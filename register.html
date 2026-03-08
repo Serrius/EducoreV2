@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registration</title>
+
+  <link rel="icon" href="assets/images/logo.png" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="register-style.css">
+
+  <style>
+    .form-step {
+      display: none;
+      opacity: 0;
+      transform: translateX(0);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .form-step.active {
+      display: block;
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .form-step.slide-left { transform: translateX(-20px); }
+    .form-step.slide-right { transform: translateX(20px); }
+
+    .progress { margin-bottom: 20px; }
+
+    .register-container .card {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .name-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 576px) {
+      .name-grid { grid-template-columns: 1fr; }
+    }
+
+    .success-check {
+      width: 60px !important;
+      height: 60px !important;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Intro Div (Preserved) -->
+  <div class="intro" id="intro"></div>
+
+  <!-- Main container -->
+  <div class="register-container">
+    <!-- Fireflies layer -->
+    <div class="fireflies" id="fireflies" aria-hidden="true"></div>
+
+    <!-- Card (NO mt-5 so it won’t push beyond viewport height) -->
+    <div class="card mx-auto">
+      <div class="card-body">
+        <h2 class="text-center mb-4">Registration</h2>
+
+        <div class="progress">
+          <div class="progress-bar" role="progressbar" style="width: 33.33%;"
+               aria-valuenow="33.33" aria-valuemin="0" aria-valuemax="100">
+            Step 1 of 3
+          </div>
+        </div>
+
+        <form id="registrationForm">
+          <!-- Step 1 -->
+          <div class="form-step active" id="step-1">
+            <div class="mb-3">
+              <label for="idNumber" class="form-label">ID Number</label>
+              <input type="text" class="form-control" id="idNumber" name="idNumber" required>
+            </div>
+
+            <div class="name-grid mb-3">
+              <div>
+                <label class="form-label">First Name</label>
+                <input type="text" class="form-control" id="firstName" name="firstName" required>
+              </div>
+              <div>
+                <label class="form-label">Middle Name (Optional)</label>
+                <input type="text" class="form-control" id="middleName" name="middleName">
+              </div>
+              <div>
+                <label class="form-label">Last Name</label>
+                <input type="text" class="form-control" id="lastName" name="lastName" required>
+              </div>
+              <div>
+                <label class="form-label">Suffix (Optional)</label>
+                <input type="text" class="form-control" id="suffix" name="suffix" placeholder="Jr., Sr., III, etc.">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="email" class="form-label">Email</label>
+              <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="form-step" id="step-2">
+            <div class="mb-3">
+              <label for="schoolYear" class="form-label">School Year</label>
+              <input
+                type="text"
+                class="form-control"
+                id="schoolYear"
+                name="schoolYear"
+                placeholder="e.g. 2025-2026"
+                readonly
+                required
+              >
+            </div>
+
+            <div class="mb-3">
+              <label for="course" class="form-label">Course</label>
+              <select id="course" name="course" class="form-select" required>
+                <option value="" selected disabled>Loading courses…</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="yearLevel" class="form-label">Year Level</label>
+              <select id="yearLevel" name="yearLevel" class="form-select" required>
+                <option value="" selected disabled>Select year level</option>
+                <option value="1">First Year</option>
+                <option value="2">Second Year</option>
+                <option value="3">Third Year</option>
+                <option value="4">Fourth Year</option>
+                <option value="5">Fifth Year</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="form-step" id="step-3">
+            <div class="mb-3">
+              <label for="password" class="form-label">Password</label>
+              <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <div class="mb-3">
+              <label for="confirmPassword" class="form-label">Confirm Password</label>
+              <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="d-flex justify-content-between mt-4">
+            <button type="button" class="btn btn-secondary" id="prevBtn" disabled>Previous</button>
+            <button type="button" class="btn btn-primary" id="nextBtn">Next</button>
+          </div>
+        </form>
+
+        <!-- Success -->
+        <div id="registerSuccess" class="card border-0 mt-4 d-none">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130.2 130.2" class="success-check">
+                <circle fill="none" stroke="#198754" stroke-width="6" stroke-miterlimit="10" cx="65.1" cy="65.1" r="62.1" />
+                <polyline fill="none" stroke="#198754" stroke-width="6" stroke-linecap="round" stroke-miterlimit="10"
+                          points="100.2,40.2 51.5,88.8 29.8,67.5 " />
+              </svg>
+            </div>
+            <h4 class="mb-1">Registration Complete!</h4>
+            <p class="text-muted mb-3" id="successText">Welcome aboard.</p>
+            <a href="login.html" class="btn btn-success px-4">Go to Login</a>
+          </div>
+        </div>
+
+        <div class="text-center mt-3">
+          <a href="login.html" class="text-decoration-none">Already have an account? Login</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer (fixed, no extra margin that forces scroll) -->
+  <div class="footer-text">
+    EduCore v2.0 • Built by KIBP © 2025
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/register.js"></script>
+
+  <!-- Fireflies -->
+  <script>
+(() => {
+  const layer = document.getElementById("fireflies");
+  if (!layer) return;
+
+  layer.innerHTML = "";
+
+  const COUNT = 28;
+  const SPEED = 0.55;
+  const WANDER = 0.045;
+  const FPS_CLAMP = 0.05;
+
+  const rand = (min, max) => Math.random() * (max - min) + min;
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  // Ensure correct positioning
+  layer.style.position = "absolute";
+  layer.style.inset = "0";
+  layer.style.pointerEvents = "none";
+
+  const rect = () => layer.getBoundingClientRect();
+  const flies = [];
+  let last = performance.now();
+
+  function makeFirefly() {
+    const el = document.createElement("span");
+    el.className = "firefly";
+    el.style.position = "absolute";
+    el.style.borderRadius = "50%";
+
+    const size = rand(4, 8);
+    const glow = rand(22, 40);
+    const glow2 = glow * rand(1.5, 2.1);
+
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.opacity = "0.95";
+    el.style.background =
+      "radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,230,140,0.95) 35%, rgba(255,255,255,0) 75%)";
+    el.style.boxShadow = `
+      0 0 ${glow}px rgba(255, 220, 120, 0.98),
+      0 0 ${glow2}px rgba(255, 220, 120, 0.60),
+      0 0 ${Math.round(glow2 * 1.25)}px rgba(255, 255, 255, 0.30)
+    `.trim();
+
+    layer.appendChild(el);
+
+    const r = rect();
+    const x = rand(0, r.width);
+    const y = rand(0, r.height);
+
+    const angle = rand(0, Math.PI * 2);
+    const spd = SPEED * rand(0.8, 1.6);
+
+    const fly = {
+      el,
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      tw: rand(0, Math.PI * 2),
+      twSpeed: rand(1.2, 2.8),
+      pulseMin: rand(0.55, 0.75),
+      pulseMax: rand(0.95, 1.05),
+    };
+
+    el.style.transform = `translate(${fly.x}px, ${fly.y}px)`;
+    flies.push(fly);
+  }
+
+  for (let i = 0; i < COUNT; i++) makeFirefly();
+
+  function wrap(f, w, h) {
+    if (f.x < -30) f.x = w + 30;
+    if (f.x > w + 30) f.x = -30;
+    if (f.y < -30) f.y = h + 30;
+    if (f.y > h + 30) f.y = -30;
+  }
+
+  function animate(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    dt = clamp(dt, 0, FPS_CLAMP);
+
+    const r = rect();
+    const w = r.width, h = r.height;
+
+    for (const f of flies) {
+      // wander
+      f.vx += (Math.random() - 0.5) * WANDER;
+      f.vy += (Math.random() - 0.5) * WANDER;
+
+      // normalize speed
+      const v = Math.hypot(f.vx, f.vy) || 0.0001;
+      const target = SPEED * rand(0.95, 1.25);
+      f.vx = (f.vx / v) * target;
+      f.vy = (f.vy / v) * target;
+
+      // move (scaled up for visible flight)
+      f.x += f.vx * 140 * dt;
+      f.y += f.vy * 140 * dt;
+
+      wrap(f, w, h);
+
+      // twinkle
+      f.tw += dt * f.twSpeed;
+      const pulse = f.pulseMin + (Math.sin(f.tw) * 0.5 + 0.5) * (f.pulseMax - f.pulseMin);
+      const scale = 0.9 + pulse * 0.35;
+
+      f.el.style.opacity = String(0.5 + pulse * 0.5);
+      f.el.style.transform = `translate(${f.x}px, ${f.y}px) scale(${scale})`;
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+})();
+  </script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!-- =========================================================
+PROGRAMMED BY:
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P
+K:::::::K    K:::::KI::::::::IB::::::BBBBBB:::::B P::::::PPPPPP:::::P
+K:::::::K   K::::::KII::::::IIBB:::::B     B:::::BPP:::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P
+  K:::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP
+  K:::::::::::K       I::::I    B::::BBBBBB:::::B   P::::PPPPPPPPP
+  K::::::K:::::K      I::::I    B::::B     B:::::B  P::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P
+K:::::::K   K::::::KII::::::IIBB:::::BBBBBB::::::BPP::::::PP
+K:::::::K    K:::::KI::::::::IB:::::::::::::::::B P::::::::P
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::P
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
+========================================================= -->
+<head>
+  <title>Manage Programs</title>
+</head>
+
+<!-- Header -->
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="mb-1">Manage Programs</h1>
+    <div class="text-muted">
+      Maintain official academic programs (e.g., BSIT, BSCS). You can archive programs for record-keeping and restore them anytime.
+    </div>
+  </div>
+
+  <!-- Right-side actions -->
+  <div class="ms-auto d-flex gap-2">
+    <button type="button" class="btn btn-outline-secondary" id="btnRefreshPrograms">
+      <i class="bi bi-arrow-clockwise me-2"></i>
+      Refresh
+    </button>
+
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalUpsertProgram" id="btnAddProgram">
+      <i class="bi bi-plus-circle me-2"></i>
+      Add Program
+    </button>
+  </div>
+</div>
+
+<!-- Single Container Card -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-3 p-md-4">
+
+    <!-- Programs Tabs -->
+    <ul class="nav nav-tabs" id="programTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link active"
+          id="tab-active-programs"
+          data-bs-toggle="tab"
+          data-bs-target="#panel-active-programs"
+          type="button"
+          role="tab"
+          aria-controls="panel-active-programs"
+          aria-selected="true"
+        >
+          <i class="bi bi-check2-circle me-2"></i>
+          Active Programs
+        </button>
+      </li>
+
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link"
+          id="tab-archived-programs"
+          data-bs-toggle="tab"
+          data-bs-target="#panel-archived-programs"
+          type="button"
+          role="tab"
+          aria-controls="panel-archived-programs"
+          aria-selected="false"
+        >
+          <i class="bi bi-archive me-2"></i>
+          Archived Programs
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content pt-4" id="programTabsContent">
+
+      <!-- ACTIVE PROGRAMS TAB -->
+      <div class="tab-pane fade show active" id="panel-active-programs" role="tabpanel" aria-labelledby="tab-active-programs" tabindex="0">
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="text-muted small">
+            Programs currently available for selection and assignment.
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <!-- NEW: rows/page -->
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Rows</span>
+              <select class="form-select form-select-sm" id="activeProgramsPageSize" style="width: 95px;">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+
+            <div class="input-group input-group-sm" style="max-width: 320px;">
+              <span class="input-group-text bg-light">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="text" class="form-control" id="activeProgramsSearch" placeholder="Search program name / abbreviation..." />
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle table-hover mb-0" id="tblActivePrograms">
+            <thead class="table-light">
+              <tr>
+                <th style="width:60px;">Icon</th>
+                <th style="width:140px;">Abbreviation</th>
+                <th>Program Name</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:170px;">Created</th>
+                <th class="text-end" style="width:220px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="activeProgramsTbody">
+              <!-- JS inject rows here -->
+              <tr>
+                <td colspan="6" class="text-center text-muted py-5">
+                  <div class="mb-2">
+                    <i class="bi bi-inbox" style="font-size: 1.5rem;"></i>
+                  </div>
+                  No active programs found.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- NEW: pagination footer -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+          <div class="text-muted small" id="activeProgramsMeta">Showing 0–0 of 0</div>
+
+          <nav aria-label="Active programs pagination">
+            <ul class="pagination pagination-sm mb-0" id="activeProgramsPagination">
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+              <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+            </ul>
+          </nav>
+        </div>
+
+        <div class="mt-3 text-muted small">
+          Tip: Archiving keeps history without deleting records.
+        </div>
+      </div>
+
+      <!-- ARCHIVED PROGRAMS TAB -->
+      <div class="tab-pane fade" id="panel-archived-programs" role="tabpanel" aria-labelledby="tab-archived-programs" tabindex="0">
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="text-muted small">
+            Archived programs are hidden from selection but can be restored anytime.
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <!-- NEW: rows/page -->
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Rows</span>
+              <select class="form-select form-select-sm" id="archivedProgramsPageSize" style="width: 95px;">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+
+            <div class="input-group input-group-sm" style="max-width: 320px;">
+              <span class="input-group-text bg-light">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="text" class="form-control" id="archivedProgramsSearch" placeholder="Search archived programs..." />
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle table-hover mb-0" id="tblArchivedPrograms">
+            <thead class="table-light">
+              <tr>
+                <th style="width:60px;">Icon</th>
+                <th style="width:140px;">Abbreviation</th>
+                <th>Program Name</th>
+                <th style="width:140px;">Status</th>
+                <th style="width:170px;">Created</th>
+                <th class="text-end" style="width:220px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="archivedProgramsTbody">
+              <!-- JS inject rows here -->
+              <tr>
+                <td colspan="6" class="text-center text-muted py-5">
+                  <div class="mb-2">
+                    <i class="bi bi-archive" style="font-size: 1.5rem;"></i>
+                  </div>
+                  No archived programs found.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- NEW: pagination footer -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+          <div class="text-muted small" id="archivedProgramsMeta">Showing 0–0 of 0</div>
+
+          <nav aria-label="Archived programs pagination">
+            <ul class="pagination pagination-sm mb-0" id="archivedProgramsPagination">
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+              <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+            </ul>
+          </nav>
+        </div>
+
+        <div class="mt-3 text-muted small">
+          Restoring a program will return it to Active Programs.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+MODALS
+========================================================= -->
+
+<!-- ADD / EDIT PROGRAM MODAL -->
+<div class="modal fade" id="modalUpsertProgram" tabindex="-1" aria-labelledby="modalUpsertProgramLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="modalUpsertProgramLabel">Add Program</h5>
+          <div class="text-muted small">Fill in the program details. Uploading an icon is optional.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form id="formUpsertProgram" enctype="multipart/form-data">
+        <div class="modal-body">
+          <input type="hidden" id="program_id" name="id" value="" />
+
+          <div class="row g-3">
+            <div class="col-12 col-md-8">
+              <label class="form-label">Program Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="program_name" name="program_name" placeholder="Bachelor of Science in Information Technology" required />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Abbreviation <span class="text-danger">*</span></label>
+              <input type="text" class="form-control text-uppercase" id="abbreviation" name="abbreviation" placeholder="BSIT" required />
+              <div class="form-text">Unique short code (e.g., BSCS, BSIS).</div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Program Icon (optional)</label>
+              <input type="file" class="form-control" id="image_file" name="image_file" accept="image/*" />
+              <div class="form-text">Recommended: square PNG, 128×128 or higher.</div>
+            </div>
+
+            <div class="col-12">
+              <div class="border rounded-4 p-3 bg-light">
+                <div class="d-flex align-items-center gap-3">
+                  <div
+                    class="border bg-white rounded-3 d-flex align-items-center justify-content-center"
+                    style="width: 56px; height: 56px; overflow:hidden;"
+                  >
+                    <img
+                      src=""
+                      alt="Preview"
+                      id="programIconPreview"
+                      style="width: 100%; height: 100%; object-fit: cover; display:none;"
+                    />
+                    <span class="text-muted small" id="programIconPlaceholder">No icon</span>
+                  </div>
+
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold">Preview</div>
+                    <div class="text-muted small">This icon will appear in the programs table.</div>
+                  </div>
+
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearProgramIcon">
+                    <i class="bi bi-x-circle me-2"></i>Clear
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-danger d-none mt-3" id="programFormError"></div>
+          <div class="alert alert-success d-none mt-3" id="programFormSuccess"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancel
+          </button>
+
+          <button type="button" class="btn btn-primary" id="btnSaveProgram">
+            <span class="programsave-btn-text"><i class="bi bi-save me-2"></i>Save</span>
+            <span class="programsave-btn-loading d-none">
+              <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Saving...
+            </span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM ARCHIVE / RESTORE MODAL -->
+<div class="modal fade" id="modalConfirmProgramAction" tabindex="-1" aria-labelledby="modalConfirmProgramActionLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalConfirmProgramActionLabel">Confirm Action</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="confirm_program_id" value="" />
+        <input type="hidden" id="confirm_action" value="" />
+
+        <div class="d-flex align-items-start gap-3">
+          <div class="text-warning">
+            <i class="bi bi-exclamation-triangle" style="font-size: 1.6rem;"></i>
+          </div>
+
+          <div class="flex-grow-1">
+            <div class="fw-semibold mb-1" id="confirmProgramTitle">—</div>
+            <div class="text-muted" id="confirmProgramMessage">
+              Are you sure you want to proceed?
+            </div>
+
+            <div class="border rounded-4 p-3 bg-light mt-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <span class="text-muted">Program</span>
+                <span class="fw-semibold" id="confirm_program_name">—</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-between mt-2">
+                <span class="text-muted">Abbreviation</span>
+                <span class="fw-semibold" id="confirm_program_abbr">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="confirmProgramError"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+
+        <button type="button" class="btn btn-danger" id="btnConfirmProgramAction">
+          <span class="programaction-btn-text">Confirm</span>
+          <span class="programaction-btn-loading d-none">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Processing...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

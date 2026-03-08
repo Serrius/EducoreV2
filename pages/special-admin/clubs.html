@@ -1,0 +1,762 @@
+<!-- pages/super-admin/clubs.html -->
+<!-- =========================================================
+PROGRAMMED BY:
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P
+K:::::::K    K:::::KI::::::::IB::::::BBBBBB:::::B P::::::PPPPPP:::::P
+K:::::::K   K::::::KII::::::IIBB:::::B     B:::::BPP:::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P
+  K:::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP
+  K:::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+K:::::::K   K::::::KII::::::IIBB::::::BBBBBB:::::B P::::::PPPPPP:::::P
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP
+
+CLUBS MODULE (Cards -> Details -> Join/Manage)
+- Student side: Join button
+- Officers side (President/Treasurer/Auditor/etc): Manage button
+- Manage: Tabs (Pending Requests, Active Members, Fee Records)
+- Pending -> Confirm payment -> Activate member (per DOCX)
+========================================================= -->
+
+<div class="container-fluid py-3">
+
+  <!-- Header -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h4 class="mb-1">
+        <i class="bi bi-people-fill me-2"></i>Clubs
+      </h4>
+      <div class="text-muted">
+        Browse clubs, view details, and manage memberships (officers only).
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary d-none" id="clubsBtnBackToList">
+        <i class="bi bi-arrow-left me-2"></i>Back
+      </button>
+      <button type="button" class="btn btn-outline-primary" id="clubsBtnRefresh">
+        <i class="bi bi-arrow-repeat me-2"></i>Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       SECTION: CLUBS LIST (CARDS)
+  ========================================================== -->
+  <div id="clubsSectionList">
+
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="clubsSearch" placeholder="Search club name..." />
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-lg-3">
+        <select class="form-select" id="clubsCategory">
+          <option value="">All Categories</option>
+          <!-- JS can populate -->
+        </select>
+      </div>
+
+      <div class="col-12 col-lg-5 text-lg-end">
+        <span class="badge text-bg-light border" id="clubsCountBadge">0 clubs</span>
+      </div>
+    </div>
+
+    <div class="row g-3" id="clubsCardGrid">
+      <!-- JS renders cards here -->
+    </div>
+
+    <div class="text-center text-muted py-5 d-none" id="clubsEmpty">
+      <div class="mb-2"><i class="bi bi-inboxes fs-1"></i></div>
+      <div class="fw-semibold">No clubs found</div>
+      <div class="small">Try changing your search or filters.</div>
+    </div>
+
+  </div>
+
+  <!-- =========================================================
+       SECTION: CLUB DETAILS (STUDENT SIDE)
+  ========================================================== -->
+  <div id="clubsSectionDetails" class="d-none">
+
+    <input type="hidden" id="clubsSelectedClubId" value="" />
+    <input type="hidden" id="clubsUserRoleInClub" value="" />
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+      <div class="row g-0">
+        <div class="col-12 col-lg-5 bg-light">
+          <div class="ratio ratio-16x9">
+            <img id="clubCover" src="assets/images/club-default.png" class="w-100 h-100 object-fit-cover" alt="Club Cover" />
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-7">
+          <div class="card-body p-3 p-md-4">
+
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
+              <div>
+                <h5 class="mb-0" id="clubName">—</h5>
+                <div class="text-muted" id="clubCategory">—</div>
+              </div>
+              <div class="text-end">
+                <span class="badge text-bg-light border" id="clubTermBadge">Academic Term: —</span>
+                <div class="small text-muted mt-1" id="clubStatusText">Status: —</div>
+              </div>
+            </div>
+
+            <!-- Club info dropdowns (Description / Mission / Vision / Advocacy) -->
+            <div class="accordion mb-3" id="clubInfoAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="clubInfoHeadDesc">
+                  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#clubInfoDesc" aria-expanded="true" aria-controls="clubInfoDesc">
+                    <i class="bi bi-info-circle me-2"></i>Description
+                  </button>
+                </h2>
+                <div id="clubInfoDesc" class="accordion-collapse collapse show" aria-labelledby="clubInfoHeadDesc" data-bs-parent="#clubInfoAccordion">
+                  <div class="accordion-body text-muted" id="clubDescription">—</div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="clubInfoHeadMission">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#clubInfoMission" aria-expanded="false" aria-controls="clubInfoMission">
+                    <i class="bi bi-bullseye me-2"></i>Mission
+                  </button>
+                </h2>
+                <div id="clubInfoMission" class="accordion-collapse collapse" aria-labelledby="clubInfoHeadMission" data-bs-parent="#clubInfoAccordion">
+                  <div class="accordion-body text-muted" id="clubMission">—</div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="clubInfoHeadVision">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#clubInfoVision" aria-expanded="false" aria-controls="clubInfoVision">
+                    <i class="bi bi-eye me-2"></i>Vision
+                  </button>
+                </h2>
+                <div id="clubInfoVision" class="accordion-collapse collapse" aria-labelledby="clubInfoHeadVision" data-bs-parent="#clubInfoAccordion">
+                  <div class="accordion-body text-muted" id="clubVision">—</div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="clubInfoHeadAdvocacy">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#clubInfoAdvocacy" aria-expanded="false" aria-controls="clubInfoAdvocacy">
+                    <i class="bi bi-megaphone me-2"></i>Advocacy
+                  </button>
+                </h2>
+                <div id="clubInfoAdvocacy" class="accordion-collapse collapse" aria-labelledby="clubInfoHeadAdvocacy" data-bs-parent="#clubInfoAccordion">
+                  <div class="accordion-body text-muted" id="clubAdvocacy">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-12 col-md-6">
+                <div class="border rounded-4 p-3 bg-light h-100">
+                  <div class="text-muted small">Membership Fee</div>
+                  <div class="fs-5 fw-semibold" id="clubMembershipFee">₱ —</div>
+                  <div class="text-muted small" id="clubFeeNote">Pay first before activation (pending → active).</div>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <div class="border rounded-4 p-3 bg-light h-100">
+                  <div class="text-muted small">Members</div>
+                  <div class="fs-5 fw-semibold" id="clubMembersCount">—</div>
+                  <div class="text-muted small">Active members in current term</div>
+
+                  <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnViewClubMembers">
+                      <i class="bi bi-people me-2"></i>View
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="my-3" />
+
+            <div class="d-flex flex-wrap gap-2">
+              <!-- STUDENT ACTIONS -->
+              <button type="button" class="btn btn-primary d-none" id="btnClubJoin" style="display: none;">
+                <i class="bi bi-person-plus-fill me-2"></i>Join Club
+              </button>
+
+              <button type="button" class="btn btn-outline-secondary d-none" id="btnClubPending">
+                <i class="bi bi-hourglass-split me-2"></i>Pending Request
+              </button>
+
+              <button type="button" class="btn btn-success d-none" id="btnClubMember">
+                <i class="bi bi-check2-circle me-2"></i>You are a Member
+              </button>
+
+              <!-- OFFICER ACTION -->
+              <button type="button" class="btn btn-warning d-none" id="btnClubManage">
+                <i class="bi bi-gear-fill me-2"></i>Manage Club
+              </button>
+
+              <button type="button" class="btn btn-outline-secondary ms-auto" id="btnClubBack">
+                <i class="bi bi-arrow-left me-2"></i>Back to Clubs
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =========================================================
+       MODAL: VIEW CLUB MEMBERS
+  ========================================================== -->
+  <div class="modal fade" id="modalClubMembers" tabindex="-1" aria-labelledby="modalClubMembersLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content rounded-4">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalClubMembersLabel">
+            <i class="bi bi-people-fill me-2"></i>Club Members
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div class="input-group" style="min-width: 280px;">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control" id="clubMembersSearch" placeholder="Search member..." />
+            </div>
+            <div class="text-muted small" id="clubMembersMeta">—</div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 110px;">ID No.</th>
+                  <th>Name</th>
+                  <th style="width: 130px;">Program</th>
+                  <th style="width: 140px;">Role</th>
+                </tr>
+              </thead>
+              <tbody id="clubMembersTbody">
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-4">No members.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       SECTION: CLUB MANAGE (OFFICERS SIDE)
+  ========================================================== -->
+  <div id="clubsSectionManage" class="d-none">
+
+    <input type="hidden" id="manageClubId" value="" />
+    <input type="hidden" id="manageClubOfficerRole" value="" />
+
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3 mt-3">
+      <div>
+        <h5 class="mb-1">
+          <i class="bi bi-shield-check me-2"></i>Manage Club
+        </h5>
+        <div class="text-muted">
+          Pending requests must be paid first, then activated to move into active members.
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="btnManageBackToDetails">
+          <i class="bi bi-arrow-left me-2"></i>Back to Details
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="btnManageRefresh">
+          <i class="bi bi-arrow-repeat me-2"></i>Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="clubManageTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-pending" data-bs-toggle="tab" data-bs-target="#panel-pending" type="button" role="tab">
+          Pending Requests
+          <span class="badge text-bg-light border ms-2" id="pendingCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-active" data-bs-toggle="tab" data-bs-target="#panel-active" type="button" role="tab">
+          Active Members
+          <span class="badge text-bg-light border ms-2" id="activeCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-fees" data-bs-toggle="tab" data-bs-target="#panel-fees" type="button" role="tab">
+          Fee Records
+          <span class="badge text-bg-light border ms-2" id="feesCount">0</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom-4 p-3 bg-white" id="clubManageTabContent">
+
+      <!-- =======================
+           PENDING REQUESTS TAB
+      ======================== -->
+      <div class="tab-pane fade show active" id="panel-pending" role="tabpanel" aria-labelledby="tab-pending" tabindex="0">
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div class="d-flex gap-2">
+            <select class="form-select" id="pendingPageSize" style="width: 120px;">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="25">25</option>
+            </select>
+
+            <div class="input-group" style="min-width: 280px;">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control" id="pendingSearch" placeholder="Search student..." />
+            </div>
+          </div>
+
+          <div class="text-muted small">
+            Pending = requested join but not yet activated (payment must be recorded first).
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 90px;">ID No.</th>
+                <th>Name</th>
+                <th style="width: 180px;">Requested At</th>
+                <th style="width: 160px;">Status</th>
+                <th style="width: 170px;" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="pendingTbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">No pending requests.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="mt-2">
+          <ul class="pagination justify-content-end mb-0" id="pendingPagination"></ul>
+        </nav>
+
+      </div>
+
+      <!-- =======================
+           ACTIVE MEMBERS TAB
+      ======================== -->
+      <div class="tab-pane fade" id="panel-active" role="tabpanel" aria-labelledby="tab-active" tabindex="0">
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div class="d-flex gap-2">
+            <select class="form-select" id="activePageSize" style="width: 120px;">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="25">25</option>
+            </select>
+
+            <div class="input-group" style="min-width: 280px;">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control" id="activeSearch" placeholder="Search active member..." />
+            </div>
+          </div>
+
+          <div class="text-muted small">
+            Active = fully joined for the current academic term.
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 90px;">ID No.</th>
+                <th>Name</th>
+                <th style="width: 180px;">Activated At</th>
+                <th style="width: 160px;">Role</th>
+                <th style="width: 170px;" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="activeTbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">No active members.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="mt-2">
+          <ul class="pagination justify-content-end mb-0" id="activePagination"></ul>
+        </nav>
+
+      </div>
+
+      <!-- =======================
+           FEE RECORDS TAB
+      ======================== -->
+      <div class="tab-pane fade" id="panel-fees" role="tabpanel" aria-labelledby="tab-fees" tabindex="0">
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div class="d-flex gap-2">
+            <select class="form-select" id="feesPageSize" style="width: 120px;">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="25">25</option>
+            </select>
+
+            <div class="input-group" style="min-width: 280px;">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control" id="feesSearch" placeholder="Search payments..." />
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary" id="btnSetPayment" style="display: none;">
+              <i class="bi bi-cash-coin me-2"></i>Set Payment
+            </button>
+            <button type="button" class="btn btn-outline-dark" id="btnPrintAllPaid">
+              <i class="bi bi-printer me-2"></i>Print All Paid
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 90px;">ID No.</th>
+                <th>Name</th>
+                <th style="width: 120px;">Amount</th>
+                <th style="width: 160px;">Paid At</th>
+                <th style="width: 160px;">OR / Ref</th>
+                <th style="width: 170px;" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="feesTbody">
+              <tr>
+                <td colspan="6" class="text-center text-muted py-4">No fee records.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="mt-2">
+          <ul class="pagination justify-content-end mb-0" id="feesPagination"></ul>
+        </nav>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- =========================================================
+     MODAL: JOIN CLUB (Student)
+========================================================= -->
+<div class="modal fade" id="modalClubJoinConfirm" tabindex="-1" aria-labelledby="modalClubJoinConfirmLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalClubJoinConfirmLabel">
+          <i class="bi bi-person-plus-fill me-2"></i>Join Club
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="text-muted mb-2">
+          You are about to send a join request to:
+        </div>
+        <div class="fw-semibold" id="joinClubName">—</div>
+        <div class="text-muted small mt-2">
+          Your request will appear in the club’s pending list until payment is recorded and you are activated by an officer.
+        </div>
+
+        <input type="hidden" id="joinClubId" value="" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmJoinClub">
+          <span class="join-btn-text"><i class="bi bi-check2-circle me-2"></i>Confirm</span>
+          <span class="join-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Processing...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     MODAL: ACTIVATE PENDING MEMBER (Officer)
+========================================================= -->
+<div class="modal fade" id="modalActivateMember" tabindex="-1" aria-labelledby="modalActivateMemberLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content rounded-4" id="formActivateMember" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalActivateMemberLabel">
+          <i class="bi bi-cash-coin me-2"></i>Activate Member (Record Payment)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <input type="hidden" id="actClubId" value="" />
+        <input type="hidden" id="actRequestId" value="" />
+        <input type="hidden" id="actStudentId" value="" />
+
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <div class="border rounded-4 p-3 bg-light">
+              <div class="text-muted small">Student</div>
+              <div class="fw-semibold" id="actStudentName">—</div>
+              <div class="text-muted small" id="actStudentIdNum">—</div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="border rounded-4 p-3 bg-light">
+              <div class="text-muted small">Club</div>
+              <div class="fw-semibold" id="actClubName">—</div>
+              <div class="text-muted small">Membership fee must be recorded before activation.</div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <hr class="my-1" />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Amount Paid</label>
+            <input type="number" class="form-control" id="actAmount" min="0" step="0.01" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Payment Date</label>
+            <input type="date" class="form-control" id="actPaidDate" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Method</label>
+            <select class="form-select" id="actMethod" required>
+              <option value="Cash" selected>Cash</option>
+              <option value="GCash">GCash</option>
+              <option value="Bank">Bank</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">OR / Reference No.</label>
+            <input type="text" class="form-control" id="actRefNo" maxlength="50" placeholder="Optional but recommended" />
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Remarks</label>
+            <input type="text" class="form-control" id="actRemarks" maxlength="255" placeholder="Optional" />
+          </div>
+
+          <div class="col-12">
+            <div class="alert alert-warning mb-0">
+              <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Activation</div>
+              <div class="small text-muted">
+                This will (1) record the membership payment and (2) move the student from Pending to Active members.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-success" id="btnConfirmActivate">
+          <span class="act-btn-text"><i class="bi bi-check2-circle me-2"></i>Confirm & Activate</span>
+          <span class="act-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Saving...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     MODAL: PRINT ALL PAID (Officer)
+========================================================= -->
+<div class="modal fade" id="modalPrintAllPaid" tabindex="-1" aria-labelledby="modalPrintAllPaidLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalPrintAllPaidLabel">
+          <i class="bi bi-printer me-2"></i>Print All Paid Users
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="text-muted">
+          This will generate a printable list of paid members for this club and academic term.
+        </div>
+        <input type="hidden" id="printAllClubId" value="" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-dark" id="btnConfirmPrintAllPaid">
+          <span class="printall-btn-text"><i class="bi bi-printer me-2"></i>Print</span>
+          <span class="printall-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Preparing...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     MODAL: SET PAYMENT (Officer)
+     - Search officers for this club and record payment
+========================================================= -->
+<div class="modal fade" id="modalSetPayment" tabindex="-1" aria-labelledby="modalSetPaymentLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content rounded-4" id="formSetPayment" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalSetPaymentLabel">
+          <i class="bi bi-cash-coin me-2"></i>Set Payment (Officers)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="setPayClubId" value="" />
+        <input type="hidden" id="setPayUserId" value="" />
+
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Search Officer</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control" id="setPaySearch" placeholder="Type name or ID no..." />
+            </div>
+            <div class="form-text">
+              Select an officer below to record their membership payment for the current academic term.
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="list-group" id="setPayResults" style="max-height: 260px; overflow:auto;">
+              <div class="list-group-item text-muted">Type to search officers...</div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="border rounded-4 p-3 bg-light h-100">
+              <div class="text-muted small">Selected Officer</div>
+              <div class="fw-semibold" id="setPaySelectedName">—</div>
+              <div class="text-muted small" id="setPaySelectedMeta">—</div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-3">
+            <label class="form-label">Amount</label>
+            <input type="number" class="form-control" id="setPayAmount" min="0" step="0.01" required />
+          </div>
+
+          <div class="col-12 col-md-3">
+            <label class="form-label">Paid Date</label>
+            <input type="date" class="form-control" id="setPayDate" required />
+          </div>
+
+          <div class="col-12">
+            <div class="alert alert-info mb-0">
+              <div class="fw-semibold"><i class="bi bi-info-circle me-2"></i>Note</div>
+              <div class="small text-muted">
+                This will create/update the officer’s membership for the term and generate a receipt.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnConfirmSetPayment">
+          <span class="setpay-btn-text"><i class="bi bi-check2-circle me-2"></i>Save Payment</span>
+          <span class="setpay-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Saving...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     MODAL: PRINT RECEIPT (per row)
+========================================================= -->
+<div class="modal fade" id="modalPrintReceipt" tabindex="-1" aria-labelledby="modalPrintReceiptLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalPrintReceiptLabel">
+          <i class="bi bi-receipt-cutoff me-2"></i>Print Receipt
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="text-muted mb-2">Receipt for:</div>
+        <div class="fw-semibold" id="receiptStudentName">—</div>
+        <div class="text-muted small" id="receiptStudentIdNum">—</div>
+
+        <hr />
+
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="text-muted">Amount</span>
+          <span class="fw-semibold" id="receiptAmount">—</span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="text-muted">Paid At</span>
+          <span class="fw-semibold" id="receiptPaidAt">—</span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="text-muted">OR / Ref</span>
+          <span class="fw-semibold" id="receiptRefNo">—</span>
+        </div>
+
+        <input type="hidden" id="receiptClubId" value="" />
+        <input type="hidden" id="receiptPaymentId" value="" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-dark" id="btnConfirmPrintReceipt">
+          <span class="printrec-btn-text"><i class="bi bi-printer me-2"></i>Print Receipt</span>
+          <span class="printrec-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Preparing...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

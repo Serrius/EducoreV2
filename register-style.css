@@ -1,0 +1,150 @@
+body {
+  font-family: 'Poppins', sans-serif;
+  background-image: url("assets/images/bg-night-2.png");
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  /* Important: prevents "wild" horizontal scroll caused by transforms/overflows */
+  overflow-x: hidden;
+}
+
+/* Optional: stops mobile overscroll bounce feeling extra "wild" */
+html, body {
+  height: 100%;
+}
+
+/* Intro overlay */
+.intro {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #11234A;
+  opacity: 1;
+  z-index: 1;
+}
+
+/* Register container: center card without adding margin that creates scroll */
+.register-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  position: relative;
+  overflow: hidden; /* keeps fireflies from causing scrollbars */
+
+  padding: 24px; /* breathing room on small screens */
+  z-index: 2;
+
+  background-color: rgba(1, 47, 85, 0.445);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Fireflies layer for REGISTER (not login) */
+.fireflies {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0; /* behind card */
+}
+
+/* Card above fireflies */
+.register-container .card {
+  position: relative;
+  z-index: 1;
+  padding: 10px;
+}
+
+/* Buttons */
+.btn-custom {
+  margin-top: 20px;
+  background-color: #211e56;
+  border: none;
+  color: white;
+  font-weight: bolder;
+  height: 50px;
+}
+.btn-custom:hover {
+  background-color: #211e569f;
+  color: white;
+  font-weight: bold;
+}
+
+/* Typography */
+h2 {
+  font-weight: bolder;
+}
+h2, label {
+  color: #211e56;
+}
+
+/* Footer fixed without creating extra scroll space */
+.footer-text {
+  position: fixed;
+  bottom: 10px;
+  right: 20px;
+
+  color: #fabc4a;
+  font-size: 14px;
+  z-index: 10000;
+
+  /* glow highlight for dark background */
+  text-shadow: 0 0 6px rgba(255,255,255,0.5);
+}
+
+/* Animations you had */
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.fade-in { animation: fadeIn .25s ease-in forwards; opacity: 0; }
+
+/* Modal animations (kept) */
+.modal#statusSuccessModal .modal-content svg,
+.modal#statusErrorsModal .modal-content svg {
+  width: 100px;
+  display: block;
+  margin: 0 auto;
+}
+
+.modal#statusSuccessModal .modal-content .path,
+.modal#statusErrorsModal .modal-content .path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 0;
+}
+
+.modal#statusSuccessModal .modal-content .path.circle,
+.modal#statusErrorsModal .modal-content .path.circle {
+  animation: dash 0.9s ease-in-out;
+}
+
+.modal#statusSuccessModal .modal-content .path.line,
+.modal#statusErrorsModal .modal-content .path.line {
+  stroke-dashoffset: 1000;
+  animation: dash 0.95s 0.35s ease-in-out forwards;
+}
+
+.modal#statusSuccessModal .modal-content .path.check,
+.modal#statusErrorsModal .modal-content .path.check {
+  stroke-dashoffset: -100;
+  animation: dash-check 0.95s 0.35s ease-in-out forwards;
+}
+
+@keyframes dash {
+  0% { stroke-dashoffset: 1000; }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes dash-check {
+  0% { stroke-dashoffset: -100; }
+  100% { stroke-dashoffset: 900; }
+}

@@ -1,0 +1,327 @@
+<!-- pages/organization-payments.html -->
+<div class="container py-3">
+<head>
+  <title>Organization Fees</title> 
+</head>
+
+  <!-- SECTION: LIST -->
+  <div id="orgPaySectionList">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <div>
+        <h5 class="mb-1"><i class="bi bi-building me-2"></i>Organization Fees</h5>
+        <div class="text-muted">Select an organization to manage required payments (per active academic term).</div>
+      </div>
+      <div class="d-flex gap-2">
+        <input type="text" class="form-control" id="orgPaySearchOrg" placeholder="Search organization..." style="max-width:280px;">
+      </div>
+    </div>
+
+    <div class="row g-3" id="orgPayOrgCards">
+      <div class="col-12">
+        <div class="alert alert-light border rounded-4 mb-0">
+          <span class="spinner-border spinner-border-sm me-2"></span>Loading organizations...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: DETAILS -->
+  <div id="orgPaySectionDetails" class="d-none">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <div>
+        <div class="d-flex align-items-center gap-3">
+          <div class="flex-shrink-0">
+            <img id="orgPayOrgLogo" src="" alt="Organization logo" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid rgba(0,0,0,.08);" onerror="this.onerror=null;this.src='assets/images/logo.png';">
+          </div>
+          <div>
+            <h5 class="mb-1"><i class="bi bi-cash-coin me-2"></i><span id="orgPayOrgName">—</span></h5>
+            <div class="text-muted">
+              <span class="badge text-bg-light border" id="orgPayTermBadge">Academic Term: —</span>
+              <span class="ms-2" id="orgPayScopeText">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="orgPayBtnBack">
+          <i class="bi bi-arrow-left me-2"></i>Back
+        </button>
+      </div>
+    </div>
+
+    <!-- ORG INFO (logo + dropdowns) -->
+    <div class="mb-3" id="orgPayOrgInfoWrap">
+      <div class="border rounded-4 p-3 bg-white">
+        <div class="d-flex align-items-center justify-content-between gap-2">
+          <div class="fw-semibold"><i class="bi bi-info-circle me-2"></i>Organization Info</div>
+          <div class="text-muted small">Description, Mission, Vision, Advocacy</div>
+        </div>
+
+        <div class="accordion mt-3" id="orgPayInfoAccordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="orgPayAccHeadDesc">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#orgPayAccDesc" aria-expanded="true" aria-controls="orgPayAccDesc">
+                <i class="bi bi-card-text me-2"></i>Description
+              </button>
+            </h2>
+            <div id="orgPayAccDesc" class="accordion-collapse collapse show" aria-labelledby="orgPayAccHeadDesc" data-bs-parent="#orgPayInfoAccordion">
+              <div class="accordion-body">
+                <div class="text-muted" id="orgPayInfoDesc">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="orgPayAccHeadMission">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#orgPayAccMission" aria-expanded="false" aria-controls="orgPayAccMission">
+                <i class="bi bi-bullseye me-2"></i>Mission
+              </button>
+            </h2>
+            <div id="orgPayAccMission" class="accordion-collapse collapse" aria-labelledby="orgPayAccHeadMission" data-bs-parent="#orgPayInfoAccordion">
+              <div class="accordion-body">
+                <div class="text-muted" id="orgPayInfoMission">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="orgPayAccHeadVision">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#orgPayAccVision" aria-expanded="false" aria-controls="orgPayAccVision">
+                <i class="bi bi-eye me-2"></i>Vision
+              </button>
+            </h2>
+            <div id="orgPayAccVision" class="accordion-collapse collapse" aria-labelledby="orgPayAccHeadVision" data-bs-parent="#orgPayInfoAccordion">
+              <div class="accordion-body">
+                <div class="text-muted" id="orgPayInfoVision">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="orgPayAccHeadAdv">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#orgPayAccAdv" aria-expanded="false" aria-controls="orgPayAccAdv">
+                <i class="bi bi-megaphone me-2"></i>Advocacy
+              </button>
+            </h2>
+            <div id="orgPayAccAdv" class="accordion-collapse collapse" aria-labelledby="orgPayAccHeadAdv" data-bs-parent="#orgPayInfoAccordion">
+              <div class="accordion-body">
+                <div class="text-muted" id="orgPayInfoAdvocacy">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY STATUS (for non-officer students) -->
+    <div id="orgPayMyStatusWrap" class="d-none mb-3">
+      <div class="border rounded-4 p-3 bg-light">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div>
+            <div class="text-muted small" id="orgPayMyStatusLabel">My Status (Active Term)</div>
+            <div class="fs-5 fw-semibold">
+              <span id="orgPayMyStatusText">—</span>
+              <span class="badge ms-2 d-none" id="orgPayMyStatusBadge">—</span>
+            </div>
+            <div class="text-muted small" id="orgPayMyStatusMeta">—</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-dark d-none" id="orgPayBtnPrintMyReceipt">
+              <i class="bi bi-printer me-2"></i>Print My Receipt
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="orgPayListWrap">
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-md-4">
+          <div class="border rounded-4 p-3 bg-light h-100">
+            <div class="text-muted small">Required Fee</div>
+            <div class="fs-5 fw-semibold" id="orgPayRequiredFee">₱ —</div>
+            <div class="text-muted small" id="orgPayFeeNote">Organization required fee for the active term.</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <div class="border rounded-4 p-3 bg-light h-100">
+            <div class="text-muted small">Paid Students</div>
+            <div class="fs-5 fw-semibold" id="orgPayCountPaid">—</div>
+            <div class="text-muted small">With payment record</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <div class="border rounded-4 p-3 bg-light h-100">
+            <div class="text-muted small">Unpaid Students</div>
+            <div class="fs-5 fw-semibold" id="orgPayCountUnpaid">—</div>
+            <div class="text-muted small">No payment record yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+        <button type="button" class="btn btn-primary d-none" id="orgPayBtnSetPayment">
+          <i class="bi bi-plus-circle me-2"></i>Record Payment
+        </button>
+
+        <button type="button" class="btn btn-dark" id="orgPayBtnPrintAllPaid">
+          <i class="bi bi-printer me-2"></i>Print Paid Students
+        </button>
+      </div>
+
+      <ul class="nav nav-pills mb-3" id="orgPayTabs">
+        <li class="nav-item">
+          <button class="nav-link active" id="tabPaid" data-bs-toggle="pill" data-bs-target="#panePaid" type="button">
+            <i class="bi bi-check2-circle me-2"></i>Paid
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tabUnpaid" data-bs-toggle="pill" data-bs-target="#paneUnpaid" type="button">
+            <i class="bi bi-x-circle me-2"></i>Unpaid
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- PAID -->
+        <div class="tab-pane fade show active" id="panePaid">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <input type="text" class="form-control" id="orgPaySearchPaid" placeholder="Search name or ID..." style="max-width:320px;">
+            <div class="text-muted small" id="orgPayPaidHint">—</div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr class="text-muted">
+                  <th>Student</th>
+                  <th style="width:120px;">Amount</th>
+                  <th style="width:150px;">Paid At</th>
+                  <th style="width:220px;">Receipt No</th>
+                  <th style="width:140px;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="orgPayPaidTbody">
+                <tr><td colspan="5" class="text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+            <div class="text-muted small" id="orgPayPaidPageInfo">—</div>
+            <nav aria-label="Paid pagination">
+              <ul class="pagination pagination-sm mb-0" id="orgPayPaidPagination"></ul>
+            </nav>
+          </div>
+        </div>
+
+        <!-- UNPAID -->
+        <div class="tab-pane fade" id="paneUnpaid">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <input type="text" class="form-control" id="orgPaySearchUnpaid" placeholder="Search name or ID..." style="max-width:320px;">
+            <div class="text-muted small" id="orgPayUnpaidHint">—</div>
+          </div>
+
+          <div class="list-group" id="orgPayUnpaidList">
+            <div class="list-group-item text-muted">Loading...</div>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+            <div class="text-muted small" id="orgPayUnpaidPageInfo">—</div>
+            <nav aria-label="Unpaid pagination">
+              <ul class="pagination pagination-sm mb-0" id="orgPayUnpaidPagination"></ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <input type="hidden" id="orgPayOrgId" value="">
+    <input type="hidden" id="orgPayCanPay" value="0">
+  </div>
+</div>
+
+<!-- MODAL: SET PAYMENT -->
+<div class="modal fade" id="modalOrgPaySetPayment" tabindex="-1" aria-labelledby="modalOrgPaySetPaymentLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalOrgPaySetPaymentLabel">
+          <i class="bi bi-plus-circle me-2"></i>Set Payment
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form id="formOrgPaySetPayment">
+        <div class="modal-body">
+          <input type="hidden" id="opOrgId" value="">
+          <input type="hidden" id="opStudentId" value="">
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Search student (eligible only)</label>
+              <input type="text" class="form-control" id="opSearch" placeholder="Type name or ID no.">
+              <div class="form-text">Exclusive = program-matched students only. General = all Active students.</div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+              <div class="border rounded-4 p-3 bg-light h-100">
+                <div class="text-muted small">Selected Student</div>
+                <div class="fw-semibold" id="opSelectedName">—</div>
+                <div class="text-muted small" id="opSelectedMeta">—</div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="list-group" id="opResults" style="max-height: 260px; overflow:auto;">
+                <div class="list-group-item text-muted">Type to search eligible students.</div>
+              </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Amount</label>
+              <input type="number" class="form-control" id="opAmount" min="0" step="0.01" required>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Paid Date</label>
+              <input type="date" class="form-control" id="opPaidDate" required>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Paid Time</label>
+              <input type="time" class="form-control" id="opPaidTime" required>
+            </div>
+
+            <div class="col-12 col-md-6">
+            <label class="form-label">Receipt No (optional)</label>
+            <input type="text" class="form-control" id="opReceiptNo"
+                  placeholder="e.g. OR-2026-00123">
+            <div class="form-text">Leave blank to auto-generate.</div>
+            </div>
+
+            <div class="col-12">
+              <div class="alert alert-info mb-0">
+                <div class="fw-semibold"><i class="bi bi-info-circle me-2"></i>Note</div>
+                <div class="small text-muted">If the student already has a paid record for this term, it will be blocked.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnOpSave">
+            <span class="op-btn-text"><i class="bi bi-check2-circle me-2"></i>Save Payment</span>
+            <span class="op-btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Saving...</span>
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>

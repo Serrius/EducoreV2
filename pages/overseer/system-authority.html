@@ -1,0 +1,1127 @@
+<!-- =========================================================  
+PROGRAMMED BY:
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP   
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P  
+K:::::::K    K:::::KI::::::::IB::::::BBBBBB:::::B P::::::PPPPPP:::::P 
+K:::::::K   K::::::KII::::::IIBB:::::B     B:::::BPP:::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P 
+  K:::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP  
+  K:::::::::::K       I::::I    B::::BBBBBB:::::B   P::::PPPPPPPPP    
+  K::::::K:::::K      I::::I    B::::B     B:::::B  P::::P            
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P            
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P            
+K:::::::K   K::::::KII::::::IIBB:::::BBBBBB::::::BPP::::::PP          
+K:::::::K    K:::::KI::::::::IB:::::::::::::::::B P::::::::P          
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::P          
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP                                                                               
+========================================================= -->
+<head>
+  <title>System Authority</title>
+</head>
+
+<!-- Header -->
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="mb-1">System Authority</h1>
+    <div class="text-muted">
+      Replace and view top-level roles, and preview official e-signatures used in certificates and documents.
+    </div>
+  </div>
+
+  <!-- Right-side action -->
+  <div class="ms-auto">
+    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAuditLogs">
+      <i class="bi bi-clipboard-data me-2"></i>
+      Audit Logs
+    </button>
+  </div>
+</div>
+
+<!-- Single Container Card -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-3 p-md-4">
+
+    <!-- Admin Tabs -->
+    <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-super" data-bs-toggle="tab" data-bs-target="#panel-super"
+          type="button" role="tab" aria-controls="panel-super" aria-selected="true">
+          <i class="bi bi-person-badge me-2"></i>
+          Office of Students Affair
+        </button>
+      </li>
+
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-sdc" data-bs-toggle="tab" data-bs-target="#panel-sdc"
+          type="button" role="tab" aria-controls="panel-sdc" aria-selected="false">
+          <i class="bi bi-person-gear me-2"></i>
+          Student Development Coordinator
+        </button>
+      </li>
+
+      <!-- NEW: RESTORE TAB -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-restore" data-bs-toggle="tab" data-bs-target="#panel-restore"
+          type="button" role="tab" aria-controls="panel-restore" aria-selected="false">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>
+          Restore Admins
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content pt-4" id="adminTabsContent">
+
+      <!-- OFFICE OF STUDENTS AFFAIR TAB -->
+      <div class="tab-pane fade show active" id="panel-super" role="tabpanel" aria-labelledby="tab-super" tabindex="0">
+        <div class="row g-4">
+
+          <!-- Admin Info + Actions -->
+          <div class="col-12 col-lg-5">
+            <div class="card border rounded-4 h-100">
+              <div class="card-body p-3 p-md-4">
+
+                <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
+                  <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <span class="badge bg-warning text-dark">Office of Students Affair</span>
+                      <span class="text-muted small">Current</span>
+                    </div>
+                    <div class="fw-semibold">Admin Information</div>
+                  </div>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle" id="super_status_badge">Active</span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">Name</span>
+                  <span class="fw-semibold" id="super_name">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">ID Number</span>
+                  <span class="fw-semibold" id="super_idnum">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">Email</span>
+                  <span class="fw-semibold" id="super_email">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2">
+                  <span class="text-muted">Status</span>
+                  <span class="fw-semibold" id="super_status">Active</span>
+                </div>
+
+                <input type="hidden" id="super_user_id" value="" />
+
+                <div class="mt-4 d-grid gap-2">
+                  <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalReplaceSuper">
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    Replace
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalViewSuper">
+                    <i class="bi bi-eye me-2"></i>
+                    View
+                  </button>
+                  <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditSuper">
+                    <i class="bi bi-pencil-square me-2"></i>
+                    Edit Info
+                  </button>
+
+                  <!-- ✅ NEW: Reset Password (keeps your existing IDs + bootstrap modal open) -->
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger"
+                    id="btnResetSuperPassword"
+                    data-role="super_admin"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalResetAdminPassword"
+                  >
+                    <i class="bi bi-key me-2"></i>
+                    Reset Password
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- Signature -->
+          <div class="col-12 col-lg-7">
+            <div class="border rounded-4 p-3 p-md-4 h-100 bg-light">
+              <div class="mb-3">
+                <h5 class="mb-1">Official E-Signature</h5>
+                <div class="text-muted">
+                  Preview only. This signature is applied automatically in certificates and official documents.
+                </div>
+              </div>
+
+              <!-- ✅ NEW: hidden id_number for e_signature binding -->
+              <input type="hidden" id="super_signature_idnum" value="" />
+
+              <div class="bg-white border rounded-3 p-4 text-center text-muted small" id="super_signature_preview">
+                Signature preview placeholder (no file uploaded)
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SDC TAB -->
+      <div class="tab-pane fade" id="panel-sdc" role="tabpanel" aria-labelledby="tab-sdc" tabindex="0">
+        <div class="row g-4">
+
+          <!-- Admin Info + Actions -->
+          <div class="col-12 col-lg-5">
+            <div class="card border rounded-4 h-100">
+              <div class="card-body p-3 p-md-4">
+
+                <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
+                  <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <span class="badge bg-primary">SDC</span>
+                      <span class="text-muted small">Current</span>
+                    </div>
+                    <div class="fw-semibold">Admin Information</div>
+                  </div>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle" id="sdc_status_badge">Active</span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">Name</span>
+                  <span class="fw-semibold" id="sdc_name">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">ID Number</span>
+                  <span class="fw-semibold" id="sdc_idnum">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <span class="text-muted">Email</span>
+                  <span class="fw-semibold" id="sdc_email">—</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between py-2">
+                  <span class="text-muted">Status</span>
+                  <span class="fw-semibold" id="sdc_status">Active</span>
+                </div>
+
+                <input type="hidden" id="sdc_user_id" value="" />
+
+                <div class="mt-4 d-grid gap-2">
+                  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalReplaceSDC">
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    Replace
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalViewSDC">
+                    <i class="bi bi-eye me-2"></i>
+                    View
+                  </button>
+                  <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditSDC">
+                    <i class="bi bi-pencil-square me-2"></i>
+                    Edit Info
+                  </button>
+
+                  <!-- ✅ NEW: Reset Password -->
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger"
+                    id="btnResetSDCPassword"
+                    data-role="special_admin"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalResetAdminPassword"
+                  >
+                    <i class="bi bi-key me-2"></i>
+                    Reset Password
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- Signature -->
+          <div class="col-12 col-lg-7">
+            <div class="border rounded-4 p-3 p-md-4 h-100 bg-light">
+              <div class="mb-3">
+                <h5 class="mb-1">Official E-Signature</h5>
+                <div class="text-muted">
+                  Preview only. This signature is applied automatically in certificates and official documents.
+                </div>
+              </div>
+
+              <!-- ✅ NEW: hidden id_number for e_signature binding -->
+              <input type="hidden" id="sdc_signature_idnum" value="" />
+
+              <div class="bg-white border rounded-3 p-4 text-center text-muted small" id="sdc_signature_preview">
+                Signature preview placeholder (no file uploaded)
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- =========================================================
+        NEW: RESTORE TAB (Tabbed table: Office of Students Affair / SDC)
+      ========================================================== -->
+      <div class="tab-pane fade" id="panel-restore" role="tabpanel" aria-labelledby="tab-restore" tabindex="0">
+
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+          <div>
+            <h5 class="mb-1">Restore Previous Admins</h5>
+            <div class="text-muted">
+              Select an inactive previous admin and restore them as the current role. (This will deactivate the current one based on your backend rules.)
+            </div>
+          </div>
+
+          <div class="ms-auto">
+            <span class="badge bg-light text-dark border">
+              <i class="bi bi-info-circle me-1"></i>Shows Inactive accounts only
+            </span>
+          </div>
+        </div>
+
+        <!-- Inner Tabs -->
+        <ul class="nav nav-pills gap-2" id="restoreTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="restore-super-tab" data-bs-toggle="tab" data-bs-target="#restore-super"
+              type="button" role="tab" aria-controls="restore-super" aria-selected="true">
+              <i class="bi bi-person-badge me-2"></i>Office of Students Affair
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="restore-sdc-tab" data-bs-toggle="tab" data-bs-target="#restore-sdc"
+              type="button" role="tab" aria-controls="restore-sdc" aria-selected="false">
+              <i class="bi bi-person-gear me-2"></i>SDC
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content pt-3" id="restoreTabsContent">
+
+          <!-- RESTORE OFFICE OF STUDENTS AFFAIR TABLE -->
+          <div class="tab-pane fade show active" id="restore-super" role="tabpanel" aria-labelledby="restore-super-tab">
+
+            <!-- Controls (pagination-ready) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="restoreSuperPageSize">Rows</label>
+                <select class="form-select form-select-sm" id="restoreSuperPageSize" style="width: 90px;">
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="restoreSuperSearch">Search</label>
+                <input type="text" class="form-control form-control-sm" id="restoreSuperSearch"
+                  placeholder="Search name, ID, email..." style="width: 240px;">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th style="min-width: 120px;">ID Number</th>
+                    <th style="min-width: 220px;">Name</th>
+                    <th style="min-width: 220px;">Email</th>
+                    <th style="min-width: 170px;">Created At</th>
+                    <th style="min-width: 170px;">Last Login</th>
+                    <th style="min-width: 180px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="restoreSuperTbody">
+                  <tr>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Footer (JS will fill) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+              <div class="text-muted small" id="restoreSuperMeta">Showing 0–0 of 0</div>
+
+              <nav aria-label="Office of Students Affair restore pagination">
+                <ul class="pagination pagination-sm mb-0" id="restoreSuperPagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+
+          </div>
+
+          <!-- RESTORE SDC TABLE -->
+          <div class="tab-pane fade" id="restore-sdc" role="tabpanel" aria-labelledby="restore-sdc-tab">
+
+            <!-- Controls (pagination-ready) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="restoreSDCPageSize">Rows</label>
+                <select class="form-select form-select-sm" id="restoreSDCPageSize" style="width: 90px;">
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="restoreSDCSearch">Search</label>
+                <input type="text" class="form-control form-control-sm" id="restoreSDCSearch"
+                  placeholder="Search name, ID, email..." style="width: 240px;">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th style="min-width: 120px;">ID Number</th>
+                    <th style="min-width: 220px;">Name</th>
+                    <th style="min-width: 220px;">Email</th>
+                    <th style="min-width: 170px;">Created At</th>
+                    <th style="min-width: 170px;">Last Login</th>
+                    <th style="min-width: 180px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="restoreSDCTbody">
+                  <tr>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Footer (JS will fill) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+              <div class="text-muted small" id="restoreSDCMeta">Showing 0–0 of 0</div>
+
+              <nav aria-label="SDC restore pagination">
+                <ul class="pagination pagination-sm mb-0" id="restoreSDCPagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- this is just for me to remember what class I would put later sorry -->
+        <div class="mt-3 text-muted small" style="display: none;">
+          <i class="bi bi-lightbulb me-2"></i>
+          JS hint: Render each row with a restore button like
+          <span class="font-monospace">.restore-admin-btn</span> and include <span class="font-monospace">data-user-id</span> + <span class="font-monospace">data-role</span>.
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- =========================================================
+  MODALS
+========================================================= -->
+
+<!-- ✅ NEW: RESET PASSWORD MODAL (shared for Office of Students Affair / SDC) -->
+<div class="modal fade" id="modalResetAdminPassword" tabindex="-1" aria-labelledby="modalResetAdminPasswordLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalResetAdminPasswordLabel">
+          <i class="bi bi-key me-2"></i>Reset Admin Password
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-danger mb-3">
+          <div class="fw-semibold">This will reset the admin’s password.</div>
+          <div class="small text-muted">
+            The new password will become the admin’s <b>ID Number</b> (stored as a hash).
+          </div>
+        </div>
+
+        <div class="border rounded-3 p-3">
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Role</span>
+            <span class="fw-semibold" id="resetPwdRole">—</span>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Admin</span>
+            <span class="fw-semibold" id="resetPwdName">—</span>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">ID Number</span>
+            <span class="fw-semibold" id="resetPwdIdNum">—</span>
+          </div>
+        </div>
+
+        <!-- Result (JS will fill after successful reset) -->
+        <div class="mt-3 d-none" id="resetPwdResult">
+          <label class="form-label text-muted mb-1">Temporary Password</label>
+          <div class="input-group">
+            <input type="text" class="form-control" id="resetPwdTemp" value="" readonly>
+            <button class="btn btn-outline-secondary" type="button" id="btnCopyResetPwd">
+              <i class="bi bi-clipboard me-1"></i>Copy
+            </button>
+          </div>
+          <div class="text-muted small mt-1">
+            This is the admin’s ID Number. Share it privately.
+          </div>
+        </div>
+
+        <!-- hidden payload for JS -->
+        <input type="hidden" id="resetPwdRoleValue" value="">
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+
+        <button type="button" class="btn btn-danger" id="btnConfirmResetPwd">
+          <span class="resetpwd-btn-text">
+            <i class="bi bi-shield-lock me-2"></i>Reset Password
+          </span>
+          <span class="resetpwd-btn-loading d-none">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Resetting...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AUDIT LOGS -->
+<div class="modal fade" id="modalAuditLogs" tabindex="-1" aria-labelledby="modalAuditLogsLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xxl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalAuditLogsLabel">
+          <i class="bi bi-clipboard-data me-2"></i>Audit Logs
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <ul class="nav nav-tabs" id="auditTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="audit-super-tab" data-bs-toggle="tab" data-bs-target="#audit-super"
+              type="button" role="tab" aria-controls="audit-super" aria-selected="true">
+              Office of Students Affair
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="audit-sdc-tab" data-bs-toggle="tab" data-bs-target="#audit-sdc"
+              type="button" role="tab" aria-controls="audit-sdc" aria-selected="false">
+              SDC
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content pt-3">
+
+          <!-- OFFICE OF STUDENTS AFFAIR LOGS -->
+          <div class="tab-pane fade show active" id="audit-super" role="tabpanel" aria-labelledby="audit-super-tab">
+
+            <!-- Controls (pagination-ready) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="auditSuperPageSize">Rows</label>
+                <select class="form-select form-select-sm" id="auditSuperPageSize" style="width: 90px;">
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="auditSuperSearch">Search</label>
+                <input type="text" class="form-control form-control-sm" id="auditSuperSearch" placeholder="Search name, ID, email..." style="width: 240px;">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th style="min-width: 170px;">Assigned At</th>
+                    <th style="min-width: 170px;">Revoked At</th>
+                    <th style="min-width: 120px;">ID Number</th>
+                    <th style="min-width: 220px;">Name</th>
+                    <th style="min-width: 220px;">Email</th>
+                    <th style="min-width: 180px;">Reason</th>
+                    <th style="min-width: 180px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="auditSuperTbody">
+                  <tr>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Footer (JS will fill) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+              <div class="text-muted small" id="auditSuperMeta">Showing 0–0 of 0</div>
+
+              <nav aria-label="Office of Students Affair audit pagination">
+                <ul class="pagination pagination-sm mb-0" id="auditSuperPagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+
+          </div>
+
+          <!-- SDC LOGS -->
+          <div class="tab-pane fade" id="audit-sdc" role="tabpanel" aria-labelledby="audit-sdc-tab">
+
+            <!-- Controls (pagination-ready) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="auditSDCPageSize">Rows</label>
+                <select class="form-select form-select-sm" id="auditSDCPageSize" style="width: 90px;">
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small mb-0" for="auditSDCSearch">Search</label>
+                <input type="text" class="form-control form-control-sm" id="auditSDCSearch" placeholder="Search name, ID, email..." style="width: 240px;">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th style="min-width: 170px;">Assigned At</th>
+                    <th style="min-width: 170px;">Revoked At</th>
+                    <th style="min-width: 120px;">ID Number</th>
+                    <th style="min-width: 220px;">Name</th>
+                    <th style="min-width: 220px;">Email</th>
+                    <th style="min-width: 180px;">Reason</th>
+                    <th style="min-width: 180px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="auditSDCTbody">
+                  <tr>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                    <td class="text-muted">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Footer (JS will fill) -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+              <div class="text-muted small" id="auditSDCMeta">Showing 0–0 of 0</div>
+
+              <nav aria-label="SDC audit pagination">
+                <ul class="pagination pagination-sm mb-0" id="auditSDCPagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW SUPER -->
+<div class="modal fade" id="modalViewSuper" tabindex="-1" aria-labelledby="modalViewSuperLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalViewSuperLabel">
+          <i class="bi bi-eye me-2"></i>View Office of Students Affair
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-muted">First Name</label>
+            <div class="fw-semibold" id="view_super_first">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Middle Name</label>
+            <div class="fw-semibold" id="view_super_middle">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Last Name</label>
+            <div class="fw-semibold" id="view_super_last">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Suffix</label>
+            <div class="fw-semibold" id="view_super_suffix">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">ID Number</label>
+            <div class="fw-semibold" id="view_super_idnum">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Email</label>
+            <div class="fw-semibold" id="view_super_email">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Status</label>
+            <div class="fw-semibold" id="view_super_status">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Created At</label>
+            <div class="fw-semibold" id="view_super_created">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Last Login</label>
+            <div class="fw-semibold" id="view_super_lastlogin">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalEditSuper">
+          Edit Info
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW SDC -->
+<div class="modal fade" id="modalViewSDC" tabindex="-1" aria-labelledby="modalViewSDCLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalViewSDCLabel">
+          <i class="bi bi-eye me-2"></i>View SDC
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-muted">First Name</label>
+            <div class="fw-semibold" id="view_sdc_first">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Middle Name</label>
+            <div class="fw-semibold" id="view_sdc_middle">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Last Name</label>
+            <div class="fw-semibold" id="view_sdc_last">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted">Suffix</label>
+            <div class="fw-semibold" id="view_sdc_suffix">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">ID Number</label>
+            <div class="fw-semibold" id="view_sdc_idnum">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Email</label>
+            <div class="fw-semibold" id="view_sdc_email">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Status</label>
+            <div class="fw-semibold" id="view_sdc_status">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Created At</label>
+            <div class="fw-semibold" id="view_sdc_created">—</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label text-muted">Last Login</label>
+            <div class="fw-semibold" id="view_sdc_lastlogin">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalEditSDC">
+          Edit Info
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT SUPER -->
+<div class="modal fade" id="modalEditSuper" tabindex="-1" aria-labelledby="modalEditSuperLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content" id="formEditSuper" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditSuperLabel">
+          <i class="bi bi-pencil-square me-2"></i>Edit Office of Students Affair
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="id" id="edit_super_id" value="" />
+        <input type="hidden" name="role" value="super_admin" />
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name</label>
+            <input class="form-control" type="text" name="first_name" id="edit_super_first" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Middle Name</label>
+            <input class="form-control" type="text" name="middle_name" id="edit_super_middle" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input class="form-control" type="text" name="last_name" id="edit_super_last" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Suffix</label>
+            <input class="form-control" type="text" name="suffix" id="edit_super_suffix" placeholder="Jr., III, etc." />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">ID Number</label>
+            <input class="form-control" type="text" name="id_number" id="edit_super_idnum" required />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" id="edit_super_email" />
+          </div>
+
+          <!-- Status removed (automatic via backend rules) -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-2"></i>Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- EDIT SDC -->
+<div class="modal fade" id="modalEditSDC" tabindex="-1" aria-labelledby="modalEditSDCLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content" id="formEditSDC" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditSDCLabel">
+          <i class="bi bi-pencil-square me-2"></i>Edit SDC
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="id" id="edit_sdc_id" value="" />
+        <input type="hidden" name="role" value="special_admin" />
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name</label>
+            <input class="form-control" type="text" name="first_name" id="edit_sdc_first" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Middle Name</label>
+            <input class="form-control" type="text" name="middle_name" id="edit_sdc_middle" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input class="form-control" type="text" name="last_name" id="edit_sdc_last" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Suffix</label>
+            <input class="form-control" type="text" name="suffix" id="edit_sdc_suffix" placeholder="Jr., III, etc." />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">ID Number</label>
+            <input class="form-control" type="text" name="id_number" id="edit_sdc_idnum" required />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" id="edit_sdc_email" />
+          </div>
+
+          <!-- Status removed (automatic via backend rules) -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-2"></i>Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- REPLACE SUPER (MANUAL INPUT) -->
+<div class="modal fade" id="modalReplaceSuper" tabindex="-1" aria-labelledby="modalReplaceSuperLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content" id="formReplaceSuper" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalReplaceSuperLabel">
+          <i class="bi bi-arrow-left-right me-2"></i>Replace Office of Students Affair
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="role" value="super_admin" />
+        <input type="hidden" name="current_user_id" id="replace_super_current_id" value="" />
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name</label>
+            <input class="form-control" type="text" name="first_name" id="replace_super_first" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Middle Name</label>
+            <input class="form-control" type="text" name="middle_name" id="replace_super_middle" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input class="form-control" type="text" name="last_name" id="replace_super_last" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Suffix</label>
+            <input class="form-control" type="text" name="suffix" id="replace_super_suffix" placeholder="Jr., III, etc." />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">ID Number</label>
+            <input class="form-control" type="text" name="id_number" id="replace_super_idnum" required />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" id="replace_super_email" />
+          </div>
+
+          <!-- Status removed (new = Active; old = Inactive automatically) -->
+
+          <div class="col-md-6">
+            <label class="form-label">Reason (optional)</label>
+            <input class="form-control" type="text" name="reason" id="replace_super_reason" maxlength="255" />
+          </div>
+        </div>
+
+        <hr class="my-3" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-warning">
+          <i class="bi bi-check2-circle me-2"></i>Confirm Replace
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- REPLACE SDC (MANUAL INPUT) -->
+<div class="modal fade" id="modalReplaceSDC" tabindex="-1" aria-labelledby="modalReplaceSDCLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form class="modal-content" id="formReplaceSDC" autocomplete="off">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalReplaceSDCLabel">
+          <i class="bi bi-arrow-left-right me-2"></i>Replace SDC
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="role" value="special_admin" />
+        <input type="hidden" name="current_user_id" id="replace_sdc_current_id" value="" />
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name</label>
+            <input class="form-control" type="text" name="first_name" id="replace_sdc_first" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Middle Name</label>
+            <input class="form-control" type="text" name="middle_name" id="replace_sdc_middle" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input class="form-control" type="text" name="last_name" id="replace_sdc_last" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Suffix</label>
+            <input class="form-control" type="text" name="suffix" id="replace_sdc_suffix" placeholder="Jr., III, etc." />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">ID Number</label>
+            <input class="form-control" type="text" name="id_number" id="replace_sdc_idnum" required />
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" id="replace_sdc_email" />
+          </div>
+
+          <!-- Status removed (new = Active; old = Inactive automatically) -->
+
+          <div class="col-md-6">
+            <label class="form-label">Reason (optional)</label>
+            <input class="form-control" type="text" name="reason" id="replace_sdc_reason" maxlength="255" />
+          </div>
+        </div>
+
+        <hr class="my-3" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2-circle me-2"></i>Confirm Replace
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- RESTORE CONFIRM MODAL -->
+<div class="modal fade" id="modalRestoreConfirm" tabindex="-1" aria-labelledby="modalRestoreConfirmLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalRestoreConfirmLabel">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Admin
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-warning mb-3">
+          <div class="fw-semibold">This will replace the current active holder.</div>
+          <div class="small text-muted">
+            The current admin for this role will be set to <b>Inactive</b>, and the selected admin will be set to <b>Active</b>.
+          </div>
+        </div>
+
+        <div class="border rounded-3 p-3">
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Role</span>
+            <span class="fw-semibold" id="restoreConfirmRole">—</span>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">ID Number</span>
+            <span class="fw-semibold" id="restoreConfirmIdNum">—</span>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Name</span>
+            <span class="fw-semibold" id="restoreConfirmName">—</span>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Email</span>
+            <span class="fw-semibold" id="restoreConfirmEmail">—</span>
+          </div>
+        </div>
+
+        <!-- hidden payload (JS writes here) -->
+        <input type="hidden" id="restoreConfirmHistoryId" value="">
+        <input type="hidden" id="restoreConfirmRoleValue" value="">
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+
+        <button type="button" class="btn btn-success" id="btnConfirmRestore">
+          <span class="restore-btn-text">
+            <i class="bi bi-check2-circle me-2"></i>Restore
+          </span>
+          <span class="restore-btn-loading d-none">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Restoring...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================  
+NOTE FOR JS
+  - Audit tables (inside Audit Logs modal):
+    Use #auditSuperTbody and #auditSDCTbody
+  - Restore tables (inside Restore Admins tab):
+    Use #restoreSuperTbody and #restoreSDCTbody
+    Recommended restore button:
+      <button class="btn btn-sm btn-success restore-admin-btn" data-user-id="X" data-role="super_admin">Restore</button>
+      <button class="btn btn-sm btn-success restore-admin-btn" data-user-id="Y" data-role="special_admin">Restore</button>
+========================================================= -->

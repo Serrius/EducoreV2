@@ -1,0 +1,264 @@
+<!-- student home dashboard panel -->
+<head>
+  <title>Home</title>
+  <style>
+    .welcome-card {
+      background-color: #ffffff;
+      border-left: 10px solid #0d6efd;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    .handled-org-card {
+      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+      color: #fff;
+      border-left: 10px solid #211E56;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    }
+
+    .handled-org-name {
+      font-size: 1.3rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .dashboard-kpi-card {
+      border: none;
+      border-radius: 0.5rem;
+      color: #fff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    }
+
+    .kpi-card-fees {
+      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+    }
+    .kpi-card-credits {
+      background: linear-gradient(135deg, #198754, #32c875);
+    }
+    .kpi-card-debits {
+      background: linear-gradient(135deg, #dc3545, #f46b7b);
+    }
+
+    .dashboard-kpi-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.9;
+    }
+
+    .dashboard-kpi-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    /* Charts */
+    .chart-wrapper {
+      position: relative;
+      height: 170px;
+      max-height: 220px;
+    }
+    .chart-wrapper canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Calendar */
+    .calendar-grid {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .calendar-grid th,
+    .calendar-grid td {
+      text-align: center;
+      padding: 4px;
+    }
+    .calendar-grid th {
+      font-weight: 600;
+      color: #6c757d;
+    }
+    .calendar-grid td span {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      border-radius: 50%;
+    }
+    .calendar-today span {
+      background-color: #211E56;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    #homePage h1 {
+      letter-spacing: 0.08em;
+      font-size: 1.6rem;
+    }
+  </style>
+</head>
+
+<div id="homePage" class="container-fluid">
+  <h1 class="mb-3">HOME</h1>
+  <hr class="mt-0 mb-3">
+
+  <!-- Top row: Welcome + Handled Organization (left) and Calendar (right) -->
+  <div class="row g-3 mb-3">
+    <!-- Left side: stacked cards -->
+    <div class="col-lg-8">
+      <!-- Welcome -->
+      <div class="card welcome-card mb-3">
+        <div class="card-body">
+          <h4 class="mb-1">
+            Welcome back, <span id="welcomeUsername">Student</span>!
+          </h4>
+          <p class="text-muted mb-0">
+            <i class="bi bi-calendar me-1"></i>
+            Today: <span id="welcomeToday">—</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Handled Organization Info (OFFICER ONLY) -->
+      <div id="handledOrgWrap" class="card handled-org-card shadow-sm">
+        <div class="card-body">
+          <div class="small text-uppercase">You are handling</div>
+          <div class="handled-org-name" id="handledOrgName">—</div>
+          <div class="small mt-1" id="handledOrgScope">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right side: Calendar -->
+    <div class="col-lg-4 d-flex">
+      <div class="card shadow-sm h-100 w-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-calendar-event me-1"></i> Calendar</span>
+          <span class="small text-muted" id="calendarMonthLabel">Month YYYY</span>
+        </div>
+        <div class="card-body d-flex flex-column">
+          <table class="calendar-grid mb-2">
+            <thead>
+              <tr>
+                <th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardCalendarBody">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+          <div class="small text-muted mt-auto">
+            Today: <span id="calendarTodayLabel">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs (OFFICER ONLY) -->
+  <div id="kpiRow" class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card dashboard-kpi-card kpi-card-fees">
+        <div class="card-body">
+          <div class="dashboard-kpi-title">Total Org Fees</div>
+          <div class="dashboard-kpi-value" id="kpiOrgFeesTotal">₱0.00</div>
+          <div class="small text-white-50 mt-1">Collected for your org</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card dashboard-kpi-card kpi-card-credits">
+        <div class="card-body">
+          <div class="dashboard-kpi-title">Event Credits</div>
+          <div class="dashboard-kpi-value" id="kpiEventCredits">₱0.00</div>
+          <div class="small text-white-50 mt-1">Funds received (AY)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card dashboard-kpi-card kpi-card-debits">
+        <div class="card-body">
+          <div class="dashboard-kpi-title">Event Expenses</div>
+          <div class="dashboard-kpi-value" id="kpiEventDebits">₱0.00</div>
+          <div class="small text-white-50 mt-1">Expenses recorded (AY)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts (OFFICER ONLY) -->
+  <div id="chartsRow" class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-people-fill me-1"></i> Organization Fees Overview</span>
+          <span class="small text-muted">Your organization</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper">
+            <canvas id="orgFeesChart"></canvas>
+          </div>
+          <div class="small text-muted mt-2">
+            Total confirmed collection for your organization (canonical term).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-receipt-cutoff me-1"></i> Event Funds Overview</span>
+          <span class="small text-muted">Credits vs Expenses</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper">
+            <canvas id="eventFundsChart"></canvas>
+          </div>
+          <div class="small text-muted mt-2">
+            Top events for your organization based on recorded credits/expenses.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student lists (ALWAYS VISIBLE) -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <i class="bi bi-x-circle me-1 text-danger"></i> Unpaid Organizations
+        </div>
+        <ul class="list-group list-group-flush" id="unpaidOrgList">
+          <li class="list-group-item text-muted">—</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <i class="bi bi-check-circle me-1 text-success"></i> Paid Organizations
+        </div>
+        <ul class="list-group list-group-flush" id="paidOrgList">
+          <li class="list-group-item text-muted">—</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <i class="bi bi-people-fill me-1"></i> Clubs Joined (AY-wide)
+        </div>
+        <ul class="list-group list-group-flush" id="clubsList">
+          <li class="list-group-item text-muted">—</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

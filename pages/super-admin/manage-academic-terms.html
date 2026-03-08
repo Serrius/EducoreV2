@@ -1,0 +1,408 @@
+<!-- pages/super-admin/manage-academic-terms.html -->
+<!-- =========================================================
+PROGRAMMED BY:
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P
+K:::::::K    K:::::KI::::::::IB::::::BBBBBB:::::B P::::::PPPPPP:::::P
+K:::::::K   K::::::KII::::::IIBB:::::B     B:::::BPP:::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P
+  K:::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP
+  K:::::::::::K       I::::I    B::::BBBBBB:::::B   P::::PPPPPPPPP
+  K::::::K:::::K      I::::I    B::::B     B:::::B  P::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P
+K:::::::K   K::::::KII::::::IIBB:::::BBBBBB::::::BPP::::::PP
+K:::::::K    K:::::KI::::::::IB:::::::::::::::::B P::::::::P
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::P
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
+========================================================= -->
+
+<head>
+  <title>Academic Terms</title>
+</head>
+
+<!-- Header -->
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="mb-1">Academic Terms</h1>
+    <div class="text-muted">
+      Manage school years and semesters. Set one term as <span class="fw-semibold">Active</span> (auto-closes the previous term).
+    </div>
+  </div>
+
+  <!-- Right-side actions -->
+  <div class="ms-auto d-flex gap-2">
+    <button type="button" class="btn btn-outline-secondary" id="btnRefreshTerms">
+      <i class="bi bi-arrow-clockwise me-2"></i>
+      Refresh
+    </button>
+
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalUpsertTerm" id="btnAddTerm">
+      <i class="bi bi-plus-circle me-2"></i>
+      Add Term
+    </button>
+  </div>
+</div>
+
+<!-- Single Container Card -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-3 p-md-4">
+
+    <!-- Terms Tabs -->
+    <ul class="nav nav-tabs" id="termTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link active"
+          id="tab-active-terms"
+          data-bs-toggle="tab"
+          data-bs-target="#panel-active-terms"
+          type="button"
+          role="tab"
+          aria-controls="panel-active-terms"
+          aria-selected="true"
+        >
+          <i class="bi bi-lightning-charge-fill me-2"></i>
+          Active Term
+        </button>
+      </li>
+
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link"
+          id="tab-closed-terms"
+          data-bs-toggle="tab"
+          data-bs-target="#panel-closed-terms"
+          type="button"
+          role="tab"
+          aria-controls="panel-closed-terms"
+          aria-selected="false"
+        >
+          <i class="bi bi-clock-history me-2"></i>
+          Closed Terms
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content pt-4" id="termTabsContent">
+
+      <!-- ACTIVE TERM TAB -->
+      <div class="tab-pane fade show active" id="panel-active-terms" role="tabpanel" aria-labelledby="tab-active-terms" tabindex="0">
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="text-muted small">
+            Only one academic term should be Active at a time.
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm" style="max-width: 320px;">
+              <span class="input-group-text bg-light">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="text" class="form-control" id="activeTermsSearch" placeholder="Search school year / semester..." />
+            </div>
+          </div>
+        </div>
+
+        <!-- Active term summary card -->
+        <div class="border rounded-4 p-3 p-md-4 bg-light mb-3" id="activeTermSummary">
+          <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+            <div>
+              <div class="text-muted small mb-1">Current Active Term</div>
+              <div class="fs-5 fw-semibold" id="activeTermTitle">—</div>
+              <div class="text-muted small" id="activeTermSubtitle">No active term set.</div>
+            </div>
+
+            <div class="d-flex gap-2 align-items-center">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnEditActiveTerm" disabled>
+                <i class="bi bi-pencil-square me-2"></i>Edit
+              </button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="btnCloseActiveTerm" disabled>
+                <i class="bi bi-lock-fill me-2"></i>Close
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle table-hover mb-0" id="tblActiveTerms">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 200px;">School Year</th>
+                <th style="width: 160px;">Semester</th>
+                <th style="width: 140px;">Status</th>
+                <th style="width: 190px;">Created</th>
+                <th class="text-end" style="width: 240px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="activeTermsTbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-5">
+                  <div class="mb-2">
+                    <i class="bi bi-inbox" style="font-size: 1.5rem;"></i>
+                  </div>
+                  No active term found.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3 text-muted small">
+          Tip: Setting a new term to <span class="fw-semibold">Active</span> should automatically close the previous one.
+        </div>
+      </div>
+
+      <!-- CLOSED TERMS TAB -->
+      <div class="tab-pane fade" id="panel-closed-terms" role="tabpanel" aria-labelledby="tab-closed-terms" tabindex="0">
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="text-muted small">
+            Closed terms remain for history and reporting.
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <!-- rows/page -->
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Rows</span>
+              <select class="form-select form-select-sm" id="closedTermsPageSize" style="width: 95px;">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+
+            <div class="input-group input-group-sm" style="max-width: 320px;">
+              <span class="input-group-text bg-light">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="text" class="form-control" id="closedTermsSearch" placeholder="Search closed terms..." />
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle table-hover mb-0" id="tblClosedTerms">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 200px;">School Year</th>
+                <th style="width: 160px;">Semester</th>
+                <th style="width: 140px;">Status</th>
+                <th style="width: 190px;">Created</th>
+                <th class="text-end" style="width: 260px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="closedTermsTbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-5">
+                  <div class="mb-2">
+                    <i class="bi bi-clock-history" style="font-size: 1.5rem;"></i>
+                  </div>
+                  No closed terms found.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- pagination footer -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+          <div class="text-muted small" id="closedTermsMeta">Showing 0–0 of 0</div>
+
+          <nav aria-label="Closed terms pagination">
+            <ul class="pagination pagination-sm mb-0" id="closedTermsPagination">
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+              <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+              <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+            </ul>
+          </nav>
+        </div>
+
+        <div class="mt-3 text-muted small">
+          Restoring a term will set it as Active (and close any current Active term).
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+MODALS
+========================================================= -->
+
+<!-- ADD / EDIT TERM MODAL -->
+<div class="modal fade" id="modalUpsertTerm" tabindex="-1" aria-labelledby="modalUpsertTermLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="modalUpsertTermLabel">Add Academic Term</h5>
+          <div class="text-muted small">Define the school year and semester for this term.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form id="formUpsertTerm" autocomplete="off">
+        <div class="modal-body">
+          <input type="hidden" id="term_id" name="id" value="" />
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label">School Year <span class="text-danger">*</span></label>
+                  <input
+                      type="text"
+                      class="form-control"
+                      id="school_year"
+                      name="school_year"
+                      placeholder="YYYY-YYYY"
+                      maxlength="9"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      pattern="^\d{4}-\d{4}$"
+                      aria-describedby="schoolYearHelp"
+                      required
+                    />
+              <div class="form-text" id="schoolYearHelp">
+                Format: <span class="fw-semibold">YYYY-YYYY</span> (example: 2025-2026)
+              </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Semester <span class="text-danger">*</span></label>
+              <select class="form-select" id="semester" name="semester" required>
+                <option value="" selected disabled>Select semester...</option>
+                <option value="1st">1st Semester</option>
+                <option value="2nd">2nd Semester</option>
+                <option value="Summer">Summer</option>
+              </select>
+              <div class="form-text">You can remove Summer later if you don’t use it.</div>
+            </div>
+
+            <div class="col-12">
+              <div class="border rounded-4 p-3 bg-light">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="text-primary">
+                    <i class="bi bi-info-circle" style="font-size: 1.4rem;"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold">Status behavior</div>
+                    <div class="text-muted small mb-0">
+                      If you set this term to <span class="fw-semibold">Active</span>, your backend should automatically close any currently active term.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Set Status</label>
+              <div class="d-flex flex-wrap gap-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="status" id="statusClosed" value="Closed" checked />
+                  <label class="form-check-label" for="statusClosed">Closed</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="status" id="statusActive" value="Active" />
+                  <label class="form-check-label" for="statusActive">Active</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-danger d-none mt-3" id="termFormError"></div>
+          <div class="alert alert-success d-none mt-3" id="termFormSuccess"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancel
+          </button>
+
+          <button type="button" class="btn btn-primary" id="btnSaveTerm">
+            <span class="termsave-btn-text"><i class="bi bi-save me-2"></i>Save</span>
+            <span class="termsave-btn-loading d-none">
+              <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Saving...
+            </span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM ACTION MODAL -->
+<div class="modal fade" id="modalConfirmTermAction" tabindex="-1" aria-labelledby="modalConfirmTermActionLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalConfirmTermActionLabel">Confirm Action</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="confirm_term_id" value="" />
+        <input type="hidden" id="confirm_term_action" value="" />
+
+        <div class="d-flex align-items-start gap-3">
+          <div class="text-warning">
+            <i class="bi bi-exclamation-triangle" style="font-size: 1.6rem;"></i>
+          </div>
+
+          <div class="flex-grow-1">
+            <div class="fw-semibold mb-1" id="confirmTermTitle">—</div>
+            <div class="text-muted" id="confirmTermMessage">Are you sure you want to proceed?</div>
+
+            <div class="border rounded-4 p-3 bg-light mt-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <span class="text-muted">School Year</span>
+                <span class="fw-semibold" id="confirm_term_school_year">—</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-between mt-2">
+                <span class="text-muted">Semester</span>
+                <span class="fw-semibold" id="confirm_term_semester">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="confirmTermError"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+
+        <button type="button" class="btn btn-danger" id="btnConfirmTermAction">
+          <span class="termaction-btn-text">Confirm</span>
+          <span class="termaction-btn-loading d-none">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Processing...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  REMINDERS FOR DEVELOPER(ME):
+  Hook your JS like your other pages:
+  <script src="js/manage-academic-terms/manage-academic-terms.js"></script>
+
+  Expected key IDs used by JS:
+  - btnRefreshTerms, btnAddTerm
+  - activeTermsSearch, closedTermsSearch, closedTermsPageSize
+  - activeTermsTbody, closedTermsTbody
+  - closedTermsMeta, closedTermsPagination
+  - modalUpsertTerm, formUpsertTerm, btnSaveTerm
+  - termFormError, termFormSuccess
+  - modalConfirmTermAction, btnConfirmTermAction, confirmTermError
+
+  School year mask target:
+  - #school_year (expects YYYY-YYYY, maxlength 9, numeric input mode)
+-->

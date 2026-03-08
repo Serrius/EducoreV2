@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="assets/images/logo.png" />
+  <title>Login</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="login-style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Intro Div (Preserved) -->    
+<div class="intro" id="intro"></div>    
+  <div class="login-container">
+    <div class="fireflies" id="fireflies"></div>
+    <div class="login-box">
+      <!-- Login Form Section -->
+      <div class="login-form">
+        <h1><span class="white-color">Edu</span><span class="yellow-color">Core</span></h1>
+        <h2>LOGIN</h2>
+        <p>WELCOME! PLEASE ENTER YOUR DETAILS</p>
+        <form id="loginForm">
+          <div class="mb-3">
+            <label for="username" class="form-label">ID Number</label>
+            <input type="text" class="form-control" id="username" placeholder="Enter username or ID number" required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" placeholder="Enter password" required>
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="rememberMe">
+            <label class="form-check-label" for="rememberMe">Remember me</label>
+          </div>
+          <button type="submit" class="btn btn-custom w-100">LOGIN</button>
+          <div class="text-center mt-3">
+            <span>Don't have an account?</span> <a href="register.html" class="text-decoration-none">Register</a>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Logo Section -->
+      <div class="logo-section">
+        <!-- Update the src attribute with the correct path to your EduCore logo -->
+        <div class="blur-load" style="background-image: url('assets/images/school-logo-small.png'); ">
+          <img src="assets/images/school-logo.png" alt="EduCore Logo" style="max-width: 350px;">
+        </div>  
+        <h2 class="mt-3" style="color: #211e56;">JASAAN</h2>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer-text" style="text-shadow: 0 0 6px rgba(255,255,255,0.5);">
+      EduCore v2.0 • Built by KIBP © 2025
+    </div>
+  </div>
+
+  <script src="js/login.js"></script>
+
+  <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Some Firefly Bullshit cuzz why not? -->
+  <script>
+(() => {
+  const layer = document.getElementById("fireflies");
+  if (!layer) return;
+
+  // Clear old ones if you re-run
+  layer.innerHTML = "";
+
+  const COUNT = 26;         // more = denser
+  const SPEED = 0.45;       // base speed
+  const WANDER = 0.035;     // direction randomness
+  const FPS_CLAMP = 0.05;   // clamp dt so tab switches don't teleport
+
+  const rand = (min, max) => Math.random() * (max - min) + min;
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  // Make sure layer can position children
+  layer.style.position = layer.style.position || "absolute";
+
+  const rect = () => layer.getBoundingClientRect();
+
+  const flies = [];
+  let last = performance.now();
+
+  function makeFirefly() {
+    const el = document.createElement("span");
+    el.className = "firefly";
+
+    // size + brightness tuning
+    const size = rand(3.5, 7.5);
+    const glow = rand(18, 34);      // stronger glow
+    const glow2 = glow * rand(1.3, 1.8);
+
+    // Inline style boosts brightness even if CSS is weak
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.borderRadius = "50%";
+    el.style.position = "absolute";
+    el.style.opacity = "0.95";
+    el.style.background =
+      "radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,230,140,0.9) 35%, rgba(255,255,255,0) 70%)";
+    el.style.boxShadow = `
+      0 0 ${glow}px rgba(255, 220, 120, 0.95),
+      0 0 ${glow2}px rgba(255, 220, 120, 0.55),
+      0 0 ${Math.round(glow2 * 1.2)}px rgba(255, 255, 255, 0.25)
+    `.trim();
+
+    layer.appendChild(el);
+
+    const r = rect();
+    const x = rand(0, r.width);
+    const y = rand(0, r.height);
+
+    // Velocity + heading
+    const angle = rand(0, Math.PI * 2);
+    const spd = SPEED * rand(0.7, 1.6);
+
+    const fly = {
+      el,
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      tw: rand(0, Math.PI * 2),  // twinkle phase
+      twSpeed: rand(0.9, 2.2),
+      pulseMin: rand(0.45, 0.7),
+      pulseMax: rand(0.85, 1.0),
+      size,
+      r,
+    };
+
+    // Put it initially
+    el.style.transform = `translate(${fly.x}px, ${fly.y}px)`;
+    flies.push(fly);
+  }
+
+  for (let i = 0; i < COUNT; i++) makeFirefly();
+
+  // Keep within bounds: wrap-around (feels like infinite space)
+  function wrap(f, w, h) {
+    if (f.x < -20) f.x = w + 20;
+    if (f.x > w + 20) f.x = -20;
+    if (f.y < -20) f.y = h + 20;
+    if (f.y > h + 20) f.y = -20;
+  }
+
+  function animate(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    dt = clamp(dt, 0, FPS_CLAMP);
+
+    const r = rect();
+    const w = r.width, h = r.height;
+
+    for (const f of flies) {
+      // wander (slowly changes direction so it feels alive)
+      const jitterX = (Math.random() - 0.5) * WANDER;
+      const jitterY = (Math.random() - 0.5) * WANDER;
+
+      f.vx += jitterX;
+      f.vy += jitterY;
+
+      // slight speed normalization so they don't stall
+      const v = Math.hypot(f.vx, f.vy) || 0.0001;
+      const target = SPEED * 1.0;
+      f.vx = (f.vx / v) * (target * rand(0.85, 1.15));
+      f.vy = (f.vy / v) * (target * rand(0.85, 1.15));
+
+      // move
+      f.x += f.vx * 120 * dt; // multiply for visible motion
+      f.y += f.vy * 120 * dt;
+
+      wrap(f, w, h);
+
+      // twinkle/pulse brightness
+      f.tw += dt * f.twSpeed;
+      const pulse = f.pulseMin + (Math.sin(f.tw) * 0.5 + 0.5) * (f.pulseMax - f.pulseMin);
+
+      // scale + opacity for pop
+      const scale = 0.85 + pulse * 0.45;
+      f.el.style.opacity = String(0.45 + pulse * 0.55);
+      f.el.style.transform = `translate(${f.x}px, ${f.y}px) scale(${scale})`;
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+
+  // Optional: regen on resize so bounds stay correct
+  window.addEventListener("resize", () => {
+    // nothing required due to wrap using fresh rect(), but you can adjust count if you want
+  });
+})();
+  </script>
+</body>
+</html>

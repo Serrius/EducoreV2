@@ -1,0 +1,334 @@
+<!-- manage-announcement.html -->
+<head>
+  <title>Manage Announcements</title>
+  <style>
+    #manage-announcement h1 {
+      letter-spacing: .08em;
+      font-size: 1.6rem;
+    }
+    #manage-announcement .page-subtitle { font-size: .85rem; }
+    #manage-announcement .nav-tabs .nav-link { font-weight: 600; font-size: 12px; }
+
+    #manage-announcement .announcement-card .announcement-body {
+      display: -webkit-box;
+      -webkit-line-clamp: 5;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: pre-wrap;
+      min-height: 6.5em;
+    }
+    #manage-announcement .announcement-card:focus {
+      outline: 2px solid rgba(13,110,253,.35);
+      outline-offset: 2px;
+      border-radius: .5rem;
+    }
+
+    /* Tab search bars */
+    #manage-announcement .ann-searchbar {
+      max-width: 360px;
+    }
+
+    /* Target user picker dropdown */
+    #manage-announcement .user-suggest {
+      position: absolute;
+      z-index: 1080;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      max-height: 260px;
+      overflow: auto;
+      display: none;
+    }
+    #manage-announcement .user-suggest.show { display: block; }
+    #manage-announcement .user-suggest .list-group-item { cursor: pointer; }
+    #manage-announcement .user-suggest .list-group-item:hover {
+      background: rgba(13,110,253,.06);
+    }
+  </style>
+</head>
+
+<div class="container-fluid" id="manage-announcement">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+    <div class="d-flex flex-column">
+      <h1 class="mb-0 text-uppercase">MANAGE ANNOUNCEMENT</h1>
+      <span class="page-subtitle text-muted">
+        Post, review, and publish announcements. Notifications are sent once an announcement becomes <strong>Active</strong>.
+      </span>
+      <span id="ayReadOnlyBadge" class="text-muted mt-1 invisible">
+        <strong><i class="bi bi-eye me-1"></i>Viewing another Academic Year</strong>
+      </span>
+    </div>
+
+    <!-- RIGHT SIDE (whoAmI + button aligned right) -->
+    <div class="ms-auto d-flex align-items-center gap-2" style="display: none;">
+     <!-- <span class="text-muted small d-none d-md-inline" style="display: none;">Posting as:</span>
+      <span id="whoAmI" class="badge bg-secondary" style="display: none;">—</span> -->
+
+      <button id="btnNewAnnouncement" class="btn btn-sm btn-success d-none">
+        <i class="bi bi-plus-circle me-1"></i>New Announcement
+      </button>
+    </div>
+  </div>
+  <hr class="mt-0 mb-3">
+
+  <!-- Filters -->
+  <div class="d-flex justify-content-end gap-3 mt-2 flex-wrap">
+    <div class="d-flex gap-2 align-items-center">
+      <span class="text-muted small">School Year:</span>
+      <select id="announcementAySpanSelect" class="form-select form-select-sm" style="width:auto; min-width:160px;"></select>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="text-muted small">Semester:</span>
+      <select id="announcementActiveYearSelect" class="form-select form-select-sm" style="width:auto; min-width:120px;"></select>
+    </div>
+  </div>
+
+  <div class="container mt-4">
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <!-- Tabs (JS will hide for student-only) -->
+        <ul class="nav nav-tabs justify-content-start" id="announcementTabs" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" id="tabPendingAnnouncementTab" data-bs-toggle="tab" data-bs-target="#tabPendingAnnouncement" type="button" role="tab">
+              <i class="bi bi-hourglass-split me-1"></i>Pending
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tabAllAnnouncementTab" data-bs-toggle="tab" data-bs-target="#tabAllAnnouncement" type="button" role="tab">
+              <i class="bi bi-megaphone me-1"></i>Active
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tabArchivedAnnouncementTab" data-bs-toggle="tab" data-bs-target="#tabArchivedAnnouncement" type="button" role="tab">
+              <i class="bi bi-archive me-1"></i>Archived
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content pt-3">
+          <!-- PENDING -->
+          <div class="tab-pane fade show active" id="tabPendingAnnouncement" role="tabpanel">
+            <!-- search -->
+            <div class="d-flex justify-content-end mb-3">
+              <div class="input-group input-group-sm ann-searchbar">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input id="pendingAnnouncementSearch" type="text" class="form-control" placeholder="Search pending announcements...">
+              </div>
+            </div>
+            <div id="pendingAnnouncementWrap"></div>
+          </div>
+
+          <!-- ACTIVE -->
+          <div class="tab-pane fade" id="tabAllAnnouncement" role="tabpanel">
+            <div class="d-flex justify-content-end mb-3">
+              <div class="input-group input-group-sm ann-searchbar">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input id="activeAnnouncementSearch" type="text" class="form-control" placeholder="Search active announcements...">
+              </div>
+            </div>
+            <div id="activeAnnouncementWrap"></div>
+          </div>
+
+          <!-- ARCHIVED -->
+          <div class="tab-pane fade" id="tabArchivedAnnouncement" role="tabpanel">
+            <div class="d-flex justify-content-end mb-3">
+              <div class="input-group input-group-sm ann-searchbar">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input id="archivedAnnouncementSearch" type="text" class="form-control" placeholder="Search archived announcements...">
+              </div>
+            </div>
+            <div id="archivedAnnouncementWrap"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Announcement Modal -->
+  <div class="modal fade" id="modalNewAnnouncement" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>New Announcement</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <form id="newAnnouncementForm">
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Title</label>
+                <input name="title" class="form-control" maxlength="255" required>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label d-flex align-items-center gap-2">
+                  <span>Body</span>
+                  <!-- ✅ image disabled icon -->
+                  <span class="text-muted small d-inline-flex align-items-center gap-1" title="Image uploads disabled">
+                    <i class="bi bi-image"></i>
+                    <i class="bi bi-slash-lg" style="margin-left:-6px;"></i>
+                    <span class="d-none d-sm-inline">Images disabled</span>
+                  </span>
+                </label>
+                <textarea name="body" class="form-control" rows="5" required></textarea>
+
+                <!-- ✅ storage notice -->
+                <div class="alert alert-warning border mt-2 mb-0">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  <strong>Notice:</strong> Adding images to announcements is currently <strong>disabled</strong>
+                  due to limited storage capacity on the hosting server.
+                </div>
+              </div>
+
+              <!-- org dropdown -->
+              <div class="col-12 col-md-6">
+                <label class="form-label">Organization</label>
+                <select id="newAnnOrgSelect" name="org_id" class="form-select">
+                  <option value="">General</option>
+                </select>
+                <div id="newAnnOrgHelp" class="form-text">
+                  General is only allowed for privileged roles. Organization posts may require approval depending on role.
+                </div>
+              </div>
+
+              <!-- target user picker -->
+              <div class="col-12 col-md-6 position-relative">
+                <label class="form-label">Target User (optional)</label>
+                <input id="newAnnTargetUserText" class="form-control" placeholder="Search name or ID number...">
+                <input type="hidden" name="target_user_id" id="newAnnTargetUserId" value="">
+                <div id="newAnnUserSuggest" class="user-suggest">
+                  <div class="list-group shadow-sm"></div>
+                </div>
+                <div class="form-text">
+                  Leave blank for everyone. Pick from suggestions: <code>Full Name(id_number)</code>
+                  (example: <code>Juan Dela Cruz(202212345678)</code>).
+                </div>
+              </div>
+
+              <!-- HIDDEN academic term row -->
+              <div class="col-12" style="display:none;">
+                <label class="form-label">Academic Term</label>
+                <input name="academic_term_id" class="form-control" readonly>
+                <div class="form-text">Uses the currently selected term in this page.</div>
+              </div>
+
+              <div class="col-12">
+                <div class="alert alert-light border mb-0">
+                  <i class="bi bi-bell me-1"></i>
+                  Notifications are created when the announcement becomes <strong>Active</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-send me-1"></i>Submit
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Announcement Modal -->
+  <div class="modal fade" id="modalViewAnnouncement" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title d-flex align-items-center gap-2">
+              <i class="bi bi-card-text"></i>
+              <span id="viewAnnTitle">Announcement</span>
+              <span id="viewAnnStatus"></span>
+            </h5>
+            <div id="viewAnnMeta" class="mt-1"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <pre id="viewAnnBody" class="mb-0" style="white-space:pre-wrap; font-family:inherit;"></pre>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btnViewEdit" type="button" class="btn btn-outline-primary d-none">
+            <i class="bi bi-pencil me-1"></i>Edit
+          </button>
+
+          <div class="ms-auto d-flex gap-2">
+            <button id="btnViewAccept" type="button" class="btn btn-success d-none">
+              <i class="bi bi-check2-circle me-1"></i>Accept
+            </button>
+            <button id="btnViewDecline" type="button" class="btn btn-outline-danger d-none">
+              <i class="bi bi-x-circle me-1"></i>Decline
+            </button>
+            <button id="btnViewArchive" type="button" class="btn btn-outline-secondary d-none">
+              <i class="bi bi-archive me-1"></i>Archive
+            </button>
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Announcement Modal -->
+  <div class="modal fade" id="modalEditAnnouncement" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Announcement</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <form id="editAnnouncementForm">
+          <input type="hidden" name="id">
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Title</label>
+                <input name="title" class="form-control" maxlength="255" required>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">Body</label>
+                <textarea name="body" class="form-control" rows="5" required></textarea>
+              </div>
+
+              <!-- target user picker (edit) -->
+              <div class="col-12 position-relative">
+                <label class="form-label">Target User (optional)</label>
+                <input id="editAnnTargetUserText" class="form-control" placeholder="Search name or ID number...">
+                <input type="hidden" name="target_user_id" id="editAnnTargetUserId" value="">
+                <div id="editAnnUserSuggest" class="user-suggest">
+                  <div class="list-group shadow-sm"></div>
+                </div>
+                <div class="form-text">Leave blank to remove targeting. Format: <code>Full Name(id_number)</code>.</div>
+              </div>
+
+              <div class="col-12">
+                <div class="alert alert-light border mb-0">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Editing an announcement does <strong>not</strong> resend notifications. Notifications only occur when it becomes <strong>Active</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>

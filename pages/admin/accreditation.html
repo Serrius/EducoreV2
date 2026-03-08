@@ -1,0 +1,1654 @@
+<!-- pages/admin/manage-accreditation.html -->
+<!-- =========================================================
+PROGRAMMED BY:
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPPPPPPPPP
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::::::::::::::P
+K:::::::K    K:::::KI::::::::IB::::::BBBBBB:::::B P::::::PPPPPP:::::P
+K:::::::K   K::::::KII::::::IIBB:::::B     B:::::BPP:::::P     P:::::P
+KK::::::K  K:::::KKK  I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K:::::K K:::::K     I::::I    B::::B     B:::::B  P::::P     P:::::P
+  K::::::K:::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPP:::::P
+  K::::::::::K       I::::I    B:::::::::::::BB    P:::::::::::::PP
+  K:::::::::::K      I::::I    B::::BBBBBB:::::B   P::::PPPPPPPPP
+  K::::::K:::::K     I::::I    B::::B     B:::::B  P::::P
+  K:::::K K:::::K    I::::I    B::::B     B:::::B  P::::P
+KK::::::K  K:::::KKK  I::::I    B::::BBBBBB:::::B  P::::P
+K:::::::K   K::::::KII::::::IIB:::::::::::::BB   P::::P
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::P
+K:::::::K    K:::::KI::::::::IB::::::::::::::::B  P::::P
+KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
+========================================================= -->
+<head>
+  <title>Manage Accreditation</title>
+  <style>
+    /* Page-scoped helpers (safe; won't affect other pages) */
+    .sa-acc .place-items-center { place-items: center; }
+    .sa-acc .min-w-0 { min-width: 0 !important; }
+    .sa-acc .badge { line-height: 1.1; }
+    .sa-acc .table td, .sa-acc .table th { vertical-align: middle; }
+    .sa-acc .sa-actions { white-space: nowrap; }
+    .sa-acc .sa-actions .btn { padding: .375rem .55rem; }
+    .sa-acc .sa-actions .btn .bi { margin: 0 !important; }
+    .sa-acc .sa-wrap { white-space: normal; word-break: break-word; }
+    .sa-acc .sa-truncate {
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    @media (max-width: 576px) {
+      .sa-acc .sa-truncate { max-width: 220px; }
+    }
+
+    /* Toolbar alignment helpers */
+    .sa-acc .sa-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+    }
+    .sa-acc .sa-toolbar-left { min-width: 0; }
+    .sa-acc .sa-toolbar-right {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .5rem;
+      margin-left: auto;
+    }
+
+    /* Make controls visually consistent */
+    .sa-acc .sa-toolbar-right .form-select,
+    .sa-acc .sa-toolbar-right .btn,
+    .sa-acc .sa-tools .form-control,
+    .sa-acc .sa-tools .btn {
+      height: 38px;
+    }
+
+    /* Header right tools */
+    .sa-acc .sa-tools {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .sa-acc .sa-tools .input-group {
+      flex: 1 1 320px;
+      min-width: 240px;
+    }
+    .sa-acc .sa-tools #adAccRefreshBtn,
+    .sa-acc .sa-tools #openAddOrgModal {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    @media (min-width: 992px) {
+      .sa-acc .sa-tools { width: auto; }
+      .sa-acc .sa-tools .input-group { min-width: 320px; }
+    }
+
+    /* Requirement upload table styling */
+    .sa-acc .req-name { font-weight: 600; }
+    .sa-acc .req-meta { font-size: .85rem; color: #6c757d; }
+    .sa-acc .req-template-meta { font-size: .82rem; color: #6c757d; }
+    .sa-acc .req-template-actions { white-space: nowrap; }
+    .sa-acc .req-upload input[type="file"] { height: 38px; }
+
+    /* Modal helpers */
+    .sa-acc .sa-filehint { font-size: .85rem; color:#6c757d; }
+
+    /* Officers */
+    .sa-acc .off-required-badge { font-size: .75rem; }
+    .sa-acc .off-row-required { background: rgba(13,110,253,.04); }
+    .sa-acc .off-row-optional { background: rgba(108,117,125,.04); }
+    .sa-acc .off-pos {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .sa-acc .off-pos input[readonly] {
+      background: #fff;
+    }
+
+    /* Student search dropdown */
+    .sa-acc .student-search-container {
+      position: relative;
+    }
+    .sa-acc .student-search-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 300px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #dee2e6;
+      border-radius: 0.375rem;
+      box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+      z-index: 1000;
+      display: none;
+    }
+    .sa-acc .student-search-item {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid #f8f9fa;
+    }
+    .sa-acc .student-search-item:hover {
+      background-color: #f8f9fa;
+    }
+    .sa-acc .student-search-item:last-child {
+      border-bottom: none;
+    }
+    .sa-acc .student-search-item .student-id {
+      font-weight: 600;
+      color: #0d6efd;
+    }
+    .sa-acc .student-search-item .student-name {
+      font-weight: 500;
+    }
+    .sa-acc .student-search-item .student-details {
+      font-size: 0.85rem;
+      color: #6c757d;
+    }
+
+    /* Renewal status badges */
+  .sa-acc .renewal-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  .sa-acc .status-draft {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+  }
+  .sa-acc .status-copied {
+    background-color: #e7f1ff;
+    color: #0d6efd;
+    border: 1px solid #b6d4fe;
+  }
+  .sa-acc .status-new {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+  .sa-acc .status-unchanged {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    border: 1px solid #a3cfbb;
+  }
+  </style>
+</head>
+
+<div class="container-fluid py-3 sa-acc" id="adminAccreditationPage">
+
+  <!-- Page Header -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body p-3 p-md-4">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+          <div class="rounded-4 d-grid place-items-center"
+               style="width:48px;height:48px;background:rgba(13,110,253,.12);">
+            <i class="bi bi-building-check fs-3 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h4 class="mb-0 fw-semibold">Accreditation</h4>
+              <span class="badge rounded-pill text-bg-primary" style="display: none;">Admin</span>
+            </div>
+            <div class="text-muted small sa-wrap">
+              Submit accreditation once, then track the request status and returns.
+            </div>
+          </div>
+        </div>
+
+        <!-- Right tools -->
+        <div class="sa-tools ms-auto justify-content-end">
+          <div class="input-group">
+            <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="adAccSearch"
+                   placeholder="Search your organization..." autocomplete="off">
+          </div>
+
+          <button class="btn btn-outline-secondary" id="adAccRefreshBtn" type="button">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+          </button>
+
+          <!-- hidden by default; JS shows if admin can still submit -->
+          <button class="btn btn-primary" id="openAddOrgModal" type="button"
+                  data-bs-toggle="modal" data-bs-target="#addOrgModal">
+            <i class="bi bi-plus-lg me-1"></i> New Accreditation
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-3 text-muted small">
+        Active Term: <span class="fw-semibold" id="activeTermLabel">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Optional notice (JS toggles) -->
+  <div id="oneOrgNotice" class="alert alert-info border-0 rounded-4 shadow-sm d-none">
+    <div class="d-flex align-items-start gap-2">
+      <i class="bi bi-info-circle mt-1"></i>
+      <div class="sa-wrap">
+        <div class="fw-semibold">One organization only</div>
+        You can only submit accreditation for <strong>one</strong> organization. If you already submitted, the button is hidden.
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-3" id="adAccTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="adPendingTab" data-bs-toggle="tab" data-bs-target="#adPendingPane"
+              type="button" role="tab" aria-controls="adPendingPane" aria-selected="true">
+        <i class="bi bi-inbox-fill me-1"></i> Pending
+        <span class="badge text-bg-secondary ms-2" id="adPendingCount">0</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="adActiveTab" data-bs-toggle="tab" data-bs-target="#adActivePane"
+              type="button" role="tab" aria-controls="adActivePane" aria-selected="false">
+        <i class="bi bi-check2-circle me-1"></i> Active
+        <span class="badge text-bg-secondary ms-2" id="adActiveCount">0</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="adReturnedTab" data-bs-toggle="tab" data-bs-target="#adReturnedPane"
+              type="button" role="tab" aria-controls="adReturnedPane" aria-selected="false">
+        <i class="bi bi-arrow-counterclockwise me-1"></i> Returned
+        <span class="badge text-bg-secondary ms-2" id="adReturnedCount">0</span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="adAccTabsContent">
+
+    <!-- ========================= PENDING ========================= -->
+    <div class="tab-pane fade show active" id="adPendingPane" role="tabpanel" aria-labelledby="adPendingTab">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-3 p-md-4">
+          <div class="sa-toolbar mb-3">
+            <div class="sa-toolbar-left text-muted small" id="adPendingMeta">
+              Showing <span class="fw-semibold">0</span> pending requests.
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 90px;">ID</th>
+                  <th>Organization</th>
+                  <th style="width: 160px;">Type</th>
+                  <th style="width: 160px;">Scope</th>
+                  <th style="width: 170px;">Program</th>
+                  <th style="width: 170px;">Term</th>
+                  <th style="width: 130px;">Status</th>
+                  <th style="width: 140px;" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adPendingTbody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-5">
+                    <div class="mb-2"><i class="bi bi-hourglass-split fs-2"></i></div>
+                    No pending records.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small" id="adPendingPaginationMeta"></div>
+            <nav aria-label="Pending pagination">
+              <ul class="pagination pagination-sm mb-0" id="adPendingPagination"></ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================= ACTIVE ========================= -->
+    <div class="tab-pane fade" id="adActivePane" role="tabpanel" aria-labelledby="adActiveTab">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-3 p-md-4">
+          <div class="sa-toolbar mb-3">
+            <div class="sa-toolbar-left text-muted small" id="adActiveMeta">
+              Showing <span class="fw-semibold">0</span> active accreditations.
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 90px;">ID</th>
+                  <th>Organization</th>
+                  <th style="width: 160px;">Type</th>
+                  <th style="width: 160px;">Scope</th>
+                  <th style="width: 170px;">Program</th>
+                  <th style="width: 170px;">Term</th>
+                  <th style="width: 130px;">Status</th>
+                  <th style="width: 140px;" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adActiveTbody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-5">
+                    <div class="mb-2"><i class="bi bi-folder-check fs-2"></i></div>
+                    No active records.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small" id="adActivePaginationMeta"></div>
+            <nav aria-label="Active pagination">
+              <ul class="pagination pagination-sm mb-0" id="adActivePagination"></ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================= RETURNED ========================= -->
+    <div class="tab-pane fade" id="adReturnedPane" role="tabpanel" aria-labelledby="adReturnedTab">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-3 p-md-4">
+          <div class="sa-toolbar mb-3">
+            <div class="sa-toolbar-left text-muted small" id="adReturnedMeta">
+              Showing <span class="fw-semibold">0</span> returned requests.
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 90px;">ID</th>
+                  <th>Organization</th>
+                  <th style="width: 160px;">Type</th>
+                  <th style="width: 160px;">Scope</th>
+                  <th style="width: 170px;">Program</th>
+                  <th style="width: 170px;">Term</th>
+                  <th style="width: 130px;">Status</th>
+                  <th style="width: 140px;" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adReturnedTbody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-5">
+                    <div class="mb-2"><i class="bi bi-arrow-counterclockwise fs-2"></i></div>
+                    No returned records.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small" id="adReturnedPaginationMeta"></div>
+            <nav aria-label="Returned pagination">
+              <ul class="pagination pagination-sm mb-0" id="adReturnedPagination"></ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /page wrapper -->
+
+
+<!-- =========================================================
+  MODAL: NEW ACCREDITATION (Admin)
+  ✅ CHANGES:
+  - Removed Scope "Club" selection (only General + Exclusive)
+  - ✅ Hard-coded REQUIRED officers only (no add-ons)
+  - ✅ Removed all buttons (add/remove)
+  - ✅ Added student search for officer data
+  - ✅ Added optional fees:
+      - fee_required (Organizations)
+      - membership_fee (Clubs)
+========================================================= -->
+<div class="modal fade" id="addOrgModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0 shadow">
+
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">New Accreditation</h5>
+          <div class="text-muted small sa-truncate">
+            Fill out organization details, add officers, and upload required documents.
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form class="modal-body" id="addOrgForm" enctype="multipart/form-data">
+        <input type="hidden" name="author_id_number" id="addAuthorIdHidden" />
+
+        <!-- Org details -->
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Organization Name</label>
+            <input class="form-control" type="text" name="org_name" id="accOrgName" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Abbreviation</label>
+            <input class="form-control" type="text" name="org_abbr" id="accOrgAbbr" maxlength="50" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Organization Logo (optional)</label>
+            <input class="form-control" type="file" name="org_logo" accept="image/png,image/jpeg">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" name="description" id="accOrgDescription" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Mission</label>
+            <textarea class="form-control" name="mission" id="accOrgMission" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Vision</label>
+            <textarea class="form-control" name="vision" id="accOrgVision" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Objectives</label>
+            <textarea class="form-control" name="objectives" id="accOrgObjectives" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Advocacy</label>
+            <textarea class="form-control" name="advocacy" id="accOrgAdvocacy" rows="2" required></textarea>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Type + Scope + Program - FIXED ALIGNMENT -->
+        <div class="row g-3">
+          <div class="col-lg-4">
+            <label class="form-label">Organization Type</label>
+            <select class="form-select" id="accOrgType" name="org_type">
+              <option value="Organization" selected>Organization</option>
+              <option value="Club">Club</option>
+            </select>
+            <div class="form-text mt-2">Used to filter requirements (e.g., Club-only requirements).</div>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Scope</label>
+            <div class="btn-group w-100" role="group" aria-label="Scope">
+              <input type="radio" class="btn-check" name="scope" id="scopeGeneral" value="General" checked>
+              <label class="btn btn-outline-secondary" for="scopeGeneral">General</label>
+
+              <input type="radio" class="btn-check" name="scope" id="scopeExclusive" value="Exclusive">
+              <label class="btn btn-outline-primary" for="scopeExclusive">Exclusive</label>
+            </div>
+            <div class="form-text mt-2">Requirements load based on scope & type.</div>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Program (if Exclusive)</label>
+            <select class="form-select" id="accProgramId" name="program_id">
+              <option value="">— Select program —</option>
+            </select>
+            <div class="form-text mt-2">Select only for exclusive organizations.</div>
+          </div>
+        </div>
+
+        <!-- ✅ FEES (optional; toggled by type) -->
+        <div class="row g-3 mt-1" id="feesRow">
+          <!-- Organization-only -->
+          <div class="col-lg-6" id="orgFeeWrap">
+            <label class="form-label">Fee Required (Organizations) <span class="text-muted">(optional)</span></label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input
+                type="number"
+                class="form-control"
+                name="fee_required"
+                id="accFeeRequired"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 50.00">
+            </div>
+            <div class="form-text mt-2">Leave blank if no required fee for the organization.</div>
+          </div>
+
+          <!-- Club-only -->
+          <div class="col-lg-6" id="clubFeeWrap" style="display:none;">
+            <label class="form-label">Membership Fee (Clubs) <span class="text-muted">(optional)</span></label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input
+                type="number"
+                class="form-control"
+                name="membership_fee"
+                id="accMembershipFee"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 100.00">
+            </div>
+            <div class="form-text mt-2">Leave blank if club membership is free.</div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- ✅ OFFICERS (hard-coded REQUIRED only, student search enabled) -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Organization Officers</div>
+            <div class="text-muted small">
+              Search for students by ID or name to automatically fill their details.
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 260px;">Position</th>
+                <th>
+                  <div>Full Name</div>
+                  <div class="text-muted small fw-normal">Click search icon to find student</div>
+                </th>
+                <th style="width: 200px;">Course / Year</th>
+                <th style="width: 160px;">Status</th>
+              </tr>
+            </thead>
+
+            <tbody id="officersTbody">
+
+              <tr class="officer-row off-row-required" data-index="0" data-required="1">
+                <td>
+                  <div class="off-pos">
+                    <input class="form-control" name="officers[0][position]" value="President / Chairperson" readonly required>
+              
+                  </div>
+                  <input type="hidden" name="officers[0][student_id]" id="officer_0_student_id">
+                </td>
+                <td>
+                  <div class="student-search-container">
+                    <div class="input-group">
+                      <input class="form-control" name="officers[0][full_name]" id="officer_0_full_name"
+                             placeholder="Search student..." required
+                             data-search-target="#officer_0_student_id"
+                             data-course-target="#officer_0_course_year"
+                             autocomplete="off">
+                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(0)">
+                        <i class="bi bi-search"></i>
+                      </button>
+                    </div>
+                    <div class="student-search-results" id="searchResults_0"></div>
+                  </div>
+                </td>
+                <td>
+                  <input class="form-control" name="officers[0][course_year]" id="officer_0_course_year"
+                         placeholder="Will auto-fill from student search" readonly required>
+                </td>
+                <td>
+                  <select class="form-select" name="officers[0][status]">
+                    <option value="Active" selected>Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr class="officer-row off-row-required" data-index="1" data-required="1">
+                <td>
+                  <div class="off-pos">
+                    <input class="form-control" name="officers[1][position]" value="Vice President" readonly required>
+              
+                  </div>
+                  <input type="hidden" name="officers[1][student_id]" id="officer_1_student_id">
+                </td>
+                <td>
+                  <div class="student-search-container">
+                    <div class="input-group">
+                      <input class="form-control" name="officers[1][full_name]" id="officer_1_full_name"
+                             placeholder="Search student..." required
+                             data-search-target="#officer_1_student_id"
+                             data-course-target="#officer_1_course_year"
+                             autocomplete="off">
+                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(1)">
+                        <i class="bi bi-search"></i>
+                      </button>
+                    </div>
+                    <div class="student-search-results" id="searchResults_1"></div>
+                  </div>
+                </td>
+                <td>
+                  <input class="form-control" name="officers[1][course_year]" id="officer_1_course_year"
+                         placeholder="Will auto-fill from student search" readonly required>
+                </td>
+                <td>
+                  <select class="form-select" name="officers[1][status]">
+                    <option value="Active" selected>Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr class="officer-row off-row-required" data-index="2" data-required="1">
+                <td>
+                  <div class="off-pos">
+                    <input class="form-control" name="officers[2][position]" value="Secretary" readonly required>
+              
+                  </div>
+                  <input type="hidden" name="officers[2][student_id]" id="officer_2_student_id">
+                </td>
+                <td>
+                  <div class="student-search-container">
+                    <div class="input-group">
+                      <input class="form-control" name="officers[2][full_name]" id="officer_2_full_name"
+                             placeholder="Search student..." required
+                             data-search-target="#officer_2_student_id"
+                             data-course-target="#officer_2_course_year"
+                             autocomplete="off">
+                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(2)">
+                        <i class="bi bi-search"></i>
+                      </button>
+                    </div>
+                    <div class="student-search-results" id="searchResults_2"></div>
+                  </div>
+                </td>
+                <td>
+                  <input class="form-control" name="officers[2][course_year]" id="officer_2_course_year"
+                         placeholder="Will auto-fill from student search" readonly required>
+                </td>
+                <td>
+                  <select class="form-select" name="officers[2][status]">
+                    <option value="Active" selected>Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr class="officer-row off-row-required" data-index="3" data-required="1">
+                <td>
+                  <div class="off-pos">
+                    <input class="form-control" name="officers[3][position]" value="Treasurer" readonly required>
+              
+                  </div>
+                  <input type="hidden" name="officers[3][student_id]" id="officer_3_student_id">
+                </td>
+                <td>
+                  <div class="student-search-container">
+                    <div class="input-group">
+                      <input class="form-control" name="officers[3][full_name]" id="officer_3_full_name"
+                             placeholder="Search student..." required
+                             data-search-target="#officer_3_student_id"
+                             data-course-target="#officer_3_course_year"
+                             autocomplete="off">
+                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(3)">
+                        <i class="bi bi-search"></i>
+                      </button>
+                    </div>
+                    <div class="student-search-results" id="searchResults_3"></div>
+                  </div>
+                </td>
+                <td>
+                  <input class="form-control" name="officers[3][course_year]" id="officer_3_course_year"
+                         placeholder="Will auto-fill from student search" readonly required>
+                </td>
+                <td>
+                  <select class="form-select" name="officers[3][status]">
+                    <option value="Active" selected>Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr class="officer-row off-row-required" data-index="4" data-required="1">
+                <td>
+                  <div class="off-pos">
+                    <input class="form-control" name="officers[4][position]" value="Auditor" readonly required>
+              
+                  </div>
+                  <input type="hidden" name="officers[4][student_id]" id="officer_4_student_id">
+                </td>
+                <td>
+                  <div class="student-search-container">
+                    <div class="input-group">
+                      <input class="form-control" name="officers[4][full_name]" id="officer_4_full_name"
+                             placeholder="Search student..." required
+                             data-search-target="#officer_4_student_id"
+                             data-course-target="#officer_4_course_year"
+                             autocomplete="off">
+                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(4)">
+                        <i class="bi bi-search"></i>
+                      </button>
+                    </div>
+                    <div class="student-search-results" id="searchResults_4"></div>
+                  </div>
+                </td>
+                <td>
+                  <input class="form-control" name="officers[4][course_year]" id="officer_4_course_year"
+                         placeholder="Will auto-fill from student search" readonly required>
+                </td>
+                <td>
+                  <select class="form-select" name="officers[4][status]">
+                    <option value="Active" selected>Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sa-filehint mt-2">
+          Click the search icon next to each officer name to find and select a student from the database.
+          Course/Year will be automatically filled from student records.
+        </div>
+
+        <hr class="my-4">
+
+        <!-- ✅ REQUIRED DOCUMENTS TABLE -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Required Documents</div>
+            <div class="text-muted small">Templates are shown when available.</div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:70px;">#</th>
+                <th>Requirement</th>
+                <th style="width:260px;">Template</th>
+                <th style="width:360px;">Upload</th>
+              </tr>
+            </thead>
+            <tbody id="requirementsUploadTbody">
+              <tr>
+                <td colspan="4" class="text-center text-muted py-4">
+                  Requirements will load here…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sa-filehint mt-2">
+          Accepted file types are only PDF.
+        </div>
+
+        <div class="alert alert-light border rounded-3 small mt-3 mb-0">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-info-circle text-primary mt-1"></i>
+            <div class="sa-wrap">
+              <div class="fw-semibold">Submission rule</div>
+              Once submitted, you can't create another organization request. You may only track status/returns.
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveAddOrgBtn">
+          <i class="bi bi-send-check me-1"></i> Submit
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: VIEW / RESUBMIT RETURNED DOCUMENTS (Enhanced with more details)
+========================================================= -->
+<div class="modal fade" id="adViewRequestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">Accreditation Request Details</h5>
+          <div class="text-muted small sa-truncate" id="adViewReqSub">Loading…</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="adViewRequestId" value="">
+
+        <!-- Organization Header -->
+        <div class="d-flex flex-wrap gap-3 align-items-center mb-4">
+          <div class="rounded-4 border bg-light d-grid place-items-center overflow-hidden"
+               style="width:72px;height:72px;">
+            <img id="adOrgLogoImg" alt="Org Logo" style="width:100%;height:100%;object-fit:cover;display:none;">
+            <i id="adOrgLogoFallback" class="bi bi-image text-muted fs-1"></i>
+          </div>
+
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+              <div class="fs-5 fw-semibold sa-truncate" id="adOrgName">—</div>
+              <span class="badge text-bg-secondary" id="adOrgAbbr">—</span>
+              <span class="badge text-bg-info" id="adOrgScope">—</span>
+              <span class="badge text-bg-dark" id="adOrgProgram">—</span>
+            </div>
+            <div class="text-muted small sa-wrap">
+              <div>Term: <span class="fw-semibold" id="adOrgTerm">—</span></div>
+              <div>Status: <span class="fw-semibold" id="adReqStatus">—</span></div>
+              <div>Submitted: <span class="fw-semibold" id="adSubmittedAt">—</span></div>
+              <div>Last Updated: <span class="fw-semibold" id="adUpdatedAt">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Organization Details Tabs -->
+        <ul class="nav nav-tabs mb-4" id="adViewTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="adOrgDetailsTab" data-bs-toggle="tab" data-bs-target="#adOrgDetailsPane"
+                    type="button" role="tab" aria-controls="adOrgDetailsPane" aria-selected="true">
+              <i class="bi bi-info-circle me-1"></i> Organization Details
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="adOfficersTab" data-bs-toggle="tab" data-bs-target="#adOfficersPane"
+                    type="button" role="tab" aria-controls="adOfficersPane" aria-selected="false">
+              <i class="bi bi-people me-1"></i> Officers
+              <span class="badge text-bg-secondary ms-1" id="adOfficersCount">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="adDocumentsTab" data-bs-toggle="tab" data-bs-target="#adDocumentsPane"
+                    type="button" role="tab" aria-controls="adDocumentsPane" aria-selected="false">
+              <i class="bi bi-files me-1"></i> Documents
+              <span class="badge text-bg-secondary ms-1" id="adDocumentsCount">0</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="adViewTabsContent">
+          <!-- Organization Details Pane -->
+          <div class="tab-pane fade show active" id="adOrgDetailsPane" role="tabpanel" aria-labelledby="adOrgDetailsTab">
+            <div class="row g-3">
+              <!-- Organization Type & Scope -->
+              <div class="col-md-6">
+                <div class="card border-0 bg-light h-100">
+                  <div class="card-body">
+                    <h6 class="card-title fw-semibold mb-3">Organization Information</h6>
+                    <div class="mb-2">
+                      <span class="text-muted small">Type:</span>
+                      <div class="fw-semibold" id="adOrgTypeDetail">—</div>
+                    </div>
+                    <div class="mb-2">
+                      <span class="text-muted small">Scope:</span>
+                      <div class="fw-semibold" id="adOrgScopeDetail">—</div>
+                    </div>
+                    <div class="mb-2">
+                      <span class="text-muted small">Program:</span>
+                      <div class="fw-semibold" id="adOrgProgramDetail">—</div>
+                    </div>
+                    <div class="mb-2">
+                      <span class="text-muted small">Fee Information:</span>
+                      <div class="fw-semibold" id="adOrgFeeDetail">—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mission & Vision -->
+              <div class="col-md-6">
+                <div class="card border-0 bg-light h-100">
+                  <div class="card-body">
+                    <h6 class="card-title fw-semibold mb-3">Description</h6>
+                    <div class="text-muted small sa-wrap" id="adOrgDescription">—</div>
+
+                    <hr class="my-3">
+
+                    <h6 class="card-title fw-semibold mb-3">Mission</h6>
+                    <div class="text-muted small sa-wrap" id="adOrgMission">—</div>
+                    
+                    <h6 class="card-title fw-semibold mt-4 mb-3">Vision</h6>
+                    <div class="text-muted small sa-wrap" id="adOrgVision">—</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Objectives & Advocacy -->
+              <div class="col-12">
+                <div class="card border-0 bg-light">
+                  <div class="card-body">
+                    <h6 class="card-title fw-semibold mb-3">Objectives</h6>
+                    <div class="text-muted small sa-wrap" id="adOrgObjectives">—</div>
+                    
+                    <h6 class="card-title fw-semibold mt-4 mb-3">Advocacy</h6>
+                    <div class="text-muted small sa-wrap" id="adOrgAdvocacy">—</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Officers Pane -->
+          <div class="tab-pane fade" id="adOfficersPane" role="tabpanel" aria-labelledby="adOfficersTab">
+            <div class="card border-0 bg-light">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3">Organization Officers</h6>
+                <div class="table-responsive">
+                  <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th style="width: 60px;">#</th>
+                        <th>Position</th>
+                        <th>Name</th>
+                        <th>Student ID</th>
+                        <th>Course / Year</th>
+                        <th style="width: 100px;">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adOfficersTbody">
+                      <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                          <i class="bi bi-people fs-4 d-block mb-2"></i>
+                          No officers found.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Documents Pane -->
+          <div class="tab-pane fade" id="adDocumentsPane" role="tabpanel" aria-labelledby="adDocumentsTab">
+            <div class="card border-0 bg-light">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3">Submitted Documents</h6>
+                <div class="table-responsive">
+                  <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Requirement</th>
+                        <th style="width: 260px;">File</th>
+                        <th style="width: 130px;">Status</th>
+                        <th style="width: 260px;">Return Reason</th>
+                        <th style="width: 320px;" class="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adDocsTbody">
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No documents found.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                  <div class="text-muted small" id="adDocsPaginationMeta"></div>
+                  <nav aria-label="Documents pagination">
+                    <ul class="pagination pagination-sm mb-0" id="adDocsPagination"></ul>
+                  </nav>
+                </div>
+
+                <div class="text-muted small mt-2" id="adDocsMeta"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: REPLACE RETURNED DOCUMENT
+========================================================= -->
+<div class="modal fade" id="adReplaceDocumentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold mb-0">Replace Document</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <form id="adReplaceDocumentForm" enctype="multipart/form-data">
+        <input type="hidden" id="adReplaceDocId" value="">
+        
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Select New File</label>
+            <input type="file" class="form-control" id="adReplaceFileInput" required
+                   accept=".pdf,application/pdf"">
+            <div class="form-text">Accepted: PDF Only</div>
+          </div>
+          
+          <div class="alert alert-info border rounded-3 small mt-3">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-info-circle text-primary mt-1"></i>
+              <div class="sa-wrap">
+                <div class="fw-semibold">Note</div>
+                Replacing a document will change its status to "Submitted" and clear any return reason.
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="adReplaceSubmitBtn">
+            <i class="bi bi-upload me-1"></i> Replace Document
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: EDIT ORGANIZATION (WITH REQUIREMENTS FOR RENEWALS)
+========================================================= -->
+<div class="modal fade" id="editOrgModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0 shadow">
+
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">Edit Organization</h5>
+          <div class="text-muted small sa-truncate">
+            Update organization details, officers, and upload required documents.
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form class="modal-body" id="editOrgForm" enctype="multipart/form-data">
+        <input type="hidden" name="org_id" id="editOrgId">
+        <input type="hidden" name="request_id" id="editRequestId">
+        <input type="hidden" name="academic_term_id" id="editAcademicTermId">
+        <input type="hidden" name="action" value="update_organization">
+
+        <!-- Org details -->
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Organization Name <span class="text-danger">*</span></label>
+            <input class="form-control" type="text" name="org_name" id="editAccOrgName" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Abbreviation <span class="text-danger">*</span></label>
+            <input class="form-control" type="text" name="abbreviation" id="editAccOrgAbbr" maxlength="50" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Organization Logo (optional)</label>
+            <input class="form-control" type="file" name="org_logo" accept="image/png,image/jpeg" id="editOrgLogo">
+            <div class="form-text small">Leave empty to keep current logo</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="description" id="editAccOrgDescription" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Mission <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="mission" id="editAccOrgMission" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Vision <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="vision" id="editAccOrgVision" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Objectives <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="objectives" id="editAccOrgObjectives" rows="2" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Advocacy <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="advocacy" id="editAccOrgAdvocacy" rows="2" required></textarea>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Type + Scope + Program -->
+        <div class="row g-3">
+          <div class="col-lg-4">
+            <label class="form-label">Organization Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="editAccOrgType" name="org_type">
+              <option value="Organization">Organization</option>
+              <option value="Club">Club</option>
+            </select>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Scope</label>
+            <div class="btn-group w-100" role="group" aria-label="Scope">
+              <input type="radio" class="btn-check" name="edit_scope" id="editScopeGeneral" value="General" checked>
+              <label class="btn btn-outline-secondary" for="editScopeGeneral">General</label>
+
+              <input type="radio" class="btn-check" name="edit_scope" id="editScopeExclusive" value="Exclusive">
+              <label class="btn btn-outline-primary" for="editScopeExclusive">Exclusive</label>
+            </div>
+            <div class="form-text mt-2">For Clubs, scope is automatically set to "General".</div>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Program (if Exclusive)</label>
+            <select class="form-select" id="editAccProgramId" name="program_id">
+              <option value="">— Select program —</option>
+            </select>
+            <div class="form-text mt-2">Select only for exclusive organizations.</div>
+          </div>
+        </div>
+
+        <!-- ✅ FEES (optional; toggled by type) -->
+        <div class="row g-3 mt-1" id="editFeesRow">
+          <!-- Organization-only -->
+          <div class="col-lg-6" id="editOrgFeeWrap">
+            <label class="form-label">Fee Required (Organizations) <span class="text-muted">(optional)</span></label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input
+                type="number"
+                class="form-control"
+                name="fee_required"
+                id="editAccFeeRequired"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 50.00">
+            </div>
+            <div class="form-text mt-2">Leave blank if no required fee for the organization.</div>
+          </div>
+
+          <!-- Club-only -->
+          <div class="col-lg-6" id="editClubFeeWrap" style="display:none;">
+            <label class="form-label">Membership Fee (Clubs) <span class="text-muted">(optional)</span></label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input
+                type="number"
+                class="form-control"
+                name="membership_fee"
+                id="editAccMembershipFee"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 100.00">
+            </div>
+            <div class="form-text mt-2">Leave blank if club membership is free.</div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- ✅ OFFICERS (hard-coded REQUIRED only, student search enabled) -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Organization Officers</div>
+            <div class="text-muted small">
+              Search for students by ID or name to automatically fill their details.
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 260px;">Position</th>
+                <th>
+                  <div>Full Name</div>
+                  <div class="text-muted small fw-normal">Click search icon to find student</div>
+                </th>
+                <th style="width: 200px;">Course / Year</th>
+                <th style="width: 160px;">Status</th>
+              </tr>
+            </thead>
+
+            <tbody id="editOfficersTbody">
+              <!-- Officers rows will be populated by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sa-filehint mt-2">
+          Click the search icon next to each officer name to find and select a student from the database.
+          Course/Year will be automatically filled from student records.
+        </div>
+
+        <hr class="my-4">
+
+        <!-- ✅ REQUIRED DOCUMENTS SECTION (FOR RENEWALS) -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Required Documents</div>
+            <div class="text-muted small">
+              <span id="editRenewalNotice" class="text-warning" style="display:none;">
+                <i class="bi bi-arrow-repeat me-1"></i> This is a renewal - upload updated documents
+              </span>
+              <span id="editRegularNotice">Upload required documents for your organization.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:70px;">#</th>
+                <th>Requirement</th>
+                <th style="width:260px;">Template</th>
+                <th style="width:360px;">Upload</th>
+              </tr>
+            </thead>
+            <tbody id="editRequirementsUploadTbody">
+              <tr>
+                <td colspan="4" class="text-center text-muted py-4">
+                  Loading requirements...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sa-filehint mt-2">
+          Accepted file types: PDF only
+        </div>
+
+        <hr class="my-4">
+
+        <div class="alert alert-warning border rounded-3 small mt-4 mb-0">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-exclamation-triangle-fill text-warning mt-1"></i>
+            <div class="sa-wrap">
+              <div class="fw-semibold">Important Note</div>
+              <div id="editRenewalAlert" style="display:none;">
+                This is a <strong>renewal request</strong>. After updating, the status will change to "Pending" for review.
+                All documents must be uploaded fresh for the new term.
+              </div>
+              <div id="editRegularAlert">
+                After editing, the organization's accreditation status will change to "Pending" for re-review.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden fields for document submission -->
+        <input type="hidden" name="is_renewal" id="editIsRenewal" value="0">
+        <input type="hidden" name="previous_request_id" id="editPreviousRequestId" value="0">
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveEditOrgBtn">
+          <i class="bi bi-save me-1"></i> Save Changes
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: RENEWAL NOTIFICATION (Shows when previous term org needs renewal)
+========================================================= -->
+<div class="modal fade" id="adRenewalNotificationModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header bg-warning bg-opacity-10 border-warning">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0 text-warning">
+            <i class="bi bi-arrow-repeat me-2"></i> Accreditation Renewal Available
+          </h5>
+          <div class="text-muted small sa-truncate">
+            Your organization from the previous term can be renewed for the current term
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="row g-4">
+          <div class="col-md-4 text-center">
+            <div class="rounded-4 border bg-light d-grid place-items-center mx-auto p-4" style="width:120px;height:120px;">
+              <i class="bi bi-building-check text-warning fs-1"></i>
+            </div>
+          </div>
+          
+          <div class="col-md-8">
+            <h6 class="fw-semibold mb-3">Your Organization From Previous Term</h6>
+            
+            <div class="mb-3">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted small">Organization:</span>
+                <span class="fw-semibold" id="adRenewalOrgName">—</span>
+              </div>
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted small">Type:</span>
+                <span class="badge text-bg-info" id="adRenewalOrgType">—</span>
+              </div>
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted small">Previous Term:</span>
+                <span class="fw-semibold" id="adRenewalPreviousTerm">—</span>
+              </div>
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted small">Current Term:</span>
+                <span class="fw-semibold" id="adRenewalCurrentTerm">—</span>
+              </div>
+            </div>
+            
+            <div class="alert alert-info border rounded-3 small">
+              <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-info-circle text-primary mt-1"></i>
+                <div class="sa-wrap">
+                  <div class="fw-semibold">Renewal Benefits</div>
+                  We'll copy your organization details, officers, and submitted documents. 
+                  You can review and update everything before final submission.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="row mt-3">
+          <div class="col-md-6">
+            <div class="card border-0 bg-light h-100">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3">What's Copied</h6>
+                <ul class="mb-0 small">
+                  <li class="mb-1">Organization details (name, mission, vision, etc.)</li>
+                  <li class="mb-1">All officer positions and members</li>
+                  <li class="mb-1">Previously submitted documents</li>
+                  <li>Organization type and scope settings</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-6">
+            <div class="card border-0 bg-light h-100">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3">What You'll Review</h6>
+                <ul class="mb-0 small">
+                  <li class="mb-1">Update any changed information</li>
+                  <li class="mb-1">Upload new/changed documents</li>
+                  <li class="mb-1">Check for new requirements</li>
+                  <li>Verify officer information</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <input type="hidden" id="adRenewalPreviousRequestId" value="">
+        <input type="hidden" id="adRenewalNewTermId" value="">
+        <input type="hidden" id="adRenewalOrgId" value="">
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="adRenewalRemindLater">
+          <i class="bi bi-clock me-1"></i> Remind Me Later
+        </button>
+        <button type="button" class="btn btn-outline-warning" id="adRenewalViewDetails">
+          <i class="bi bi-eye me-1"></i> View Details
+        </button>
+        <button type="button" class="btn btn-warning" id="adRenewalStartNow">
+          <i class="bi bi-play-circle me-1"></i> Start Renewal Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: RENEWAL REQUIREMENTS (Shows what will be copied/needs updates)
+========================================================= -->
+<div class="modal fade" id="adRenewalRequirementsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">Renewal Details & Requirements</h5>
+          <div class="text-muted small sa-truncate">
+            Review what will be copied and what needs updates
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="alert alert-primary border-0 rounded-3 mb-4">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-lightbulb text-primary mt-1"></i>
+            <div class="sa-wrap">
+              <strong>Smart Renewal System:</strong> We'll copy your previous submission and highlight what needs attention. 
+              Documents marked as "Draft" were copied from last term and should be reviewed.
+            </div>
+          </div>
+        </div>
+        
+        <div class="row mb-4">
+          <div class="col-md-6">
+            <div class="card border-0 bg-primary bg-opacity-10 h-100">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3 text-primary">
+                  <i class="bi bi-check-circle me-1"></i> Automatic Copy
+                </h6>
+                <div class="row g-2">
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-check-lg text-success"></i>
+                      <span>Organization Information</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-check-lg text-success"></i>
+                      <span>Officer Positions & Members</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-check-lg text-success"></i>
+                      <span>Organization Type & Scope</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-check-lg text-success"></i>
+                      <span>Submitted Documents</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-6">
+            <div class="card border-0 bg-warning bg-opacity-10 h-100">
+              <div class="card-body">
+                <h6 class="card-title fw-semibold mb-3 text-warning">
+                  <i class="bi bi-exclamation-triangle me-1"></i> Needs Review
+                </h6>
+                <div class="row g-2">
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-pencil text-warning"></i>
+                      <span>Update Changed Information</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-upload text-warning"></i>
+                      <span>Upload New Documents</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-plus-circle text-warning"></i>
+                      <span>New Requirements (if any)</span>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-people text-warning"></i>
+                      <span>Verify Officer Status</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Requirements Comparison Table -->
+        <h6 class="fw-semibold mb-3">Document Status</h6>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Requirement</th>
+                <th style="width: 150px;">Previous Term</th>
+                <th style="width: 150px;">Current Status</th>
+                <th style="width: 200px;">Action Needed</th>
+              </tr>
+            </thead>
+            <tbody id="adRenewalRequirementsTbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                  Loading requirements comparison...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="mt-3 text-muted small">
+          <i class="bi bi-info-circle me-1"></i>
+          Documents marked as "Draft" were copied from your previous submission and should be reviewed.
+          New requirements will be marked as "Pending" and need to be uploaded.
+        </div>
+        
+        <input type="hidden" id="adRenewalReqPreviousRequestId" value="">
+        <input type="hidden" id="adRenewalReqNewTermId" value="">
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" id="adRenewalContinueToForm">
+          <i class="bi bi-arrow-right me-1"></i> Continue to Renewal Form
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: RENEWAL IN PROGRESS (Shows when renewal is already in draft)
+========================================================= -->
+<div class="modal fade" id="adRenewalInProgressModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">Renewal In Progress</h5>
+          <div class="text-muted small sa-truncate">
+            You already have a renewal request in draft status
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="text-center py-4">
+          <div class="rounded-4 border bg-light d-grid place-items-center mx-auto mb-3" 
+               style="width:80px;height:80px;">
+            <i class="bi bi-hourglass-split text-primary fs-2"></i>
+          </div>
+          
+          <h6 class="fw-semibold mb-2">Continue Your Renewal</h6>
+          <p class="text-muted mb-4">
+            You have an accreditation renewal request that's currently in <span class="badge text-bg-light">Draft</span> status.
+            You can continue editing and submit it when ready.
+          </p>
+          
+          <div class="alert alert-info border rounded-3 small text-start">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-info-circle text-primary mt-1"></i>
+              <div class="sa-wrap">
+                <strong>Note:</strong> Your previous organization data and documents have already been copied.
+                Review everything and make any necessary updates before submission.
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <input type="hidden" id="adRenewalInProgressRequestId" value="">
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" id="adRenewalContinueEditing">
+          <i class="bi bi-pencil me-1"></i> Continue Editing
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL: PREVIEW FILE (PDF/IMG iframe; DOCX fallback)
+========================================================= -->
+<div class="modal fade" id="adPreviewFileModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">Preview</h5>
+          <div class="text-muted small sa-truncate" id="adPreviewFileName">—</div>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <a class="btn btn-outline-secondary btn-sm" id="adPreviewOpenNewTab" href="#" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right me-1"></i> Open
+          </a>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+      </div>
+      <div class="modal-body p-0">
+        <div class="ratio ratio-16x9 bg-light">
+          <iframe id="adPreviewIframe" title="File preview" style="width:100%;height:100%;border:0;" src=""></iframe>
+        </div>
+        <div class="p-3 small text-muted" id="adPreviewHint" style="display:none;">
+          DOCX preview isn't embedded. Click <span class="fw-semibold">Open</span> to view/download.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--logo-->
