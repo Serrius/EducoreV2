@@ -890,387 +890,477 @@ try {
       out(["ok" => true, "items" => $items]);
     }
 
-    // -----------------------------------------
-    // 6) Submit new accreditation (multipart)
-    // -----------------------------------------
-    case "submit_request": {
-      $isRenewal = (bool)($_POST["is_renewal"] ?? false);
-      $previousRequestId = (int)($_POST["previous_request_id"] ?? 0);
+  // -----------------------------------------
+  // 6) Submit new accreditation (multipart)
+  // -----------------------------------------
+  case "submit_request": {
+    $isRenewal = (bool)($_POST["is_renewal"] ?? false);
+    $previousRequestId = (int)($_POST["previous_request_id"] ?? 0);
 
-      $term = active_term($pdo);
-      if (!$term) fail("No academic term found.", 500);
-      $termId = (int)$term["id"];
-      $schoolYear = (string)($term["school_year"] ?? "");
-      if ($schoolYear === "") fail("Active term missing school_year.", 500);
+    $term = active_term($pdo);
+    if (!$term) fail("No academic term found.", 500);
+    $termId = (int)$term["id"];
+    $schoolYear = (string)($term["school_year"] ?? "");
+    if ($schoolYear === "") fail("Active term missing school_year.", 500);
 
-      if (!$isRenewal) {
-        $st = $pdo->prepare("
-          SELECT ar.id
-          FROM accreditation_requests ar
-          JOIN academic_terms t ON t.id = ar.academic_term_id
-          WHERE ar.coordinator_user_id = ?
-            AND t.school_year = ?
-          LIMIT 1
-        ");
-        $st->execute([$uid, $schoolYear]);
-        if ($st->fetch()) fail("You already submitted an accreditation request for this term.", 403);
-      } else {
-        $st = $pdo->prepare("
-          SELECT ar.id
-          FROM accreditation_requests ar
-          JOIN academic_terms t ON t.id = ar.academic_term_id
-          WHERE ar.coordinator_user_id = ?
-            AND t.school_year = ?
-            AND ar.previous_request_id = ?
-          LIMIT 1
-        ");
-        $st->execute([$uid, $schoolYear, $previousRequestId]);
-        if ($st->fetch()) fail("Renewal already submitted for this term.", 403);
+    if (!$isRenewal) {
+      $st = $pdo->prepare("
+        SELECT ar.id
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND t.school_year = ?
+        LIMIT 1
+      ");
+      $st->execute([$uid, $schoolYear]);
+      if ($st->fetch()) fail("You already submitted an accreditation request for this term.", 403);
+    } else {
+      $st = $pdo->prepare("
+        SELECT ar.id
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND t.school_year = ?
+          AND ar.previous_request_id = ?
+        LIMIT 1
+      ");
+      $st->execute([$uid, $schoolYear, $previousRequestId]);
+      if ($st->fetch()) fail("Renewal already submitted for this term.", 403);
+    }
+
+    $orgName = trim((string)($_POST["org_name"] ?? ""));
+    $orgAbbr = trim((string)($_POST["org_abbr"] ?? ""));
+    $description = trim((string)($_POST["description"] ?? ""));
+    $mission = trim((string)($_POST["mission"] ?? ""));
+    $vision = trim((string)($_POST["vision"] ?? ""));
+    $objectives = trim((string)($_POST["objectives"] ?? ""));
+    $advocacy = trim((string)($_POST["advocacy"] ?? ""));
+
+    if ($orgName === "" || $orgAbbr === "" || $description === "" || $mission === "" || $vision === "" || $objectives === "" || $advocacy === "") {
+      fail("Please complete organization details including description.");
+    }
+
+    $orgType = (string)($_POST["org_type"] ?? "Organization");
+    $uiScope = (string)($_POST["scope"] ?? "General");
+    $programId = (int)($_POST["program_id"] ?? 0);
+
+    // Fees support
+    $membershipFee = (float)($_POST["membership_fee"] ?? 0);
+    $feeRequiredRaw = trim((string)($_POST["fee_required"] ?? ""));
+    $feeRequired = ($feeRequiredRaw === "") ? 0.00 : (float)$feeRequiredRaw;
+    if ($feeRequired < 0) fail("Fee required must be 0 or greater.");
+
+    // DB scope mapping (clubs forced to General)
+    $dbScope = map_scope_for_db($uiScope, $orgType);
+
+    if (strcasecmp($orgType, "Club") === 0) {
+      $programId = 0;
+      $feeRequired = 0.00;
+    } else {
+      if (strcasecmp($uiScope, "Exclusive") === 0 && $programId <= 0) {
+        fail("Program is required for Exclusive scope.");
       }
-
-      $orgName = trim((string)($_POST["org_name"] ?? ""));
-      $orgAbbr = trim((string)($_POST["org_abbr"] ?? ""));
-      $mission = trim((string)($_POST["mission"] ?? ""));
-      $vision = trim((string)($_POST["vision"] ?? ""));
-      $objectives = trim((string)($_POST["objectives"] ?? ""));
-      $advocacy = trim((string)($_POST["advocacy"] ?? ""));
-
-      if ($orgName === "" || $orgAbbr === "" || $mission === "" || $vision === "" || $objectives === "" || $advocacy === "") {
-        fail("Please complete organization details.");
-      }
-
-      $orgType = (string)($_POST["org_type"] ?? "Organization");
-      $uiScope = (string)($_POST["scope"] ?? "General");
-      $programId = (int)($_POST["program_id"] ?? 0);
-
-      // Fees support
-      $membershipFee = (float)($_POST["membership_fee"] ?? 0);
-      $feeRequiredRaw = trim((string)($_POST["fee_required"] ?? ""));
-      $feeRequired = ($feeRequiredRaw === "") ? 0.00 : (float)$feeRequiredRaw;
-      if ($feeRequired < 0) fail("Fee required must be 0 or greater.");
-
-      // DB scope mapping (clubs forced to General)
-      $dbScope = map_scope_for_db($uiScope, $orgType);
-
-      if (strcasecmp($orgType, "Club") === 0) {
+      if (strcasecmp($uiScope, "Exclusive") !== 0) {
         $programId = 0;
-        $feeRequired = 0.00;
-      } else {
-        if (strcasecmp($uiScope, "Exclusive") === 0 && $programId <= 0) {
-          fail("Program is required for Exclusive scope.");
-        }
-        if (strcasecmp($uiScope, "Exclusive") !== 0) {
-          $programId = 0;
-        }
       }
+    }
 
-      $reqIds = [];
-      if (!empty($_POST["requirement_ids"])) {
-        $tmp = json_decode((string)$_POST["requirement_ids"], true);
-        if (is_array($tmp)) {
-          foreach ($tmp as $v) {
-            $iv = (int)$v;
-            if ($iv > 0) $reqIds[] = $iv;
-          }
-        }
-      }
-
-      if (!$reqIds && !empty($_FILES["files"]) && is_array($_FILES["files"]["name"])) {
-        foreach ($_FILES["files"]["name"] as $k => $_n) {
-          $iv = (int)$k;
+    $reqIds = [];
+    if (!empty($_POST["requirement_ids"])) {
+      $tmp = json_decode((string)$_POST["requirement_ids"], true);
+      if (is_array($tmp)) {
+        foreach ($tmp as $v) {
+          $iv = (int)$v;
           if ($iv > 0) $reqIds[] = $iv;
         }
       }
+    }
 
-      if (!$reqIds) fail("No requirements selected.", 400);
+    if (!$reqIds && !empty($_FILES["files"]) && is_array($_FILES["files"]["name"])) {
+      foreach ($_FILES["files"]["name"] as $k => $_n) {
+        $iv = (int)$k;
+        if ($iv > 0) $reqIds[] = $iv;
+      }
+    }
 
-      $pdo->beginTransaction();
-      try {
-        $logoPath = null;
-        $orgId = 0;
+    if (!$reqIds) fail("No requirements selected.", 400);
 
-        if ($isRenewal && $previousRequestId > 0) {
-          $st = $pdo->prepare("
-            SELECT o.*
-            FROM accreditation_requests ar
-            JOIN organizations o ON o.id = ar.org_id
-            WHERE ar.id = ? AND ar.coordinator_user_id = ?
-            LIMIT 1
-          ");
-          $st->execute([$previousRequestId, $uid]);
-          $previousOrg = $st->fetch();
-          if (!$previousOrg) throw new Exception("Previous organization not found.");
+    $pdo->beginTransaction();
+    try {
+      $logoPath = null;
+      $orgId = 0;
 
-          $orgId = (int)$previousOrg["id"];
+      if ($isRenewal && $previousRequestId > 0) {
+        $st = $pdo->prepare("
+          SELECT o.*
+          FROM accreditation_requests ar
+          JOIN organizations o ON o.id = ar.org_id
+          WHERE ar.id = ? AND ar.coordinator_user_id = ?
+          LIMIT 1
+        ");
+        $st->execute([$previousRequestId, $uid]);
+        $previousOrg = $st->fetch();
+        if (!$previousOrg) throw new Exception("Previous organization not found.");
 
-          $orgSql = "
-            UPDATE organizations
-            SET org_type = ?, org_name = ?, abbreviation = ?, mission = ?, vision = ?,
-                objectives = ?, advocacy = ?, scope = ?, program_id = ?,
-                membership_fee = ?, fee_required = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          ";
-          $st = $pdo->prepare($orgSql);
-          $st->execute([
-            $orgType,
-            $orgName,
-            $orgAbbr,
-            $mission,
-            $vision,
-            $objectives,
-            $advocacy,
-            $dbScope,
-            ($programId > 0 ? $programId : null),
-            $membershipFee,
-            $feeRequired,
-            $orgId
-          ]);
+        $orgId = (int)$previousOrg["id"];
 
-          if (!empty($_FILES["org_logo"]) && is_uploaded_file($_FILES["org_logo"]["tmp_name"])) {
-            $f = $_FILES["org_logo"];
-            if ($f["error"] !== UPLOAD_ERR_OK) throw new Exception("Logo upload failed.");
-            $ext = strtolower(pathinfo((string)$f["name"], PATHINFO_EXTENSION));
-            if (!in_array($ext, ["png", "jpg", "jpeg", "webp"], true)) throw new Exception("Logo must be an image (png/jpg/webp).");
+        $orgSql = "
+          UPDATE organizations
+          SET org_type = ?, org_name = ?, abbreviation = ?, description = ?,
+              mission = ?, vision = ?, objectives = ?, advocacy = ?,
+              scope = ?, program_id = ?,
+              membership_fee = ?, fee_required = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        ";
+        $st = $pdo->prepare($orgSql);
+        $st->execute([
+          $orgType,
+          $orgName,
+          $orgAbbr,
+          $description,
+          $mission,
+          $vision,
+          $objectives,
+          $advocacy,
+          $dbScope,
+          ($programId > 0 ? $programId : null),
+          $membershipFee,
+          $feeRequired,
+          $orgId
+        ]);
 
-            $dirFs = __DIR__ . "/../assets/uploads/org-logos";
-            if (!ensure_dir($dirFs)) throw new Exception("Cannot create upload directory.");
+        if (!empty($_FILES["org_logo"]) && is_uploaded_file($_FILES["org_logo"]["tmp_name"])) {
+          $f = $_FILES["org_logo"];
+          if ($f["error"] !== UPLOAD_ERR_OK) throw new Exception("Logo upload failed.");
+          $ext = strtolower(pathinfo((string)$f["name"], PATHINFO_EXTENSION));
+          if (!in_array($ext, ["png", "jpg", "jpeg", "webp"], true)) throw new Exception("Logo must be an image (png/jpg/webp).");
 
-            $fname = "org_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "." . $ext;
-            $destFs = $dirFs . "/" . $fname;
+          $dirFs = __DIR__ . "/../assets/uploads/org-logos";
+          if (!ensure_dir($dirFs)) throw new Exception("Cannot create upload directory.");
 
-            if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) throw new Exception("Failed to save logo.");
-            $logoPath = to_public_path("assets/uploads/org-logos/" . $fname);
+          $fname = "org_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "." . $ext;
+          $destFs = $dirFs . "/" . $fname;
 
-            $updateLogoSt = $pdo->prepare("UPDATE organizations SET logo_path = ? WHERE id = ?");
-            $updateLogoSt->execute([$logoPath, $orgId]);
-          }
-        } else {
-          if (!empty($_FILES["org_logo"]) && is_uploaded_file($_FILES["org_logo"]["tmp_name"])) {
-            $f = $_FILES["org_logo"];
-            if ($f["error"] !== UPLOAD_ERR_OK) throw new Exception("Logo upload failed.");
-            $ext = strtolower(pathinfo((string)$f["name"], PATHINFO_EXTENSION));
-            if (!in_array($ext, ["png", "jpg", "jpeg", "webp"], true)) throw new Exception("Logo must be an image (png/jpg/webp).");
+          if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) throw new Exception("Failed to save logo.");
+          $logoPath = to_public_path("assets/uploads/org-logos/" . $fname);
 
-            $dirFs = __DIR__ . "/../assets/uploads/org-logos";
-            if (!ensure_dir($dirFs)) throw new Exception("Cannot create upload directory.");
+          $updateLogoSt = $pdo->prepare("UPDATE organizations SET logo_path = ? WHERE id = ?");
+          $updateLogoSt->execute([$logoPath, $orgId]);
+        }
+      } else {
+        if (!empty($_FILES["org_logo"]) && is_uploaded_file($_FILES["org_logo"]["tmp_name"])) {
+          $f = $_FILES["org_logo"];
+          if ($f["error"] !== UPLOAD_ERR_OK) throw new Exception("Logo upload failed.");
+          $ext = strtolower(pathinfo((string)$f["name"], PATHINFO_EXTENSION));
+          if (!in_array($ext, ["png", "jpg", "jpeg", "webp"], true)) throw new Exception("Logo must be an image (png/jpg/webp).");
 
-            $fname = "org_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "." . $ext;
-            $destFs = $dirFs . "/" . $fname;
+          $dirFs = __DIR__ . "/../assets/uploads/org-logos";
+          if (!ensure_dir($dirFs)) throw new Exception("Cannot create upload directory.");
 
-            if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) throw new Exception("Failed to save logo.");
-            $logoPath = to_public_path("assets/uploads/org-logos/" . $fname);
-          }
+          $fname = "org_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "." . $ext;
+          $destFs = $dirFs . "/" . $fname;
 
-          $orgSql = "
-            INSERT INTO organizations
-              (org_type, org_name, abbreviation, logo_path, mission, vision, objectives, advocacy, scope, program_id,
-               membership_fee, fee_required, status, created_by, created_at)
-            VALUES
-              (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, CURRENT_TIMESTAMP)
-          ";
-          $st = $pdo->prepare($orgSql);
-          $st->execute([
-            $orgType,
-            $orgName,
-            $orgAbbr,
-            $logoPath,
-            $mission,
-            $vision,
-            $objectives,
-            $advocacy,
-            $dbScope,
-            ($programId > 0 ? $programId : null),
-            $membershipFee,
-            $feeRequired,
-            $uid,
-          ]);
-          $orgId = (int)$pdo->lastInsertId();
+          if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) throw new Exception("Failed to save logo.");
+          $logoPath = to_public_path("assets/uploads/org-logos/" . $fname);
         }
 
-        $reqSql = "
-          INSERT INTO accreditation_requests
-            (org_id, academic_term_id, coordinator_user_id, moderator_user_id,
-             previous_request_id, is_renewal, status, submitted_at, updated_at)
+        $orgSql = "
+          INSERT INTO organizations
+            (org_type, org_name, abbreviation, description, logo_path, mission, vision, objectives, advocacy, scope, program_id,
+            membership_fee, fee_required, status, created_by, created_at)
           VALUES
-            (?, ?, ?, NULL, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, CURRENT_TIMESTAMP)
         ";
-        $st = $pdo->prepare($reqSql);
+        $st = $pdo->prepare($orgSql);
         $st->execute([
-          $orgId,
-          $termId,
+          $orgType,
+          $orgName,
+          $orgAbbr,
+          $description,
+          $logoPath,
+          $mission,
+          $vision,
+          $objectives,
+          $advocacy,
+          $dbScope,
+          ($programId > 0 ? $programId : null),
+          $membershipFee,
+          $feeRequired,
           $uid,
-          ($isRenewal && $previousRequestId > 0) ? $previousRequestId : null,
-          $isRenewal ? 1 : 0
         ]);
-        $requestId = (int)$pdo->lastInsertId();
+        $orgId = (int)$pdo->lastInsertId();
+      }
 
-        // Insert/Update 5 officers (hardcoded form slots)
-        for ($i = 0; $i < 5; $i++) {
-          $positionKey = "officers[" . $i . "][position]";
-          $studentIdKey = "officers[" . $i . "][student_id]";
-          $fullNameKey = "officers[" . $i . "][full_name]";
-          $courseYearKey = "officers[" . $i . "][course_year]";
-          $statusKey = "officers[" . $i . "][status]";
+      $reqSql = "
+        INSERT INTO accreditation_requests
+          (org_id, academic_term_id, coordinator_user_id, moderator_user_id,
+          previous_request_id, is_renewal, status, submitted_at, updated_at)
+        VALUES
+          (?, ?, ?, NULL, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ";
+      $st = $pdo->prepare($reqSql);
+      $st->execute([
+        $orgId,
+        $termId,
+        $uid,
+        ($isRenewal && $previousRequestId > 0) ? $previousRequestId : null,
+        $isRenewal ? 1 : 0
+      ]);
+      $requestId = (int)$pdo->lastInsertId();
 
-          $position = trim((string)($_POST[$positionKey] ?? ""));
-          $studentId = (int)($_POST[$studentIdKey] ?? 0);
-          $fullName = trim((string)($_POST[$fullNameKey] ?? ""));
-          $courseYear = trim((string)($_POST[$courseYearKey] ?? ""));
-          $status = trim((string)($_POST[$statusKey] ?? "Active"));
+      // ================= OFFICER VALIDATION AND INSERTION =================
+      // Get school year for validation
+      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
+      $st->execute([$termId]);
+      $schoolYear = $st->fetchColumn();
 
-          if ($position !== "" && $studentId > 0) {
-            $checkOffSt = $pdo->prepare("
+      // Hardcoded positions in order
+      $hardcodedPositions = [
+          'President / Chairperson',
+          'Vice President',
+          'Secretary',
+          'Treasurer',
+          'Auditor'
+      ];
+
+      // First, collect all officer student IDs to check for duplicates
+      $officerStudentIds = [];
+      $officerData = [];
+
+      for ($i = 0; $i < 5; $i++) {
+          $studentId = (int)($_POST["officers"][$i]["student_id"] ?? 0);
+          
+          if ($studentId <= 0) {
+              throw new Exception("Please select a student for {$hardcodedPositions[$i]} position.");
+          }
+          
+          // Check for duplicates within the same organization submission
+          if (in_array($studentId, $officerStudentIds)) {
+              throw new Exception("Duplicate officer detected. A student cannot hold multiple officer positions in the same organization.");
+          }
+          
+          $officerStudentIds[] = $studentId;
+          $officerData[$i] = [
+              'student_id' => $studentId,
+              'position' => $hardcodedPositions[$i],
+              'full_name' => trim((string)($_POST["officers"][$i]["full_name"] ?? "")),
+              'course_year' => trim((string)($_POST["officers"][$i]["course_year"] ?? "")),
+              'status' => trim((string)($_POST["officers"][$i]["status"] ?? "Active"))
+          ];
+      }
+
+      // Now check if any of these students are already officers in OTHER organizations for the SAME school year
+      $placeholders = implode(',', array_fill(0, count($officerStudentIds), '?'));
+      $params = array_merge([$schoolYear, $orgId], $officerStudentIds);
+
+      $checkOtherOrgSql = "
+          SELECT 
+              oo.user_id,
+              o.org_name,
+              oo.position,
+              CONCAT(u.first_name, ' ', u.last_name) as student_name
+          FROM organization_officers oo
+          JOIN organizations o ON o.id = oo.org_id
+          JOIN academic_terms t ON t.id = oo.academic_term_id
+          JOIN users u ON u.id = oo.user_id
+          WHERE t.school_year = ?
+              AND oo.org_id != ?
+              AND oo.user_id IN ($placeholders)
+          LIMIT 1
+      ";
+
+      $st = $pdo->prepare($checkOtherOrgSql);
+      $st->execute($params);
+      $existingOfficerOtherOrg = $st->fetch();
+
+      if ($existingOfficerOtherOrg) {
+          // Get the student's name for the error message
+          $studentName = $existingOfficerOtherOrg['student_name'];
+          $otherOrg = $existingOfficerOtherOrg['org_name'];
+          $otherPosition = $existingOfficerOtherOrg['position'];
+          
+          throw new Exception(
+              "Student {$studentName} is already an officer in '{$otherOrg}' " .
+              "as {$otherPosition} for school year {$schoolYear}. " .
+              "A student can only be an officer in ONE organization per academic year."
+          );
+      }
+
+      // If all validation passes, proceed with inserting/updating officers
+      for ($i = 0; $i < 5; $i++) {
+          $data = $officerData[$i];
+          $position = $data['position'];
+          $studentId = $data['student_id'];
+          $fullName = $data['full_name'];
+          $courseYear = $data['course_year'];
+          $status = $data['status'];
+
+          // Verify the student exists and is active
+          $st = $pdo->prepare("SELECT id, role, status FROM users WHERE id = ?");
+          $st->execute([$studentId]);
+          $student = $st->fetch();
+          
+          if (!$student || $student['role'] !== 'student' || $student['status'] !== 'Active') {
+              throw new Exception("Invalid or inactive student selected for {$position} position.");
+          }
+
+          // Check if officer already exists for this organization and term
+          $checkOffSt = $pdo->prepare("
               SELECT id FROM organization_officers
               WHERE org_id = ? AND academic_term_id = ? AND position = ?
               LIMIT 1
-            ");
-            $checkOffSt->execute([$orgId, $termId, $position]);
-
-            if ($checkOffSt->fetch()) {
-              $offSql = "
-                UPDATE organization_officers
-                SET user_id = ?, full_name = ?, course_year = ?, status = ?, created_at = CURRENT_TIMESTAMP
-                WHERE org_id = ? AND academic_term_id = ? AND position = ?
-              ";
-              $st = $pdo->prepare($offSql);
-              $st->execute([
-                $studentId,
-                $fullName,
-                $courseYear,
-                $status,
-                $orgId,
-                $termId,
-                $position
-              ]);
-            } else {
-              $offSql = "
-                INSERT INTO organization_officers
-                (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ";
-              $st = $pdo->prepare($offSql);
-              $st->execute([
-                $orgId,
-                $termId,
-                $studentId,
-                $position,
-                $fullName,
-                $courseYear,
-                $status
-              ]);
-            }
-          }
-        }
-
-        if (empty($_FILES["files"])) throw new Exception("No documents uploaded.");
-
-        $files = $_FILES["files"];
-        if (!is_array($files["name"])) throw new Exception("Invalid files payload.");
-
-        $baseDirRel = "assets/uploads/accreditation/{$requestId}";
-        $baseDirFs = __DIR__ . "/../" . $baseDirRel;
-        if (!ensure_dir($baseDirFs)) throw new Exception("Cannot create request upload directory.");
-
-        foreach ($reqIds as $rid) {
-          $key = (string)$rid;
-          if (!isset($files["tmp_name"][$key])) continue;
-
-          $tmpName = $files["tmp_name"][$key];
-          $err = $files["error"][$key] ?? UPLOAD_ERR_NO_FILE;
-          $orig = $files["name"][$key] ?? "file";
-          if ($err === UPLOAD_ERR_NO_FILE) throw new Exception("Missing upload for requirement #{$rid}.");
-          if ($err !== UPLOAD_ERR_OK) throw new Exception("Upload error for requirement #{$rid}.");
-          if (!is_uploaded_file($tmpName)) throw new Exception("Invalid upload for requirement #{$rid}.");
-
-          $ext = strtolower(pathinfo((string)$orig, PATHINFO_EXTENSION));
-          $allowed = ["pdf"];
-          if (!in_array($ext, $allowed, true)) throw new Exception("Invalid file type for requirement #{$rid}.");
-
-          $safe = safe_filename(pathinfo((string)$orig, PATHINFO_FILENAME));
-          $fname = "req{$rid}_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "_" . $safe . "." . $ext;
-
-          $subFs = $baseDirFs . "/req_" . $rid;
-          if (!ensure_dir($subFs)) throw new Exception("Cannot create requirement folder.");
-
-          $destFs = $subFs . "/" . $fname;
-          if (!move_uploaded_file((string)$tmpName, $destFs)) throw new Exception("Failed to save uploaded file for requirement #{$rid}.");
-
-          $relPath = $baseDirRel . "/req_{$rid}/" . $fname;
-          $publicPath = to_public_path($relPath);
-
-          $checkDocSt = $pdo->prepare("
-            SELECT id FROM accreditation_request_documents
-            WHERE request_id = ? AND requirement_id = ?
-            LIMIT 1
           ");
-          $checkDocSt->execute([$requestId, $rid]);
+          $checkOffSt->execute([$orgId, $termId, $position]);
+          $existingOfficer = $checkOffSt->fetch();
 
-          if ($checkDocSt->fetch()) {
-            $docSql = "
-              UPDATE accreditation_request_documents
-              SET file_path = ?, file_name = ?, status = 'Submitted',
-                  reviewed_by = NULL, reviewed_at = NULL, return_reason = NULL,
-                  uploaded_at = CURRENT_TIMESTAMP
-              WHERE request_id = ? AND requirement_id = ?
-            ";
-            $st = $pdo->prepare($docSql);
-            $st->execute([$publicPath, $orig, $requestId, $rid]);
+          if ($existingOfficer) {
+              // Update existing officer
+              $offSql = "
+                  UPDATE organization_officers
+                  SET user_id = ?, full_name = ?, course_year = ?, status = ?
+                  WHERE org_id = ? AND academic_term_id = ? AND position = ?
+              ";
+              $st = $pdo->prepare($offSql);
+              $st->execute([
+                  $studentId,
+                  $fullName,
+                  $courseYear,
+                  $status,
+                  $orgId,
+                  $termId,
+                  $position
+              ]);
           } else {
-            $docSql = "
-              INSERT INTO accreditation_request_documents
-                (request_id, requirement_id, file_path, file_name, status, reviewed_by, reviewed_at, return_reason, uploaded_at)
-              VALUES
-                (?, ?, ?, ?, 'Submitted', NULL, NULL, NULL, CURRENT_TIMESTAMP)
-            ";
-            $st = $pdo->prepare($docSql);
-            $st->execute([$requestId, $rid, $publicPath, $orig]);
+              // Insert new officer
+              $offSql = "
+                  INSERT INTO organization_officers
+                  (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ";
+              $st = $pdo->prepare($offSql);
+              $st->execute([
+                  $orgId,
+                  $termId,
+                  $studentId,
+                  $position,
+                  $fullName,
+                  $courseYear,
+                  $status
+              ]);
           }
-        }
+      }
 
-        $specialAdminId = get_active_special_admin($pdo);
-        if ($specialAdminId) {
-          $message = $isRenewal
-            ? "A renewal accreditation request for organization '{$orgName}' has been submitted by {$user['first_name']} {$user['last_name']}."
-            : "A new accreditation request for organization '{$orgName}' has been submitted by {$user['first_name']} {$user['last_name']}.";
+      // ================= DOCUMENT UPLOADS =================
+      if (empty($_FILES["files"])) throw new Exception("No documents uploaded.");
 
-          add_notification(
-            $pdo,
-            $specialAdminId,
-            $uid,
-            $isRenewal ? "Renewal Accreditation Request Submitted" : "New Accreditation Request Submitted",
-            $message,
-            'accreditation',
-            $requestId
-          );
+      $files = $_FILES["files"];
+      if (!is_array($files["name"])) throw new Exception("Invalid files payload.");
+
+      $baseDirRel = "assets/uploads/accreditation/{$requestId}";
+      $baseDirFs = __DIR__ . "/../" . $baseDirRel;
+      if (!ensure_dir($baseDirFs)) throw new Exception("Cannot create request upload directory.");
+
+      foreach ($reqIds as $rid) {
+        $key = (string)$rid;
+        if (!isset($files["tmp_name"][$key])) continue;
+
+        $tmpName = $files["tmp_name"][$key];
+        $err = $files["error"][$key] ?? UPLOAD_ERR_NO_FILE;
+        $orig = $files["name"][$key] ?? "file";
+        if ($err === UPLOAD_ERR_NO_FILE) throw new Exception("Missing upload for requirement #{$rid}.");
+        if ($err !== UPLOAD_ERR_OK) throw new Exception("Upload error for requirement #{$rid}.");
+        if (!is_uploaded_file($tmpName)) throw new Exception("Invalid upload for requirement #{$rid}.");
+
+        $ext = strtolower(pathinfo((string)$orig, PATHINFO_EXTENSION));
+        $allowed = ["pdf"];
+        if (!in_array($ext, $allowed, true)) throw new Exception("Invalid file type for requirement #{$rid}.");
+
+        $safe = safe_filename(pathinfo((string)$orig, PATHINFO_FILENAME));
+        $fname = "req{$rid}_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "_" . $safe . "." . $ext;
+
+        $subFs = $baseDirFs . "/req_" . $rid;
+        if (!ensure_dir($subFs)) throw new Exception("Cannot create requirement folder.");
+
+        $destFs = $subFs . "/" . $fname;
+        if (!move_uploaded_file((string)$tmpName, $destFs)) throw new Exception("Failed to save uploaded file for requirement #{$rid}.");
+
+        $relPath = $baseDirRel . "/req_{$rid}/" . $fname;
+        $publicPath = to_public_path($relPath);
+
+        $checkDocSt = $pdo->prepare("
+          SELECT id FROM accreditation_request_documents
+          WHERE request_id = ? AND requirement_id = ?
+          LIMIT 1
+        ");
+        $checkDocSt->execute([$requestId, $rid]);
+
+        if ($checkDocSt->fetch()) {
+          $docSql = "
+            UPDATE accreditation_request_documents
+            SET file_path = ?, file_name = ?, status = 'Submitted',
+                reviewed_by = NULL, reviewed_at = NULL, return_reason = NULL,
+                uploaded_at = CURRENT_TIMESTAMP
+            WHERE request_id = ? AND requirement_id = ?
+          ";
+          $st = $pdo->prepare($docSql);
+          $st->execute([$publicPath, $orig, $requestId, $rid]);
+        } else {
+          $docSql = "
+            INSERT INTO accreditation_request_documents
+              (request_id, requirement_id, file_path, file_name, status, reviewed_by, reviewed_at, return_reason, uploaded_at)
+            VALUES
+              (?, ?, ?, ?, 'Submitted', NULL, NULL, NULL, CURRENT_TIMESTAMP)
+          ";
+          $st = $pdo->prepare($docSql);
+          $st->execute([$requestId, $rid, $publicPath, $orig]);
         }
+      }
+
+      // ================= NOTIFICATIONS =================
+      $specialAdminId = get_active_special_admin($pdo);
+      if ($specialAdminId) {
+        $message = $isRenewal
+          ? "A renewal accreditation request for organization '{$orgName}' has been submitted by {$user['first_name']} {$user['last_name']}."
+          : "A new accreditation request for organization '{$orgName}' has been submitted by {$user['first_name']} {$user['last_name']}.";
 
         add_notification(
           $pdo,
+          $specialAdminId,
           $uid,
-          $uid,
-          $isRenewal ? "Renewal Accreditation Request Submitted" : "Accreditation Request Submitted",
-          $isRenewal
-            ? "Your renewal accreditation request for '{$orgName}' has been submitted successfully and is now pending review."
-            : "Your accreditation request for '{$orgName}' has been submitted successfully and is now pending review.",
+          $isRenewal ? "Renewal Accreditation Request Submitted" : "New Accreditation Request Submitted",
+          $message,
           'accreditation',
           $requestId
         );
-
-        $pdo->commit();
-
-        out([
-          "ok" => true,
-          "message" => $isRenewal ? "Renewal submitted." : "Accreditation submitted.",
-          "request_id" => $requestId,
-          "org_id" => $orgId,
-          "term_id" => $termId,
-          "is_renewal" => $isRenewal
-        ]);
-      } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
       }
+
+      add_notification(
+        $pdo,
+        $uid,
+        $uid,
+        $isRenewal ? "Renewal Accreditation Request Submitted" : "Accreditation Request Submitted",
+        $isRenewal
+          ? "Your renewal accreditation request for '{$orgName}' has been submitted successfully and is now pending review."
+          : "Your accreditation request for '{$orgName}' has been submitted successfully and is now pending review.",
+        'accreditation',
+        $requestId
+      );
+
+      $pdo->commit();
+
+      out([
+        "ok" => true,
+        "message" => $isRenewal ? "Renewal submitted." : "Accreditation submitted.",
+        "request_id" => $requestId,
+        "org_id" => $orgId,
+        "term_id" => $termId,
+        "is_renewal" => $isRenewal
+      ]);
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      fail($e->getMessage(), 500);
     }
+  }
 
     // -----------------------------------------
     // 7) Get request details + documents paging
