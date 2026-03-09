@@ -867,6 +867,8 @@ function can_mutate_in_filter(PDO $pdo, string $sy, string $sem): bool {
    Event visibility gates
    ✅ Uses organizations.scope (General/Exclusive)
    ✅ Uses users.program (abbr) vs organizations.program_id -> programs.abbreviation
+   ✅ Super viewers (overseer, super_admin, special_admin) can ONLY see fully approved events
+   ✅ Normal students can ONLY see fully approved events
    ========================= */
 function can_view_event(PDO $pdo, array $e, int $uid, string $role): bool {
   $role = strtolower($role);
@@ -876,8 +878,29 @@ function can_view_event(PDO $pdo, array $e, int $uid, string $role): bool {
     return can_view_draft_event($pdo, $e, $uid, $role);
   }
 
-  if (is_super_viewer($role)) return true;
+  // ✅ SUPER VIEWERS (overseer, super_admin, special_admin) - strict filtering
+  // They can ONLY see events with BOTH proposal AND accomplishment approved
+  if (is_super_viewer($role)) {
+    $proposalApproved = ((string)($e['status'] ?? '') === 'Approved');
+    $accomplishmentApproved = ((string)($e['accomplishment_status'] ?? '') === 'Approved');
+    return $proposalApproved && $accomplishmentApproved;
+  }
 
+  // ✅ NORMAL STUDENTS - can ONLY see fully approved events
+  if ($role === 'student') {
+    $proposalApproved = ((string)($e['status'] ?? '') === 'Approved');
+    $accomplishmentApproved = ((string)($e['accomplishment_status'] ?? '') === 'Approved');
+    
+    // If not fully approved, student cannot see it
+    if (!$proposalApproved || !$accomplishmentApproved) {
+      return false;
+    }
+    
+    // Even if fully approved, students still need org-based access rights
+    // Continue with normal org-based visibility checks for students
+  }
+
+  // For all other roles, continue with normal visibility logic
   $orgId = (int)($e['org_id'] ?? 0);
   if ($orgId <= 0) return true;
 
@@ -914,8 +937,14 @@ function can_view_event(PDO $pdo, array $e, int $uid, string $role): bool {
     return false;
   }
 
+  // Officers can see their orgs regardless of approval status
   if (is_officer_role($role)) return true;
 
+  // Faculty/admin roles handled earlier
+  if (can_review_events_role($role)) return true;
+
+  // For students, we already checked approval status above
+  // Now check org-based access
   if ($orgScope === 'general') return true;
 
   $sy = school_year_from_years((int)($e['start_year'] ?? 0), (int)($e['end_year'] ?? 0));
@@ -1462,490 +1491,561 @@ try {
   }
 
   if ($action === 'list_events') {
-  require_login();
+    require_login();
 
-  $q          = s($in, ['q'], '');
-  $schoolYear = s($in, ['school_year'], '');
-  $semester   = s($in, ['semester'], '');
-  $termId     = i($in, ['term_id', 'academic_term_id'], 0);
+    $q          = s($in, ['q'], '');
+    $schoolYear = s($in, ['school_year'], '');
+    $semester   = s($in, ['semester'], '');
+    $termId     = i($in, ['term_id', 'academic_term_id'], 0);
 
-  $uid   = current_user_id();
-  $role  = current_role();
-  $uname = get_user_full_name($pdo, $uid);
+    $uid   = current_user_id();
+    $role  = current_role();
+    $uname = get_user_full_name($pdo, $uid);
 
-  // ----------------------------
-  // ✅ Resolve term consistently
-  // Priority:
-  //  1) term_id from JS
-  //  2) school_year + semester (if provided)
-  //  3) active term
-  // ----------------------------
-  $active = get_active_term($pdo);
+    // ----------------------------
+    // ✅ Resolve term consistently
+    // Priority:
+    //  1) term_id from JS
+    //  2) school_year + semester (if provided)
+    //  3) active term
+    // ----------------------------
+    $active = get_active_term($pdo);
 
-  // If JS passed term_id, resolve filters for consistency
-  if ($termId > 0 && ($schoolYear === '' || $semester === '')) {
-    $t = get_term_by_id($pdo, $termId);
-    if ($t) {
-      $schoolYear = (string)$t['school_year'];
-      $semester   = (string)$t['semester'];
-    }
-  }
-
-  // If termId missing but filters provided, resolve termId from academic_terms
-  if ($termId <= 0 && $schoolYear !== '' && $semester !== '') {
-    $syNorm = normalize_school_year($schoolYear);
-    $stTerm = $pdo->prepare("
-      SELECT id, school_year, semester
-      FROM academic_terms
-      WHERE school_year = :sy AND semester = :sem
-      LIMIT 1
-    ");
-    $stTerm->execute([':sy' => $syNorm, ':sem' => $semester]);
-    $t = $stTerm->fetch(PDO::FETCH_ASSOC);
-    if ($t) {
-      $termId     = (int)$t['id'];
-      $schoolYear = (string)$t['school_year'];
-      $semester   = (string)$t['semester'];
-    }
-  }
-
-  // If still missing filters, fall back to active term (and its id)
-  if ($schoolYear === '' || $semester === '') {
-    if (!$active) fail('No active academic term found.', 400);
-    $schoolYear = (string)$active['school_year'];
-    $semester   = (string)$active['semester'];
-    if (!empty($active['id'])) $termId = (int)$active['id'];
-  }
-
-  // If we still don't have termId, resolve again (best-effort)
-  if ($termId <= 0) {
-    $syNorm = normalize_school_year($schoolYear);
-    $stTerm = $pdo->prepare("SELECT id FROM academic_terms WHERE school_year = :sy AND semester = :sem LIMIT 1");
-    $stTerm->execute([':sy' => $syNorm, ':sem' => $semester]);
-    $termId = (int)($stTerm->fetchColumn() ?: 0);
-  }
-
-  // Optional mode (kept for compatibility)
-  $mode = strtolower(trim((string)($in['mode'] ?? $in['save_mode'] ?? $in['status_mode'] ?? 'draft')));
-  if (!in_array($mode, ['draft', 'submit'], true)) $mode = 'draft';
-
-  [$syStart, $syEnd] = parse_school_year($schoolYear);
-  if ($syStart <= 0 || $syEnd <= 0) fail('Invalid school_year.', 400);
-
-  $syStr = normalize_school_year($schoolYear);
-  $ay    = semester_to_active_year($semester);
-
-  // ----------------------------
-  // ✅ Officer orgs for the ENTIRE SCHOOL YEAR (not just selected term)
-  // ✅ Fix: Officers persist across semesters within same school year
-  // ----------------------------
-  $myOrgs = [];
-
-  $ooHasUserId   = has_column($pdo, 'organization_officers', 'user_id');
-  $ooHasFullName = has_column($pdo, 'organization_officers', 'full_name');
-  $ooHasStatus   = has_column($pdo, 'organization_officers', 'status');
-
-  if ($termId > 0) {
-    // Get the school year for this term
-    $stYear = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = :tid LIMIT 1");
-    $stYear->execute([':tid' => $termId]);
-    $schoolYearForTerm = $stYear->fetchColumn();
-    
-    if ($schoolYearForTerm) {
-      // Look for officers in ANY term with this school year
-      $ooWhere = "t.school_year = :school_year";
-      $bind = [':school_year' => $schoolYearForTerm];
-
-      $matchParts = [];
-
-      if ($ooHasUserId) {
-        $matchParts[] = "oo.user_id = :uid";
-        $bind[':uid'] = $uid;
+    // If JS passed term_id, resolve filters for consistency
+    if ($termId > 0 && ($schoolYear === '' || $semester === '')) {
+      $t = get_term_by_id($pdo, $termId);
+      if ($t) {
+        $schoolYear = (string)$t['school_year'];
+        $semester   = (string)$t['semester'];
       }
+    }
 
-      if ($ooHasFullName) {
-        // loose name match (helps if officer rows were imported w/ string names)
-        $matchParts[] = "(
-          oo.user_id IS NULL
-          AND TRIM(COALESCE(oo.full_name,'')) <> ''
-          AND UPPER(TRIM(oo.full_name)) LIKE UPPER(:uname_like)
-        )";
-        $bind[':uname_like'] = '%' . trim($uname) . '%';
+    // If termId missing but filters provided, resolve termId from academic_terms
+    if ($termId <= 0 && $schoolYear !== '' && $semester !== '') {
+      $syNorm = normalize_school_year($schoolYear);
+      $stTerm = $pdo->prepare("
+        SELECT id, school_year, semester
+        FROM academic_terms
+        WHERE school_year = :sy AND semester = :sem
+        LIMIT 1
+      ");
+      $stTerm->execute([':sy' => $syNorm, ':sem' => $semester]);
+      $t = $stTerm->fetch(PDO::FETCH_ASSOC);
+      if ($t) {
+        $termId     = (int)$t['id'];
+        $schoolYear = (string)$t['school_year'];
+        $semester   = (string)$t['semester'];
       }
+    }
 
-      // If we cannot match by anything, do not query
-      if (!empty($matchParts)) {
-        $ooWhere .= " AND (" . implode(" OR ", $matchParts) . ")";
+    // If still missing filters, fall back to active term (and its id)
+    if ($schoolYear === '' || $semester === '') {
+      if (!$active) fail('No active academic term found.', 400);
+      $schoolYear = (string)$active['school_year'];
+      $semester   = (string)$active['semester'];
+      if (!empty($active['id'])) $termId = (int)$active['id'];
+    }
 
-        if ($ooHasStatus) {
-          // accept common variants
-          $ooWhere .= " AND (oo.status = 'Active' OR oo.status = 'ACTIVE' OR oo.status = 'active')";
+    // If we still don't have termId, resolve again (best-effort)
+    if ($termId <= 0) {
+      $syNorm = normalize_school_year($schoolYear);
+      $stTerm = $pdo->prepare("SELECT id FROM academic_terms WHERE school_year = :sy AND semester = :sem LIMIT 1");
+      $stTerm->execute([':sy' => $syNorm, ':sem' => $semester]);
+      $termId = (int)($stTerm->fetchColumn() ?: 0);
+    }
+
+    // Optional mode (kept for compatibility)
+    $mode = strtolower(trim((string)($in['mode'] ?? $in['save_mode'] ?? $in['status_mode'] ?? 'draft')));
+    if (!in_array($mode, ['draft', 'submit'], true)) $mode = 'draft';
+
+    [$syStart, $syEnd] = parse_school_year($schoolYear);
+    if ($syStart <= 0 || $syEnd <= 0) fail('Invalid school_year.', 400);
+
+    $syStr = normalize_school_year($schoolYear);
+    $ay    = semester_to_active_year($semester);
+
+    // ----------------------------
+    // ✅ Officer orgs for the ENTIRE SCHOOL YEAR (not just selected term)
+    // ✅ Fix: Officers persist across semesters within same school year
+    // ----------------------------
+    $myOrgs = [];
+
+    $ooHasUserId   = has_column($pdo, 'organization_officers', 'user_id');
+    $ooHasFullName = has_column($pdo, 'organization_officers', 'full_name');
+    $ooHasStatus   = has_column($pdo, 'organization_officers', 'status');
+
+    if ($termId > 0) {
+      // Get the school year for this term
+      $stYear = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = :tid LIMIT 1");
+      $stYear->execute([':tid' => $termId]);
+      $schoolYearForTerm = $stYear->fetchColumn();
+      
+      if ($schoolYearForTerm) {
+        // Look for officers in ANY term with this school year
+        $ooWhere = "t.school_year = :school_year";
+        $bind = [':school_year' => $schoolYearForTerm];
+
+        $matchParts = [];
+
+        if ($ooHasUserId) {
+          $matchParts[] = "oo.user_id = :uid";
+          $bind[':uid'] = $uid;
         }
 
-        $stMy = $pdo->prepare("
-          SELECT DISTINCT
-            o.id,
-            o.org_name,
-            o.abbreviation,
-            CONCAT(
+        if ($ooHasFullName) {
+          // loose name match (helps if officer rows were imported w/ string names)
+          $matchParts[] = "(
+            oo.user_id IS NULL
+            AND TRIM(COALESCE(oo.full_name,'')) <> ''
+            AND UPPER(TRIM(oo.full_name)) LIKE UPPER(:uname_like)
+          )";
+          $bind[':uname_like'] = '%' . trim($uname) . '%';
+        }
+
+        // If we cannot match by anything, do not query
+        if (!empty($matchParts)) {
+          $ooWhere .= " AND (" . implode(" OR ", $matchParts) . ")";
+
+          if ($ooHasStatus) {
+            // accept common variants
+            $ooWhere .= " AND (oo.status = 'Active' OR oo.status = 'ACTIVE' OR oo.status = 'active')";
+          }
+
+          $stMy = $pdo->prepare("
+            SELECT DISTINCT
+              o.id,
               o.org_name,
-              CASE
-                WHEN COALESCE(o.abbreviation,'') <> '' THEN CONCAT(' (', o.abbreviation, ')')
-                ELSE ''
-              END
-            ) AS label
-          FROM organization_officers oo
-          INNER JOIN academic_terms t ON t.id = oo.academic_term_id
-          INNER JOIN organizations o ON o.id = oo.org_id
-          WHERE {$ooWhere}
-          GROUP BY o.id, o.org_name, o.abbreviation
-          ORDER BY o.org_name ASC
-        ");
-        $stMy->execute($bind);
+              o.abbreviation,
+              CONCAT(
+                o.org_name,
+                CASE
+                  WHEN COALESCE(o.abbreviation,'') <> '' THEN CONCAT(' (', o.abbreviation, ')')
+                  ELSE ''
+                END
+              ) AS label
+            FROM organization_officers oo
+            INNER JOIN academic_terms t ON t.id = oo.academic_term_id
+            INNER JOIN organizations o ON o.id = oo.org_id
+            WHERE {$ooWhere}
+            GROUP BY o.id, o.org_name, o.abbreviation
+            ORDER BY o.org_name ASC
+          ");
+          $stMy->execute($bind);
 
-        while ($row = $stMy->fetch(PDO::FETCH_ASSOC)) {
-          $myOrgs[] = [
-            'id' => (int)$row['id'],
-            'org_name' => (string)$row['org_name'],
-            'abbreviation' => (string)($row['abbreviation'] ?? ''),
-            'label' => (string)$row['label'],
-          ];
+          while ($row = $stMy->fetch(PDO::FETCH_ASSOC)) {
+            $myOrgs[] = [
+              'id' => (int)$row['id'],
+              'org_name' => (string)$row['org_name'],
+              'abbreviation' => (string)($row['abbreviation'] ?? ''),
+              'label' => (string)$row['label'],
+            ];
+          }
         }
       }
     }
-  }
 
-  // ✅ Treat "student" as officer when they have officer orgs in this school year
-  $isOfficerThisTerm = is_officer_role($role) || ($role === 'student' && !empty($myOrgs));
+    // ✅ Treat "student" as officer when they have officer orgs in this school year
+    $isOfficerThisTerm = is_officer_role($role) || ($role === 'student' && !empty($myOrgs));
 
-  // ----------------------------
-  // ✅ columns
-  // ----------------------------
-  $hasEventDate = has_column($pdo, 'event_events', 'event_date');
-  $hasDesc      = has_column($pdo, 'event_events', 'description');
+    // ----------------------------
+    // ✅ columns
+    // ----------------------------
+    $hasEventDate = has_column($pdo, 'event_events', 'event_date');
+    $hasDesc      = has_column($pdo, 'event_events', 'description');
 
-  $selectEventDate = $hasEventDate ? "e.event_date" : "'' AS event_date";
-  $selectDesc      = $hasDesc ? "e.description" : "'' AS description";
+    $selectEventDate = $hasEventDate ? "e.event_date" : "'' AS event_date";
+    $selectDesc      = $hasDesc ? "e.description" : "'' AS description";
 
-  // ----------------------------
-  // ✅ base where (term filter)
-  // ----------------------------
-  $where  = "e.start_year = :sy1 AND e.end_year = :sy2 AND e.active_year = :ay";
-  $params = [':sy1' => $syStart, ':sy2' => $syEnd, ':ay' => $ay];
+    // ----------------------------
+    // ✅ base where (term filter)
+    // ----------------------------
+    $where  = "e.start_year = :sy1 AND e.end_year = :sy2 AND e.active_year = :ay";
+    $params = [':sy1' => $syStart, ':sy2' => $syEnd, ':ay' => $ay];
 
-  if ($q !== '') {
-    $where .= " AND (e.title LIKE :q1 OR e.location LIKE :q2 OR o.org_name LIKE :q3)";
-    $like = "%{$q}%";
-    $params[':q1'] = $like;
-    $params[':q2'] = $like;
-    $params[':q3'] = $like;
-  }
+    if ($q !== '') {
+      $where .= " AND (e.title LIKE :q1 OR e.location LIKE :q2 OR o.org_name LIKE :q3)";
+      $like = "%{$q}%";
+      $params[':q1'] = $like;
+      $params[':q2'] = $like;
+      $params[':q3'] = $like;
+    }
 
-  // ----------------------------
-  // ✅ DRAFT VISIBILITY RULE (GLOBAL) — robust column checks
-  // Drafts visible only to:
-  //  - author_user_id
-  //  - officers of the event's org for THIS term (by user_id OR full_name if exists)
-  // IMPORTANT: only apply status/full_name checks if those columns exist.
-  // ----------------------------
-  $draftOfficerMatch = [];
-  $draftBinds = [];
+    // ----------------------------
+    // ✅ DRAFT VISIBILITY RULE (GLOBAL) — robust column checks
+    // Drafts visible only to:
+    //  - author_user_id
+    //  - officers of the event's org for THIS term (by user_id OR full_name if exists)
+    // IMPORTANT: only apply status/full_name checks if those columns exist.
+    // ----------------------------
+    $draftOfficerMatch = [];
+    $draftBinds = [];
 
-  $ooDHasUserId   = $ooHasUserId;
-  $ooDHasFullName = $ooHasFullName;
-  $ooDHasStatus   = $ooHasStatus;
+    $ooDHasUserId   = $ooHasUserId;
+    $ooDHasFullName = $ooHasFullName;
+    $ooDHasStatus   = $ooHasStatus;
 
-  if ($ooDHasUserId) {
-    $draftOfficerMatch[] = "oo_d.user_id = :v_uid_draft_officer";
-    $draftBinds[':v_uid_draft_officer'] = $uid;
-  }
-  if ($ooDHasFullName) {
-    $draftOfficerMatch[] = "(
-      oo_d.user_id IS NULL
-      AND TRIM(COALESCE(oo_d.full_name,'')) <> ''
-      AND UPPER(TRIM(oo_d.full_name)) = UPPER(TRIM(:v_uname_draft_officer))
-    )";
-    $draftBinds[':v_uname_draft_officer'] = $uname;
-  }
-  if (empty($draftOfficerMatch)) {
-    // if we can't match officer identity, disable the EXISTS by making it false
-    $draftOfficerMatch[] = "0=1";
-  }
+    if ($ooDHasUserId) {
+      $draftOfficerMatch[] = "oo_d.user_id = :v_uid_draft_officer";
+      $draftBinds[':v_uid_draft_officer'] = $uid;
+    }
+    if ($ooDHasFullName) {
+      $draftOfficerMatch[] = "(
+        oo_d.user_id IS NULL
+        AND TRIM(COALESCE(oo_d.full_name,'')) <> ''
+        AND UPPER(TRIM(oo_d.full_name)) = UPPER(TRIM(:v_uname_draft_officer))
+      )";
+      $draftBinds[':v_uname_draft_officer'] = $uname;
+    }
+    if (empty($draftOfficerMatch)) {
+      // if we can't match officer identity, disable the EXISTS by making it false
+      $draftOfficerMatch[] = "0=1";
+    }
 
-  $draftStatusSql = "";
-  if ($ooDHasStatus) {
-    $draftStatusSql = " AND (oo_d.status = 'Active' OR oo_d.status = 'ACTIVE' OR oo_d.status = 'active') ";
-  }
+    $draftStatusSql = "";
+    if ($ooDHasStatus) {
+      $draftStatusSql = " AND (oo_d.status = 'Active' OR oo_d.status = 'ACTIVE' OR oo_d.status = 'active') ";
+    }
 
-  $where .= "
-    AND (
-      e.status <> 'Draft'
-      OR (
-        e.status = 'Draft'
-        AND (
-          e.author_user_id = :v_uid_draft_author
-          OR EXISTS (
-            SELECT 1
-            FROM organization_officers oo_d
-            WHERE oo_d.org_id = e.org_id
-              AND oo_d.academic_term_id = :v_tid_draft
-              AND (" . implode(" OR ", $draftOfficerMatch) . ")
-              {$draftStatusSql}
-            LIMIT 1
+    $where .= "
+      AND (
+        e.status <> 'Draft'
+        OR (
+          e.status = 'Draft'
+          AND (
+            e.author_user_id = :v_uid_draft_author
+            OR EXISTS (
+              SELECT 1
+              FROM organization_officers oo_d
+              WHERE oo_d.org_id = e.org_id
+                AND oo_d.academic_term_id = :v_tid_draft
+                AND (" . implode(" OR ", $draftOfficerMatch) . ")
+                {$draftStatusSql}
+              LIMIT 1
+            )
           )
         )
       )
-    )
-  ";
-  $params[':v_uid_draft_author'] = $uid;
-  $params[':v_tid_draft']        = $termId;
-  foreach ($draftBinds as $k => $v) $params[$k] = $v;
+    ";
+    $params[':v_uid_draft_author'] = $uid;
+    $params[':v_tid_draft']        = $termId;
+    foreach ($draftBinds as $k => $v) $params[$k] = $v;
 
-  // ----------------------------
-  // ✅ Audience visibility rules (non-super viewers)
-  // Robust: don't reference oo.status/full_name if columns missing
-  // ----------------------------
-  if (!is_super_viewer($role)) {
+    // ----------------------------
+    // ✅ MODIFIED: Audience visibility rules with role-based restrictions
+    // ✅ Super viewers (overseer, super_admin, special_admin) only see fully approved events
+    // ✅ Normal students only see fully approved events they have access to
+    // ✅ Officers can see all events for their orgs (including drafts)
+    // ✅ Faculty_admin can see events for orgs they created
+    // ----------------------------
+    
+    // Get org access for the user (used in student visibility)
     $hasCreatedBy = has_column($pdo, 'organizations', 'created_by');
     $hasOrgScope  = has_column($pdo, 'organizations', 'scope');
     $hasOrgProgId = has_column($pdo, 'organizations', 'program_id');
     $hasPrograms  = has_column($pdo, 'programs', 'abbreviation');
 
-    $handleOrgSql  = $hasCreatedBy ? " OR o.created_by = :v_uid_handle_org "  : "";
-    $handleClubSql = $hasCreatedBy ? " OR o.created_by = :v_uid_handle_club " : "";
+    // SUPER VIEWER SPECIAL HANDLING - strict approval filters
+    if (is_super_viewer($role)) {
+      // Super viewers can ONLY see events with BOTH proposal AND accomplishment approved
+      $where .= " AND e.status = 'Approved' AND e.accomplishment_status = 'Approved'";
+      // No org restrictions - they can see all orgs, but only fully approved events
+    } 
+    // NORMAL STUDENT HANDLING - strict approval filters + org-based access
+    else if ($role === 'student' && !$isOfficerThisTerm) {
+      // Students can ONLY see events with BOTH proposal AND accomplishment approved
+      $where .= " AND e.status = 'Approved' AND e.accomplishment_status = 'Approved'";
+      
+      // AND they must have org-based access (general, program-matched, etc.)
+      $orgGeneralSql = $hasOrgScope
+        ? "LOWER(COALESCE(o.scope,'')) = 'general'"
+        : "LOWER(COALESCE(e.scope,'')) = 'general'";
 
-    $orgGeneralSql = $hasOrgScope
-      ? "LOWER(COALESCE(o.scope,'')) = 'general'"
-      : "LOWER(COALESCE(e.scope,'')) = 'general'";
-
-    $programSql = "";
-    if (($role === 'student' || is_officer_role($role)) && $hasOrgScope && $hasOrgProgId && $hasPrograms) {
-      $userProgramAbbr = get_user_program_abbr($pdo, $uid);
-      if ($userProgramAbbr !== null) {
-        $programSql = "
-          OR (
-            LOWER(COALESCE(o.scope,'')) <> 'general'
-            AND EXISTS (
-              SELECT 1
-              FROM programs p
-              WHERE p.id = o.program_id
-                AND UPPER(TRIM(p.abbreviation)) = UPPER(TRIM(:v_user_program_abbr))
-              LIMIT 1
+      $programSql = "";
+      if ($hasOrgScope && $hasOrgProgId && $hasPrograms) {
+        $userProgramAbbr = get_user_program_abbr($pdo, $uid);
+        if ($userProgramAbbr !== null) {
+          $programSql = "
+            OR (
+              LOWER(COALESCE(o.scope,'')) <> 'general'
+              AND EXISTS (
+                SELECT 1
+                FROM programs p
+                WHERE p.id = o.program_id
+                  AND UPPER(TRIM(p.abbreviation)) = UPPER(TRIM(:v_user_program_abbr))
+                LIMIT 1
+              )
             )
-          )
-        ";
-        $params[':v_user_program_abbr'] = $userProgramAbbr;
+          ";
+          $params[':v_user_program_abbr'] = $userProgramAbbr;
+        }
       }
-    }
 
-    // Officer EXISTS (non-club)
-    $ooOfficerMatch = [];
-    if ($ooHasUserId) {
-      $ooOfficerMatch[] = "oo.user_id = :v_uid_org_officer";
-      $params[':v_uid_org_officer'] = $uid;
-    }
-    if ($ooHasFullName) {
-      $ooOfficerMatch[] = "(
-        oo.user_id IS NULL
-        AND TRIM(COALESCE(oo.full_name,'')) <> ''
-        AND UPPER(TRIM(oo.full_name)) = UPPER(TRIM(:v_uname_org_officer))
-      )";
-      $params[':v_uname_org_officer'] = $uname;
-    }
-    if (empty($ooOfficerMatch)) $ooOfficerMatch[] = "0=1";
-
-    $ooOfficerStatusSql = "";
-    if ($ooHasStatus) {
-      $ooOfficerStatusSql = " AND (oo.status = 'Active' OR oo.status = 'ACTIVE' OR oo.status = 'active') ";
-    }
-
-    // Club officer EXISTS
-    $oo2Match = [];
-    if ($ooHasUserId) {
-      $oo2Match[] = "oo2.user_id = :v_uid_club_officer";
-      $params[':v_uid_club_officer'] = $uid;
-    }
-    if ($ooHasFullName) {
-      $oo2Match[] = "(
-        oo2.user_id IS NULL
-        AND TRIM(COALESCE(oo2.full_name,'')) <> ''
-        AND UPPER(TRIM(oo2.full_name)) = UPPER(TRIM(:v_uname_club_officer))
-      )";
-      $params[':v_uname_club_officer'] = $uname;
-    }
-    if (empty($oo2Match)) $oo2Match[] = "0=1";
-
-    $oo2StatusSql = "";
-    if ($ooHasStatus) {
-      $oo2StatusSql = " AND (oo2.status = 'Active' OR oo2.status = 'ACTIVE' OR oo2.status = 'active') ";
-    }
-
-    $where .= "
-      AND (
-        (e.org_id IS NULL OR e.org_id = 0)
-
-        OR (
-          LOWER(COALESCE(o.org_type,'')) <> 'club'
-          AND :v_officer_view_nonclub = 1
-        )
-
-        OR (
-          LOWER(COALESCE(o.org_type,'')) <> 'club'
-          AND (
-            {$orgGeneralSql}
-
-            OR EXISTS (
-              SELECT 1
-              FROM organization_officers oo
-              WHERE oo.org_id = e.org_id
-                AND oo.academic_term_id = :v_tid_org_officer
-                AND (" . implode(" OR ", $ooOfficerMatch) . ")
-                {$ooOfficerStatusSql}
-              LIMIT 1
+      // Add org-based access conditions
+      $where .= "
+        AND (
+          e.org_id IS NULL 
+          OR e.org_id = 0
+          OR (
+            LOWER(COALESCE(o.org_type,'')) <> 'club'
+            AND (
+              {$orgGeneralSql}
+              {$programSql}
             )
-
-            {$handleOrgSql}
-
-            {$programSql}
           )
-        )
-
-        OR (
-          LOWER(COALESCE(o.org_type,'')) = 'club'
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM organization_officers oo2
-              WHERE oo2.org_id = e.org_id
-                AND oo2.academic_term_id = :v_tid_club_officer
-                AND (" . implode(" OR ", $oo2Match) . ")
-                {$oo2StatusSql}
-              LIMIT 1
-            )
-            OR EXISTS (
+          OR (
+            LOWER(COALESCE(o.org_type,'')) = 'club'
+            AND EXISTS (
               SELECT 1
               FROM organization_memberships m
               WHERE m.org_id = e.org_id
-                AND m.academic_term_id = :v_tid_club_member
-                AND m.student_user_id = :v_uid_club_member
+                AND m.academic_term_id = :v_tid_club_member_student
+                AND m.student_user_id = :v_uid_club_member_student
               LIMIT 1
             )
-            {$handleClubSql}
           )
         )
-      )
-    ";
-
-    $params[':v_officer_view_nonclub'] = ($isOfficerThisTerm ? 1 : 0);
-
-    // term binds
-    $params[':v_tid_org_officer']  = $termId;
-    $params[':v_tid_club_officer'] = $termId;
-
-    // club member binds
-    $params[':v_uid_club_member'] = $uid;
-    $params[':v_tid_club_member'] = $termId;
-
-    if ($hasCreatedBy) {
-      $params[':v_uid_handle_org']  = $uid;
-      $params[':v_uid_handle_club'] = $uid;
+      ";
+      
+      $params[':v_tid_club_member_student'] = $termId;
+      $params[':v_uid_club_member_student'] = $uid;
     }
-  }
+    // OFFICERS AND OTHER ROLES - use the normal complex visibility logic
+    else {
+      $handleOrgSql  = $hasCreatedBy ? " OR o.created_by = :v_uid_handle_org "  : "";
+      $handleClubSql = $hasCreatedBy ? " OR o.created_by = :v_uid_handle_club " : "";
 
-  // ----------------------------
-  // ✅ fetch events
-  // ----------------------------
-  $st = $pdo->prepare("
-    SELECT e.id, e.org_id, e.title, e.location, e.scope, e.active_year, e.start_year, e.end_year,
-           e.status, e.accomplishment_status,
-           {$selectEventDate},
-           {$selectDesc},
-           e.created_at,
-           o.org_name, o.abbreviation, o.org_type
-    FROM event_events e
-    LEFT JOIN organizations o ON o.id = e.org_id
-    WHERE {$where}
-    ORDER BY e.created_at DESC, e.id DESC
-    LIMIT 200
-  ");
-  $st->execute($params);
+      $orgGeneralSql = $hasOrgScope
+        ? "LOWER(COALESCE(o.scope,'')) = 'general'"
+        : "LOWER(COALESCE(e.scope,'')) = 'general'";
 
-  $events = [];
-  while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-    $orgLabel = null;
-    if (!empty($r['org_name'])) {
-      $orgLabel = trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : ''));
+      $programSql = "";
+      if (($role === 'student' || is_officer_role($role)) && $hasOrgScope && $hasOrgProgId && $hasPrograms) {
+        $userProgramAbbr = get_user_program_abbr($pdo, $uid);
+        if ($userProgramAbbr !== null) {
+          $programSql = "
+            OR (
+              LOWER(COALESCE(o.scope,'')) <> 'general'
+              AND EXISTS (
+                SELECT 1
+                FROM programs p
+                WHERE p.id = o.program_id
+                  AND UPPER(TRIM(p.abbreviation)) = UPPER(TRIM(:v_user_program_abbr))
+                LIMIT 1
+              )
+            )
+          ";
+          $params[':v_user_program_abbr'] = $userProgramAbbr;
+        }
+      }
+
+      // Officer EXISTS (non-club)
+      $ooOfficerMatch = [];
+      if ($ooHasUserId) {
+        $ooOfficerMatch[] = "oo.user_id = :v_uid_org_officer";
+        $params[':v_uid_org_officer'] = $uid;
+      }
+      if ($ooHasFullName) {
+        $ooOfficerMatch[] = "(
+          oo.user_id IS NULL
+          AND TRIM(COALESCE(oo.full_name,'')) <> ''
+          AND UPPER(TRIM(oo.full_name)) = UPPER(TRIM(:v_uname_org_officer))
+        )";
+        $params[':v_uname_org_officer'] = $uname;
+      }
+      if (empty($ooOfficerMatch)) $ooOfficerMatch[] = "0=1";
+
+      $ooOfficerStatusSql = "";
+      if ($ooHasStatus) {
+        $ooOfficerStatusSql = " AND (oo.status = 'Active' OR oo.status = 'ACTIVE' OR oo.status = 'active') ";
+      }
+
+      // Club officer EXISTS
+      $oo2Match = [];
+      if ($ooHasUserId) {
+        $oo2Match[] = "oo2.user_id = :v_uid_club_officer";
+        $params[':v_uid_club_officer'] = $uid;
+      }
+      if ($ooHasFullName) {
+        $oo2Match[] = "(
+          oo2.user_id IS NULL
+          AND TRIM(COALESCE(oo2.full_name,'')) <> ''
+          AND UPPER(TRIM(oo2.full_name)) = UPPER(TRIM(:v_uname_club_officer))
+        )";
+        $params[':v_uname_club_officer'] = $uname;
+      }
+      if (empty($oo2Match)) $oo2Match[] = "0=1";
+
+      $oo2StatusSql = "";
+      if ($ooHasStatus) {
+        $oo2StatusSql = " AND (oo2.status = 'Active' OR oo2.status = 'ACTIVE' OR oo2.status = 'active') ";
+      }
+
+      $where .= "
+        AND (
+          (e.org_id IS NULL OR e.org_id = 0)
+
+          OR (
+            LOWER(COALESCE(o.org_type,'')) <> 'club'
+            AND :v_officer_view_nonclub = 1
+          )
+
+          OR (
+            LOWER(COALESCE(o.org_type,'')) <> 'club'
+            AND (
+              {$orgGeneralSql}
+
+              OR EXISTS (
+                SELECT 1
+                FROM organization_officers oo
+                WHERE oo.org_id = e.org_id
+                  AND oo.academic_term_id = :v_tid_org_officer
+                  AND (" . implode(" OR ", $ooOfficerMatch) . ")
+                  {$ooOfficerStatusSql}
+                LIMIT 1
+              )
+
+              {$handleOrgSql}
+
+              {$programSql}
+            )
+          )
+
+          OR (
+            LOWER(COALESCE(o.org_type,'')) = 'club'
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM organization_officers oo2
+                WHERE oo2.org_id = e.org_id
+                  AND oo2.academic_term_id = :v_tid_club_officer
+                  AND (" . implode(" OR ", $oo2Match) . ")
+                  {$oo2StatusSql}
+                LIMIT 1
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM organization_memberships m
+                WHERE m.org_id = e.org_id
+                  AND m.academic_term_id = :v_tid_club_member
+                  AND m.student_user_id = :v_uid_club_member
+                LIMIT 1
+              )
+              {$handleClubSql}
+            )
+          )
+        )
+      ";
+
+      $params[':v_officer_view_nonclub'] = ($isOfficerThisTerm ? 1 : 0);
+
+      // term binds
+      $params[':v_tid_org_officer']  = $termId;
+      $params[':v_tid_club_officer'] = $termId;
+
+      // club member binds
+      $params[':v_uid_club_member'] = $uid;
+      $params[':v_tid_club_member'] = $termId;
+
+      if ($hasCreatedBy) {
+        $params[':v_uid_handle_org']  = $uid;
+        $params[':v_uid_handle_club'] = $uid;
+      }
     }
 
-    $events[] = [
-      'id' => (int)$r['id'],
-      'org_id' => $r['org_id'] !== null ? (int)$r['org_id'] : null,
-      'org_name' => $orgLabel,
-      'org_label' => $orgLabel,
-      'title' => (string)$r['title'],
-      'location' => (string)$r['location'],
-      'scope' => (string)$r['scope'],
-      'school_year' => "{$r['start_year']}-{$r['end_year']}",
-      'semester' => active_year_to_semester((int)$r['active_year']),
-      'status' => (string)$r['status'],
-      'accomplishment_status' => (string)$r['accomplishment_status'],
-      'event_date' => (string)($r['event_date'] ?? ''),
-      'description' => (string)($r['description'] ?? ''),
-      'created_at' => (string)$r['created_at'],
-    ];
+    // ----------------------------
+    // ✅ fetch events
+    // ----------------------------
+    $st = $pdo->prepare("
+      SELECT e.id, e.org_id, e.title, e.location, e.scope, e.active_year, e.start_year, e.end_year,
+            e.status, e.accomplishment_status,
+            {$selectEventDate},
+            {$selectDesc},
+            e.created_at,
+            o.org_name, o.abbreviation, o.org_type
+      FROM event_events e
+      LEFT JOIN organizations o ON o.id = e.org_id
+      WHERE {$where}
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 200
+    ");
+    $st->execute($params);
+
+    $events = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+      $orgLabel = null;
+      if (!empty($r['org_name'])) {
+        $orgLabel = trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : ''));
+      }
+
+      $events[] = [
+        'id' => (int)$r['id'],
+        'org_id' => $r['org_id'] !== null ? (int)$r['org_id'] : null,
+        'org_name' => $orgLabel,
+        'org_label' => $orgLabel,
+        'title' => (string)$r['title'],
+        'location' => (string)$r['location'],
+        'scope' => (string)$r['scope'],
+        'school_year' => "{$r['start_year']}-{$r['end_year']}",
+        'semester' => active_year_to_semester((int)$r['active_year']),
+        'status' => (string)$r['status'],
+        'accomplishment_status' => (string)$r['accomplishment_status'],
+        'event_date' => (string)($r['event_date'] ?? ''),
+        'description' => (string)($r['description'] ?? ''),
+        'created_at' => (string)$r['created_at'],
+      ];
+    }
+
+    // ----------------------------
+    // ✅ permissions / flags
+    // ----------------------------
+    $readOnly  = !is_active_filter($pdo, $schoolYear, $semester);
+    $canReview = (!$readOnly && can_review_events_role($role));
+
+    $canPrint = false;
+    if (can_review_events_role($role)) {
+      $canPrint = true;
+    } elseif ($isOfficerThisTerm || $role === 'student') {
+      $canPrint = true;
+    }
+
+    // ✅ can add event:
+    // - officers in this school year
+    // - or student who is an officer in this school year (myOrgs not empty)
+    $canAddEvent = false;
+    if (!$readOnly) {
+      $canAddEvent = $isOfficerThisTerm;
+    }
+
+    ok([
+      'filter' => [
+        'school_year' => $schoolYear,
+        'semester' => $semester,
+        'term_id' => $termId,
+      ],
+      'read_only' => $readOnly,
+      'events' => $events,
+
+      // ✅ what your JS needs
+      'my_orgs' => $myOrgs,
+
+      'active_term' => $active,
+      'permissions' => [
+        'user_id' => $uid,
+        'role' => $role,
+        'can_view' => true,
+        'is_readonly' => $readOnly,
+        'can_add_event' => $canAddEvent,
+        'can_add_credit' => false,
+        'can_add_debit' => false,
+        'can_review_event' => $canReview,
+        'can_print' => $canPrint,
+        'can_print_ledger' => $canPrint,
+        'can_print_passbook' => $canPrint,
+        'can_print_liquidation' => $canPrint,
+      ],
+    ]);
   }
-
-  // ----------------------------
-  // ✅ permissions / flags
-  // ----------------------------
-  $readOnly  = !is_active_filter($pdo, $schoolYear, $semester);
-  $canReview = (!$readOnly && can_review_events_role($role));
-
-  $canPrint = false;
-  if (can_review_events_role($role)) {
-    $canPrint = true;
-  } elseif ($isOfficerThisTerm || $role === 'student') {
-    $canPrint = true;
-  }
-
-  // ✅ can add event:
-  // - officers in this school year
-  // - or student who is an officer in this school year (myOrgs not empty)
-  $canAddEvent = false;
-  if (!$readOnly) {
-    $canAddEvent = $isOfficerThisTerm;
-  }
-
-  ok([
-    'filter' => [
-      'school_year' => $schoolYear,
-      'semester' => $semester,
-      'term_id' => $termId,
-    ],
-    'read_only' => $readOnly,
-    'events' => $events,
-
-    // ✅ what your JS needs
-    'my_orgs' => $myOrgs,
-
-    'active_term' => $active,
-    'permissions' => [
-      'user_id' => $uid,
-      'role' => $role,
-      'can_view' => true,
-      'is_readonly' => $readOnly,
-      'can_add_event' => $canAddEvent,
-      'can_add_credit' => false,
-      'can_add_debit' => false,
-      'can_review_event' => $canReview,
-      'can_print' => $canPrint,
-      'can_print_ledger' => $canPrint,
-      'can_print_passbook' => $canPrint,
-      'can_print_liquidation' => $canPrint,
-    ],
-  ]);
-  }
-
+  
   if ($action === 'get_event') {
     require_login();
 
