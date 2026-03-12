@@ -274,6 +274,122 @@ function get_user_program_abbr(PDO $pdo, int $uid): ?string {
   return null;
 }
 
+/* =========================
+   Financial helpers
+   ========================= */
+function calculate_current_balance(PDO $pdo, int $eventId): float {
+  $stCredits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_credits WHERE event_id = :eid");
+  $stCredits->execute([':eid' => $eventId]);
+  $totalCredits = (float)$stCredits->fetchColumn();
+  
+  $stDebits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_debits WHERE event_id = :eid");
+  $stDebits->execute([':eid' => $eventId]);
+  $totalDebits = (float)$stDebits->fetchColumn();
+  
+  return $totalCredits - $totalDebits;
+}
+
+function check_sufficient_funds(PDO $pdo, int $eventId, float $proposedDebit): bool {
+  $currentBalance = calculate_current_balance($pdo, $eventId);
+  return ($currentBalance - $proposedDebit) >= -500; // Allow small negative (-500) but warn
+}
+
+
+/* =========================
+   Accomplishment helpers
+   ========================= */
+
+/**
+ * Get the term ID for an event
+ */
+function ee_event_term_id(PDO $pdo, array $event): int {
+  // Extract school year and active year from event
+  $startYear = (int)($event['start_year'] ?? 0);
+  $endYear = (int)($event['end_year'] ?? 0);
+  $activeYear = (int)($event['active_year'] ?? 1);
+  
+  if ($startYear <= 0 || $endYear <= 0) {
+    return 0;
+  }
+  
+  $schoolYear = $startYear . '-' . $endYear;
+  $semester = active_year_to_semester($activeYear);
+  
+  // Find the term ID
+  $st = $pdo->prepare("
+    SELECT id FROM academic_terms 
+    WHERE school_year = :sy AND semester = :sem 
+    LIMIT 1
+  ");
+  $st->execute([':sy' => $schoolYear, ':sem' => $semester]);
+  
+  return (int)($st->fetchColumn() ?: 0);
+}
+
+/**
+ * Get officer by position
+ */
+function ee_get_officer(PDO $pdo, int $orgId, int $termId, string $position): ?array {
+  if ($orgId <= 0 || $termId <= 0) return null;
+  
+  $st = $pdo->prepare("
+    SELECT oo.*, 
+           TRIM(CONCAT_WS(' ',
+             COALESCE(u.first_name, ''),
+             NULLIF(COALESCE(u.middle_name, ''), ''),
+             COALESCE(u.last_name, ''),
+             NULLIF(COALESCE(u.suffix, ''), '')
+           )) AS user_full_name
+    FROM organization_officers oo
+    LEFT JOIN users u ON u.id = oo.user_id
+    WHERE oo.org_id = :org_id 
+      AND oo.academic_term_id = :term_id
+      AND LOWER(oo.position) LIKE :position
+      AND oo.status = 'Active'
+    LIMIT 1
+  ");
+  
+  $st->execute([
+    ':org_id' => $orgId,
+    ':term_id' => $termId,
+    ':position' => '%' . strtolower($position) . '%'
+  ]);
+  
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$row) return null;
+  
+  return [
+    'user_id' => (int)($row['user_id'] ?? 0),
+    'full_name' => (string)($row['user_full_name'] ?? $row['full_name'] ?? ''),
+    'position' => (string)($row['position'] ?? ''),
+  ];
+}
+
+/**
+ * Get organization president
+ */
+function get_org_president(PDO $pdo, int $orgId, int $termId): ?array {
+  return ee_get_officer($pdo, $orgId, $termId, 'president');
+}
+
+/**
+ * Get active signature file for a user
+ */
+function ee_get_active_signature_file(PDO $pdo, int $userId): ?string {
+  if ($userId <= 0) return null;
+  
+  $st = $pdo->prepare("
+    SELECT signature_file 
+    FROM e_signatures 
+    WHERE user_id = :uid AND status = 'Active'
+    ORDER BY updated_at DESC
+    LIMIT 1
+  ");
+  $st->execute([':uid' => $userId]);
+  
+  return $st->fetchColumn() ?: null;
+}
+
 /**
  * Visible org list for current user's "cards / dropdown"
  * - Students: officer orgs (SY-based) + memberships (SY-based) + program-wired orgs + ✅ ALL GENERAL NON-CLUB ORGS
@@ -281,6 +397,7 @@ function get_user_program_abbr(PDO $pdo, int $uid): ?string {
  * - Super viewers: all orgs
  * Note: clubs remain members/officers-only (unless handling admin / super viewer)
  */
+
 
 function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): array {
   if ($uid <= 0) return [];
@@ -454,6 +571,71 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
   return $out;
 }
 
+/**
+ * Fetch passbook entries for a specific event (treasurer's manual entries only)
+ */
+function fetch_passbook_for_event(PDO $pdo, int $eventId): array {
+  try {
+    $st = $pdo->prepare("
+      SELECT 
+        p.id,
+        p.txn_date,
+        p.txn_type,
+        p.title,
+        p.notes,
+        p.amount_in,
+        p.amount_out,
+        p.balance_after,
+        p.recorded_by_user_id,
+        p.created_at,
+        p.event_id,
+        p.ref_table,
+        p.ref_id,
+        CASE WHEN p.ref_table = 'manual' THEN 1 ELSE 0 END as is_manual,
+        TRIM(CONCAT_WS(' ',
+          COALESCE(u.first_name, ''),
+          NULLIF(COALESCE(u.middle_name, ''), ''),
+          COALESCE(u.last_name, ''),
+          NULLIF(COALESCE(u.suffix, ''), '')
+        )) AS recorded_by_name
+      FROM passbook_logs p
+      LEFT JOIN users u ON u.id = p.recorded_by_user_id
+      WHERE p.event_id = :eid
+      ORDER BY p.txn_date ASC, p.created_at ASC
+    ");
+    $st->execute([':eid' => $eventId]);
+    
+    $rows = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+      $rows[] = [
+        'id' => (int)($r['id'] ?? 0),
+        'event_id' => (int)($r['event_id'] ?? 0),
+        'date' => (string)($r['txn_date'] ?? ''),
+        'txn_date' => (string)($r['txn_date'] ?? ''),
+        'type' => (string)($r['txn_type'] ?? ''),
+        'txn_type' => (string)($r['txn_type'] ?? ''),
+        'title' => (string)($r['title'] ?? ''),
+        'notes' => (string)($r['notes'] ?? ''),
+        'description' => trim((string)($r['title'] ?? '') . (empty($r['notes'] ?? '') ? '' : ' - ' . (string)($r['notes'] ?? ''))),
+        'amount_in' => (float)($r['amount_in'] ?? 0),
+        'amount_out' => (float)($r['amount_out'] ?? 0),
+        'balance_after' => (float)($r['balance_after'] ?? 0),
+        'recorded_by_user_id' => (int)($r['recorded_by_user_id'] ?? 0),
+        'recorded_by_name' => (string)($r['recorded_by_name'] ?? ''),
+        'ref_table' => (string)($r['ref_table'] ?? ''),
+        'ref_id' => (int)($r['ref_id'] ?? 0),
+        'is_manual' => (bool)($r['is_manual'] ?? false),
+        'created_at' => (string)($r['created_at'] ?? ''),
+      ];
+    }
+    return $rows;
+    
+  } catch (PDOException $e) {
+    error_log("fetch_passbook_for_event error: " . $e->getMessage());
+    return [];
+  }
+}
+
 function fetch_visible_orgs_for_school_year(PDO $pdo, int $uid, string $role, string $schoolYear): array {
   if ($uid <= 0) return [];
   $sy = trim($schoolYear);
@@ -582,6 +764,7 @@ function parse_school_year(string $sy): array {
   if (!preg_match('/^(\d{4})\s*-\s*(\d{4})$/', $sy, $m)) return [0, 0];
   return [(int)$m[1], (int)$m[2]];
 }
+
 function school_year_from_years(int $syStart, int $syEnd): string {
   if ($syStart <= 0 || $syEnd <= 0) return '';
   return $syStart . '-' . $syEnd;
@@ -598,6 +781,7 @@ function semester_to_active_year(string $sem): int {
   if (is_numeric($x)) return (int)$x;
   return 1;
 }
+
 function active_year_to_semester(int $ay): string {
   if ($ay === 2) return '2nd';
   if ($ay === 3) return 'Summer';
@@ -613,6 +797,7 @@ function app_base(): string {
   if (preg_match('~/php$~', $dir)) $dir = preg_replace('~/php$~', '', $dir) ?: '';
   return $dir === '' ? '' : $dir;
 }
+
 function public_url(?string $relPath): ?string {
   $rel = trim((string)($relPath ?? ''));
   if ($rel === '') return null;
@@ -1070,6 +1255,7 @@ function fetch_event(PDO $pdo, int $eventId): ?array {
   return $e;
 }
 
+// MODIFIED: event_totals now ONLY uses credits and debits, NOT passbook
 function event_totals(PDO $pdo, int $eventId): array {
   $stC = $pdo->prepare("SELECT COALESCE(SUM(amount),0) AS s FROM event_credits WHERE event_id=:eid");
   $stC->execute([':eid' => $eventId]);
@@ -1082,7 +1268,7 @@ function event_totals(PDO $pdo, int $eventId): array {
   return [
     'credits' => $credits,
     'debits' => $debits,
-    'balance' => $credits - $debits,
+    'balance' => $credits - $debits, // Pure event financials
   ];
 }
 
@@ -1163,23 +1349,28 @@ function require_event_submitted(array $event): void {
 
   // 🔒 Once accomplishment is approved, NOTHING should be editable
   if ($ac === 'Approved') {
-    fail('This event is already approved and is locked.', 403, [
+    fail('This event is already finalized and is locked.', 403, [
       'reason' => 'event_locked',
       'status' => $st,
       'accomplishment_status' => $ac,
     ]);
   }
 
-  // ✅ Allow entries while still being prepared (Draft) or already submitted for review (Submitted)
-  // ❌ Block once proposal is Approved/Declined (or any other status)
-  if (!in_array($st, ['Draft', 'Submitted'], true)) {
-    fail('Entries can only be added when the event status is Draft or Submitted.', 403, [
+  // ✅ Allow entries when:
+  // - Proposal is Approved (can add credits/debits/passbook)
+  // - OR still in Draft/Submitted (for editing)
+  // ❌ Only block if proposal is Declined or other invalid states
+  $allowedStatuses = ['Draft', 'Submitted', 'Approved'];
+  
+  if (!in_array($st, $allowedStatuses, true)) {
+    fail('Entries can only be added when the event status is Draft, Submitted, or Approved.', 403, [
       'reason' => 'event_not_editable',
       'status' => $st,
       'accomplishment_status' => $ac,
     ]);
   }
 }
+
 function require_proposal_approved(array $event): void {
   if ((string)($event['status'] ?? '') !== 'Approved') {
     fail('Proposal not approved yet.', 403, ['reason' => 'proposal_not_approved']);
@@ -1285,107 +1476,107 @@ function fetch_debits(PDO $pdo, int $eventId): array {
   return $rows;
 }
 
+// MODIFIED: Ledger now ONLY uses credits and debits, NOT passbook
 function fetch_ledger(PDO $pdo, int $eventId): array {
-  $st = $pdo->prepare("
-    SELECT
-      p.id, p.txn_date, p.txn_type, p.title, p.notes, p.amount_in, p.amount_out, p.balance_after, p.ref_table, p.ref_id,
-      p.recorded_by_user_id,
-      TRIM(CONCAT_WS(' ',
-        COALESCE(u.first_name, ''),
-        NULLIF(COALESCE(u.middle_name, ''), ''),
-        COALESCE(u.last_name, ''),
-        NULLIF(COALESCE(u.suffix, ''), '')
-      )) AS recorded_by_name
-    FROM passbook_logs p
-    LEFT JOIN users u ON u.id = p.recorded_by_user_id
-    WHERE p.event_id = :eid
-    ORDER BY p.txn_date ASC, p.id ASC
-    LIMIT 2000
-  ");
-  $st->execute([':eid' => $eventId]);
-
-  $rows = [];
-  while ($r = $st->fetch()) {
-    $rows[] = [
-      'id' => (int)$r['id'],
-      'date' => (string)$r['txn_date'],
-      'type' => (string)$r['txn_type'],
-      // raw fields for Passbook UI
-      'title' => (string)($r['title'] ?? ''),
-      'notes' => (string)($r['notes'] ?? ''),
-      'description' => trim((string)$r['title'] . (empty($r['notes']) ? '' : ' - ' . (string)$r['notes'])),
-      'credit' => (float)$r['amount_in'],
-      'debit' => (float)$r['amount_out'],
-      'amount_in' => (float)$r['amount_in'],
-      'amount_out' => (float)$r['amount_out'],
-      'balance' => (float)$r['balance_after'],
-      'balance_after' => (float)$r['balance_after'],
-      'ref_table' => (string)($r['ref_table'] ?? ''),
-      'ref_id' => (int)($r['ref_id'] ?? 0),
-      'is_manual' => (strtolower((string)($r['ref_table'] ?? '')) === 'manual'),
-      'reference' => (string)$r['ref_table'] . '#' . (string)$r['ref_id'],
-      'ref' => (string)$r['ref_table'] . '#' . (string)$r['ref_id'],
-      'recorded_by_user_id' => (int)($r['recorded_by_user_id'] ?? 0),
-      'recorded_by_name' => (string)($r['recorded_by_name'] ?? ''),
-    ];
+  error_log("fetch_ledger called for event_id: " . $eventId);
+  
+  try {
+    // Get all credits and debits in chronological order
+    $sql = "
+      SELECT 
+        'credit' as source_type,
+        id as source_id,
+        credit_date as txn_date,
+        source as title,
+        COALESCE(notes, '') as notes,
+        amount as amount_in,
+        0 as amount_out,
+        recorded_by_user_id,
+        created_at
+      FROM event_credits 
+      WHERE event_id = :eid
+      
+      UNION ALL
+      
+      SELECT 
+        'debit' as source_type,
+        id as source_id,
+        debit_date as txn_date,
+        category as title,
+        COALESCE(notes, '') as notes,
+        0 as amount_in,
+        amount as amount_out,
+        recorded_by_user_id,
+        created_at
+      FROM event_debits 
+      WHERE event_id = :eid
+      
+      ORDER BY txn_date ASC, created_at ASC
+    ";
+    
+    $st = $pdo->prepare($sql);
+    $st->execute([':eid' => $eventId]);
+    
+    $rows = [];
+    $runningBalance = 0;
+    
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+      $amountIn = (float)$r['amount_in'];
+      $amountOut = (float)$r['amount_out'];
+      
+      $runningBalance = $runningBalance + $amountIn - $amountOut;
+      
+      // Get recorded by name
+      $recordedByName = '';
+      if (!empty($r['recorded_by_user_id'])) {
+        $stUser = $pdo->prepare("
+          SELECT TRIM(CONCAT_WS(' ',
+            COALESCE(first_name,''),
+            NULLIF(COALESCE(middle_name,''),''),
+            COALESCE(last_name,''),
+            NULLIF(COALESCE(suffix,''),'')
+          )) AS full_name
+          FROM users
+          WHERE id = :id
+          LIMIT 1
+        ");
+        $stUser->execute([':id' => $r['recorded_by_user_id']]);
+        $recordedByName = trim((string)($stUser->fetchColumn() ?: ''));
+        if (empty($recordedByName)) {
+          $recordedByName = "User #" . $r['recorded_by_user_id'];
+        }
+      }
+      
+      $rows[] = [
+        'id' => (int)$r['source_id'],
+        'date' => (string)$r['txn_date'],
+        'type' => $r['source_type'] === 'credit' ? 'CREDIT' : 'DEBIT',
+        'title' => (string)($r['title'] ?? ''),
+        'notes' => (string)($r['notes'] ?? ''),
+        'description' => trim((string)$r['title'] . (empty($r['notes']) ? '' : ' - ' . (string)$r['notes'])),
+        'credit' => $amountIn,
+        'debit' => $amountOut,
+        'amount_in' => $amountIn,
+        'amount_out' => $amountOut,
+        'balance' => $runningBalance,
+        'balance_after' => $runningBalance,
+        'recorded_by_user_id' => (int)($r['recorded_by_user_id'] ?? 0),
+        'recorded_by_name' => $recordedByName,
+      ];
+    }
+    
+    error_log("fetch_ledger returning " . count($rows) . " rows for event $eventId");
+    if (count($rows) > 0) {
+      error_log("First row: " . json_encode($rows[0]));
+    }
+    
+    return $rows;
+    
+  } catch (PDOException $e) {
+    error_log("fetch_ledger error: " . $e->getMessage());
+    return [];
   }
-  return $rows;
 }
-
-function fetch_passbook(PDO $pdo, int $orgId, string $schoolYear, string $semester): array {
-  if ($orgId <= 0) return [];
-
-  [$syStart, $syEnd] = parse_school_year($schoolYear);
-  if ($syStart <= 0 || $syEnd <= 0) return [];
-
-  $ay = semester_to_active_year($semester);
-
-  $st = $pdo->prepare("
-    SELECT
-      p.id, p.txn_date, p.txn_type, p.title, p.notes, p.amount_in, p.amount_out, p.balance_after, p.ref_table, p.ref_id,
-      p.recorded_by_user_id,
-      TRIM(CONCAT_WS(' ',
-        COALESCE(u.first_name, ''),
-        NULLIF(COALESCE(u.middle_name, ''), ''),
-        COALESCE(u.last_name, ''),
-        NULLIF(COALESCE(u.suffix, ''), '')
-      )) AS recorded_by_name
-    FROM passbook_logs p
-    INNER JOIN event_events e ON e.id = p.event_id
-    LEFT JOIN users u ON u.id = p.recorded_by_user_id
-    WHERE p.org_id = :org
-      AND e.start_year = :sy1 AND e.end_year = :sy2 AND e.active_year = :ay
-    ORDER BY p.txn_date ASC, p.id ASC
-    LIMIT 5000
-  ");
-  $st->execute([
-    ':org' => $orgId,
-    ':sy1' => $syStart,
-    ':sy2' => $syEnd,
-    ':ay' => $ay,
-  ]);
-
-  $rows = [];
-  while ($r = $st->fetch()) {
-    $rows[] = [
-      'id' => (int)$r['id'],
-      'date' => (string)$r['txn_date'],
-      'type' => (string)$r['txn_type'],
-      'description' => trim((string)$r['title'] . (empty($r['notes']) ? '' : ' - ' . (string)$r['notes'])),
-      'notes' => (string)($r['notes'] ?? ''),
-      'credit' => (float)$r['amount_in'],
-      'debit' => (float)$r['amount_out'],
-      'balance' => (float)$r['balance_after'],
-      'reference' => (string)$r['ref_table'] . '#' . (string)$r['ref_id'],
-      'ref' => (string)$r['ref_table'] . '#' . (string)$r['ref_id'],
-      'recorded_by_user_id' => (int)($r['recorded_by_user_id'] ?? 0),
-      'recorded_by_name' => (string)($r['recorded_by_name'] ?? ''),
-    ];
-  }
-  return $rows;
-}
-
-
 
 /* =========================
    Passbook helpers (manual entries)
@@ -1447,6 +1638,8 @@ function calculate_proposed_total(PDO $pdo, int $eventId): float {
   $st->execute([':eid' => $eventId]);
   return (float)$st->fetchColumn();
 }
+
+
 
 function is_passbook_locked(array $event): bool {
   return ((string)($event['accomplishment_status'] ?? '') === 'Approved');
@@ -2047,195 +2240,197 @@ try {
   }
   
   if ($action === 'get_event') {
-    require_login();
+  require_login();
 
-    $eventId = i($in, ['event_id'], 0);
-    if ($eventId <= 0) fail('Missing event_id.', 400);
+  $eventId = i($in, ['event_id'], 0);
+  if ($eventId <= 0) fail('Missing event_id.', 400);
 
-    $e = fetch_event($pdo, $eventId);
-    if (!$e) fail('Event not found.', 404);
+  $e = fetch_event($pdo, $eventId);
+  if (!$e) fail('Event not found.', 404);
 
-    $uid = current_user_id();
-    $role = current_role();
-    if (!can_view_event($pdo, $e, $uid, $role)) {
-      fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+  $uid = current_user_id();
+  $role = current_role();
+  if (!can_view_event($pdo, $e, $uid, $role)) {
+    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+  }
+
+  $sy  = "{$e['start_year']}-{$e['end_year']}";
+  $sem = active_year_to_semester((int)$e['active_year']);
+
+  // Get event totals
+  $tot = event_totals($pdo, $eventId);
+
+  $orgName = null;
+  if (!empty($e['org_id'])) {
+    $stO = $pdo->prepare("SELECT org_name, abbreviation FROM organizations WHERE id=:id LIMIT 1");
+    $stO->execute([':id' => (int)$e['org_id']]);
+    $o = $stO->fetch();
+    if ($o) $orgName = trim((string)$o['org_name'] . (!empty($o['abbreviation']) ? ' (' . (string)$o['abbreviation'] . ')' : ''));
+  }
+
+  $isOfficer = can_officer_manage_org($pdo, (int)($e['org_id'] ?? 0) ?: null, $uid, $role);
+  $readOnly  = !is_active_filter($pdo, $sy, $sem);
+
+  $status = (string)($e['status'] ?? '');
+  $cs     = (string)($e['accomplishment_status'] ?? '');
+
+  $proposalApproved = ($status === 'Approved');
+  $accompApproved   = ($cs === 'Approved');
+
+  // 🔒 FIXED PERMISSIONS:
+  // When accomplishment is approved, EVERYTHING is locked
+  $isLocked = $accompApproved;
+  
+  // Credits/Debits can be added ONLY when:
+  // 1. NOT locked (accomplishment not approved)
+  // 2. Proposal is APPROVED
+  // 3. User is officer
+  // 4. Not in read-only mode
+  $canAddEntries = false;
+  if (!$isLocked && !$readOnly && $proposalApproved && $isOfficer) {
+    $canAddEntries = true;
+  }
+
+  // Passbook follows same rules
+  $canManagePassbook = (!$isLocked && !$readOnly && $proposalApproved && $isOfficer);
+
+  // Submit for approval button - only shows in DRAFT or DECLINED (and not locked)
+  $canSubmitForApproval = (!$isLocked && !$readOnly && $isOfficer && in_array($status, ['Draft', 'Declined'], true));
+
+  // Delete permissions - only allowed when NOT locked
+  $canDelete = !$isLocked && !$readOnly && $canAddEntries;
+
+  // Review permissions (for faculty_admin, etc.)
+  $canReview = (!$readOnly && can_review_events_role($role));
+
+  // Check if current user is the org coordinator
+  $orgId = (int)($e['org_id'] ?? 0);
+  $isCoordinator = false;
+  if ($orgId > 0) {
+    $coordinator = get_org_coordinator($pdo, $orgId);
+    if ($coordinator && !empty($coordinator['id']) && $coordinator['id'] == $uid) {
+      $isCoordinator = true;
     }
+  }
 
-    $sy  = "{$e['start_year']}-{$e['end_year']}";
-    $sem = active_year_to_semester((int)$e['active_year']);
+  // Accomplishment permissions - also locked when accomplishment approved
+  $canSubmitAccomplishment = (!$isLocked && !$readOnly && $isOfficer && $proposalApproved && in_array($cs, ['Draft','Declined'], true));
+  $canApproveAccomplishment = (!$isLocked && !$readOnly && ($canReview || $isCoordinator) && ($cs === 'Submitted'));
+  $canDeclineAccomplishment = $canApproveAccomplishment;
 
-    $tot = event_totals($pdo, $eventId);
+  // Debug logging
+  error_log("Event ID: $eventId, Status: $status, Proposal Approved: " . ($proposalApproved ? 'yes' : 'no') . 
+            ", Accomplishment Approved: " . ($accompApproved ? 'yes' : 'no') . 
+            ", Is Locked: " . ($isLocked ? 'yes' : 'no') . 
+            ", Is Officer: " . ($isOfficer ? 'yes' : 'no') . 
+            ", Read Only: " . ($readOnly ? 'yes' : 'no') . 
+            ", Can Add Entries: " . ($canAddEntries ? 'yes' : 'no'));
 
-    $orgName = null;
-    if (!empty($e['org_id'])) {
-      $stO = $pdo->prepare("SELECT org_name, abbreviation FROM organizations WHERE id=:id LIMIT 1");
-      $stO->execute([':id' => (int)$e['org_id']]);
-      $o = $stO->fetch();
-      if ($o) $orgName = trim((string)$o['org_name'] . (!empty($o['abbreviation']) ? ' (' . (string)$o['abbreviation'] . ')' : ''));
-    }
+  // FETCH PROPOSED EXPENSES
+  $proposedItems = [];
+  $proposedTotal = 0.00;
+  
+  $stCheck = $pdo->query("SHOW TABLES LIKE 'event_proposed_expenses'");
+  if ($stCheck && $stCheck->rowCount() > 0) {
+    $proposedItems = fetch_proposed_expenses($pdo, $eventId);
+    $proposedTotal = calculate_proposed_total($pdo, $eventId);
+  }
 
-    $isOfficer = can_officer_manage_org($pdo, (int)($e['org_id'] ?? 0) ?: null, $uid, $role);
-    $readOnly  = !is_active_filter($pdo, $sy, $sem);
-
-    $status = (string)($e['status'] ?? '');
-    $cs     = (string)($e['accomplishment_status'] ?? '');
-
-    $isEditableStatus = in_array($status, ['Draft','Submitted'], true);
-
-    $proposalApproved  = ($status === 'Approved');
-    $proposalSubmitted = ($status === 'Submitted');
-    $accompApproved    = ($cs === 'Approved');
-
-    $canAddEntries = false;
-    if (!$readOnly && $isEditableStatus && $cs !== 'Approved') {
-      $canAddEntries = $isOfficer;
-    }
-
-    $canManagePassbook = (!$readOnly && $isOfficer && $isEditableStatus && $cs !== 'Approved');
-    $canReview         = (!$readOnly && can_review_events_role($role));
-
-    // Check if current user is the org coordinator (faculty_admin who created the org)
-    $orgId = (int)($e['org_id'] ?? 0);
-    $isCoordinator = false;
-    if ($orgId > 0) {
-      $coordinator = get_org_coordinator($pdo, $orgId);
-      if ($coordinator && !empty($coordinator['id']) && $coordinator['id'] == $uid) {
-        $isCoordinator = true;
-      }
-    }
-
-    $canSubmitAccomplishment =
-      (!$readOnly) &&
-      $isOfficer &&
-      $proposalApproved &&
-      in_array($cs, ['Draft','Declined',], true);
-
-    $canApproveAccomplishment =
-      (!$readOnly) &&
-      ($canReview || $isCoordinator) &&
-      ($cs === 'Submitted');
-
-    $canDeclineAccomplishment = $canApproveAccomplishment;
-
-    // ✅ FETCH PROPOSED EXPENSES
-    $proposedItems = [];
-    $proposedTotal = 0.00;
+  // FETCH ACCOMPLISHMENT DATA
+  $accomplishmentData = null;
+  $stAccCheck = $pdo->query("SHOW TABLES LIKE 'event_accomplishments'");
+  if ($stAccCheck && $stAccCheck->rowCount() > 0) {
+    $stAcc = $pdo->prepare("
+      SELECT objectives, outcomes, challenges, status, 
+             submitted_by, submitted_at, 
+             approved_by, approved_at, 
+             declined_reason, generated_pdf
+      FROM event_accomplishments
+      WHERE event_id = :eid
+      LIMIT 1
+    ");
+    $stAcc->execute([':eid' => $eventId]);
+    $accRow = $stAcc->fetch(PDO::FETCH_ASSOC);
     
-    $stCheck = $pdo->query("SHOW TABLES LIKE 'event_proposed_expenses'");
-    if ($stCheck && $stCheck->rowCount() > 0) {
-      $proposedItems = fetch_proposed_expenses($pdo, $eventId);
-      $proposedTotal = calculate_proposed_total($pdo, $eventId);
-    }
-
-    // ✅ FETCH ACCOMPLISHMENT DATA with proper status fields
-    $accomplishmentData = null;
-    $stAccCheck = $pdo->query("SHOW TABLES LIKE 'event_accomplishments'");
-    if ($stAccCheck && $stAccCheck->rowCount() > 0) {
-      $stAcc = $pdo->prepare("
-        SELECT objectives, outcomes, challenges, status, 
-               submitted_by, submitted_at, 
-               approved_by, approved_at, 
-               declined_reason, generated_pdf
-        FROM event_accomplishments
-        WHERE event_id = :eid
-        LIMIT 1
-      ");
-      $stAcc->execute([':eid' => $eventId]);
-      $accRow = $stAcc->fetch(PDO::FETCH_ASSOC);
-      
-      if ($accRow) {
-        $accomplishmentData = [
-          'objectives' => (string)($accRow['objectives'] ?? ''),
-          'outcomes' => (string)($accRow['outcomes'] ?? ''),
-          'challenges' => (string)($accRow['challenges'] ?? ''),
-          'status' => (string)($accRow['status'] ?? 'Draft'),
-          'submitted_by' => (int)($accRow['submitted_by'] ?? 0),
-          'submitted_at' => $accRow['submitted_at'] ?? null,
-          'approved_by' => (int)($accRow['approved_by'] ?? 0),
-          'approved_at' => $accRow['approved_at'] ?? null,
-          'declined_reason' => (string)($accRow['declined_reason'] ?? ''),
-          'generated_pdf' => $accRow['generated_pdf'] ?? null
-        ];
-      }
-    }
-
-    // ✅ FETCH LEDGER AND FORMAT PASSBOOK
-    $ledger = fetch_ledger($pdo, $eventId);
-    
-    $passbook = array_map(function($row) {
-      return [
-        'id' => (int)$row['id'],
-        'date' => (string)$row['date'],
-        'txn_date' => (string)$row['date'],
-        'txn_type' => (string)$row['type'],
-        'title' => (string)($row['title'] ?? ''),
-        'notes' => (string)($row['notes'] ?? ''),
-        'description' => (string)($row['description'] ?? ''),
-        'amount_in' => (float)($row['amount_in'] ?? 0),
-        'amount_out' => (float)($row['amount_out'] ?? 0),
-        'credit' => (float)($row['credit'] ?? 0),
-        'debit' => (float)($row['debit'] ?? 0),
-        'balance_after' => (float)($row['balance_after'] ?? 0),
-        'balance' => (float)($row['balance'] ?? 0),
-        'ref_table' => (string)($row['ref_table'] ?? ''),
-        'ref_id' => (int)($row['ref_id'] ?? 0),
-        'is_manual' => (bool)($row['is_manual'] ?? false),
-        'recorded_by_user_id' => (int)($row['recorded_by_user_id'] ?? 0),
-        'recorded_by_name' => (string)($row['recorded_by_name'] ?? ''),
+    if ($accRow) {
+      $accomplishmentData = [
+        'objectives' => (string)($accRow['objectives'] ?? ''),
+        'outcomes' => (string)($accRow['outcomes'] ?? ''),
+        'challenges' => (string)($accRow['challenges'] ?? ''),
+        'status' => (string)($accRow['status'] ?? 'Draft'),
+        'submitted_by' => (int)($accRow['submitted_by'] ?? 0),
+        'submitted_at' => $accRow['submitted_at'] ?? null,
+        'approved_by' => (int)($accRow['approved_by'] ?? 0),
+        'approved_at' => $accRow['approved_at'] ?? null,
+        'declined_reason' => (string)($accRow['declined_reason'] ?? ''),
+        'generated_pdf' => $accRow['generated_pdf'] ?? null
       ];
-    }, $ledger);
+    }
+  }
 
-    ok([
-      'event' => [
-        'id' => (int)$e['id'],
-        'org_id' => $e['org_id'],
-        'org_name' => $orgName,
-        'org_label' => $orgName,
-        'title' => (string)($e['title'] ?? ''),
-        'location' => (string)($e['location'] ?? ''),
-        'scope' => (string)($e['scope'] ?? ''),
-        'school_year' => $sy,
-        'semester' => $sem,
-        'status' => $status,
-        'accomplishment_status' => $cs,
-        'event_date' => (string)($e['event_date'] ?? ''),
-        'description' => (string)($e['description'] ?? ''),
-        'total_credits' => (float)$tot['credits'],
-        'total_debits' => (float)$tot['debits'],
-        'accomplishment_file_url' => public_url($e['accomplishment_file'] ?? null),
-        'accomplishment_notes' => (string)($e['accomplishment_notes'] ?? ''),
-      ],
-      'totals' => $tot,
-      'gates' => [
-        'proposal_submitted' => $proposalSubmitted,
-        'proposal_approved' => $proposalApproved,
-        'accomplishment_approved' => $accompApproved,
-      ],
-      'permissions' => [
-        'user_id' => $uid,
-        'role' => $role,
-        'can_view' => true,
-        'is_readonly' => $readOnly,
-        'can_add_event' => (!$readOnly && $isOfficer),
-        'can_add_credit' => $canAddEntries,
-        'can_add_debit' => $canAddEntries,
-        'can_manage_passbook' => $canManagePassbook,
-        'passbook_locked' => ($cs === 'Approved'),
-        'can_review_event' => $canReview,
-        'can_submit_accomplishment' => $canSubmitAccomplishment,
-        'can_approve_accomplishment' => $canApproveAccomplishment,
-        'can_decline_accomplishment' => $canDeclineAccomplishment,
-        'can_print_accomplishment' => true, // Anyone can view/print, content differs by status
-      ],
-      'credits' => fetch_credits($pdo, $eventId),
-      'debits' => fetch_debits($pdo, $eventId),
-      'ledger' => $ledger,
-      'passbook' => $passbook,
-      'proposed_expenses' => $proposedItems,
-      'proposed_total' => $proposedTotal,
-      'accomplishment' => $accomplishmentData,
-      'filter' => ['school_year' => $sy, 'semester' => $sem],
-    ]);
+  // FETCH LEDGER (credits and debits only)
+  $ledger = fetch_ledger($pdo, $eventId);
+
+  // FETCH PASSBOOK
+  $passbook = fetch_passbook_for_event($pdo, $eventId);
+
+  // FETCH CREDITS AND DEBITS for display
+  $credits = fetch_credits($pdo, $eventId);
+  $debits = fetch_debits($pdo, $eventId);
+
+  ok([
+    'event' => [
+      'id' => (int)$e['id'],
+      'org_id' => $e['org_id'],
+      'org_name' => $orgName,
+      'org_label' => $orgName,
+      'title' => (string)($e['title'] ?? ''),
+      'location' => (string)($e['location'] ?? ''),
+      'scope' => (string)($e['scope'] ?? ''),
+      'school_year' => $sy,
+      'semester' => $sem,
+      'status' => $status,
+      'accomplishment_status' => $cs,
+      'event_date' => (string)($e['event_date'] ?? ''),
+      'description' => (string)($e['description'] ?? ''),
+      'total_credits' => (float)$tot['credits'],
+      'total_debits' => (float)$tot['debits'],
+      'accomplishment_file_url' => public_url($e['accomplishment_file'] ?? null),
+      'accomplishment_notes' => (string)($e['accomplishment_notes'] ?? ''),
+    ],
+    'totals' => $tot,
+    'gates' => [
+      'proposal_approved' => $proposalApproved,
+      'accomplishment_approved' => $accompApproved,
+    ],
+    'permissions' => [
+      'user_id' => $uid,
+      'role' => $role,
+      'can_view' => true,
+      'is_readonly' => $readOnly,
+      'is_locked' => $isLocked,
+      'can_add_event' => (!$readOnly && $isOfficer),
+      'can_add_credit' => $canAddEntries,
+      'can_add_debit' => $canAddEntries,
+      'can_manage_passbook' => $canManagePassbook,
+      'can_delete' => $canDelete,
+      'can_submit_for_approval' => $canSubmitForApproval,
+      'passbook_locked' => $isLocked,
+      'can_review_event' => $canReview,
+      'can_submit_accomplishment' => $canSubmitAccomplishment,
+      'can_approve_accomplishment' => $canApproveAccomplishment,
+      'can_decline_accomplishment' => $canDeclineAccomplishment,
+      'can_print_accomplishment' => true,
+    ],
+    'credits' => $credits,
+    'debits' => $debits,
+    'ledger' => $ledger,
+    'passbook' => $passbook,
+    'proposed_expenses' => $proposedItems,
+    'proposed_total' => $proposedTotal,
+    'accomplishment' => $accomplishmentData,
+    'filter' => ['school_year' => $sy, 'semester' => $sem],
+  ]);
   }
 
   if ($action === 'get_passbook') {
@@ -2491,242 +2686,182 @@ ok(['message' => 'Event submitted for approval.']);
   }
 
 
-if ($action === 'add_credit') {
-    require_login();
+  if ($action === 'add_credit') {
+  require_login();
 
-    $eventId = i($in, ['event_id'], 0);
-    $date = s($in, ['date'], '');
-    $source = s($in, ['source'], '');
-    $notes = s($in, ['notes', 'description'], '');
-    $amount = f($in, ['amount'], 0.0);
+  $eventId = i($in, ['event_id'], 0);
+  $date = s($in, ['date'], '');
+  $source = s($in, ['source'], '');
+  $notes = s($in, ['notes', 'description'], '');
+  $amount = f($in, ['amount'], 0.0);
 
-    if ($eventId <= 0) fail('Missing event_id.', 400);
-    if ($date === '') fail('Missing date.', 400);
-    if ($source === '') fail('Missing source.', 400);
-    if ($amount <= 0) fail('Invalid amount.', 400);
+  if ($eventId <= 0) fail('Missing event_id.', 400);
+  if ($date === '') fail('Missing date.', 400);
+  if ($source === '') fail('Missing source.', 400);
+  if ($amount <= 0) fail('Invalid amount.', 400);
 
-    $e = fetch_event($pdo, $eventId);
-    if (!$e) fail('Event not found.', 404);
+  $e = fetch_event($pdo, $eventId);
+  if (!$e) fail('Event not found.', 404);
 
-    $uid = current_user_id();
-    $role = current_role();
-    if (!can_view_event($pdo, $e, $uid, $role)) {
-      fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-    }
-
-    $eventOrgId = (int)($e['org_id'] ?? 0);
-    if ($eventOrgId <= 0) {
-      fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
-    }
-
-    $sy = "{$e['start_year']}-{$e['end_year']}";
-    $sem = active_year_to_semester((int)$e['active_year']);
-    if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-      fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-    }
-
-    require_officer_for_expenses($pdo, $eventOrgId);
-    must_be_officer_for_event($pdo, $e);
-
-    if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
-      fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-    }
-
-if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
-
-    $st = $pdo->prepare("
-      INSERT INTO event_credits (event_id, credit_date, source, notes, amount, recorded_by_user_id)
-      VALUES (:eid, :d, :src, :n, :amt, :uid)
-    ");
-    $st->execute([
-      ':eid' => $eventId,
-      ':d' => $date,
-      ':src' => $source,
-      ':n' => ($notes !== '' ? $notes : null),
-      ':amt' => $amount,
-      ':uid' => $uid,
-    ]);
-
-    $creditId = (int)$pdo->lastInsertId();
-
-    // ✅ Ensure passbook entry exists (some DB triggers may be missing/disabled)
-    // Avoid duplicates if trigger already inserted.
-    $stChk = $pdo->prepare("
-      SELECT 1
-      FROM passbook_logs
-      WHERE ref_table = 'event_credits' AND ref_id = :rid
-      LIMIT 1
-    ");
-    $stChk->execute([':rid' => $creditId]);
-    $exists = (bool)$stChk->fetchColumn();
-
-    if (!$exists) {
-      $orgIdPB = (int)($e['org_id'] ?? 0);
-      if ($orgIdPB > 0) {
-        $stLast = $pdo->prepare("SELECT COALESCE(balance_after,0) FROM passbook_logs WHERE org_id=:org ORDER BY id DESC LIMIT 1");
-        $stLast->execute([':org' => $orgIdPB]);
-        $lastBal = (float)($stLast->fetchColumn() ?: 0);
-
-        $newBal = $lastBal + $amount;
-
-        $stPB = $pdo->prepare("
-          INSERT INTO passbook_logs
-            (org_id, event_id, txn_date, txn_type, title, notes, amount_in, amount_out, balance_after, ref_table, ref_id, recorded_by_user_id)
-          VALUES
-            (:org, :eid, :d, 'credit', :t, :n, :ain, 0, :bal, 'event_credits', :rid, :uid)
-        ");
-        $stPB->execute([
-          ':org' => $orgIdPB,
-          ':eid' => $eventId,
-          ':d' => $date,
-          ':t' => $source,
-          ':n' => ($notes !== '' ? $notes : null),
-          ':ain' => $amount,
-          ':bal' => $newBal,
-          ':rid' => $creditId,
-          ':uid' => $uid,
-        ]);
-      }
-    }
-
-    ok(['message' => 'Credit added.', 'credit_id' => $creditId]);
+  $uid = current_user_id();
+  $role = current_role();
+  if (!can_view_event($pdo, $e, $uid, $role)) {
+    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
   }
 
+  $eventOrgId = (int)($e['org_id'] ?? 0);
+  if ($eventOrgId <= 0) {
+    fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
+  }
+
+  $sy = "{$e['start_year']}-{$e['end_year']}";
+  $sem = active_year_to_semester((int)$e['active_year']);
+  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+  }
+
+  require_officer_for_expenses($pdo, $eventOrgId);
+  must_be_officer_for_event($pdo, $e);
+
+  if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
+    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+  }
+
+  if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
+
+  // ✅ INSERT ONLY INTO event_credits - NO PASSBOOK AUTO-INSERT
+  $st = $pdo->prepare("
+    INSERT INTO event_credits (event_id, credit_date, source, notes, amount, recorded_by_user_id)
+    VALUES (:eid, :d, :src, :n, :amt, :uid)
+  ");
+  $st->execute([
+    ':eid' => $eventId,
+    ':d' => $date,
+    ':src' => $source,
+    ':n' => ($notes !== '' ? $notes : null),
+    ':amt' => $amount,
+    ':uid' => $uid,
+  ]);
+
+  $creditId = (int)$pdo->lastInsertId();
+
+  ok(['message' => 'Credit added.', 'credit_id' => $creditId]);
+  }
 
   if ($action === 'add_debit') {
-    require_login();
+  require_login();
 
-    $eventId = i($in, ['event_id'], 0);
-    $date = s($in, ['date'], '');
-    $category = s($in, ['category'], '');
-    $notes = s($in, ['notes'], '');
+  $eventId = i($in, ['event_id'], 0);
+  $date = s($in, ['date'], '');
+  $category = s($in, ['category'], '');
+  $notes = s($in, ['notes'], '');
 
-    $quantity = i($in, ['qty', 'quantity'], 1);
-    if ($quantity < 1) $quantity = 1;
+  $quantity = i($in, ['qty', 'quantity'], 1);
+  if ($quantity < 1) $quantity = 1;
 
-    $unitPriceRaw = pick($in, ['unit_price', 'unitPrice'], null);
-    $unitPriceF = null;
-    if ($unitPriceRaw !== null && $unitPriceRaw !== '' && is_numeric($unitPriceRaw)) {
-      $unitPriceF = (float)$unitPriceRaw;
-      if ($unitPriceF < 0) $unitPriceF = 0.0;
-    }
-
-    $amount = f($in, ['amount'], 0.0);
-    if ($unitPriceF !== null && $amount <= 0) $amount = $unitPriceF * $quantity;
-
-    $receiptNumber = s($in, ['receipt_no', 'receipt_number'], '');
-
-    if ($eventId <= 0) fail('Missing event_id.', 400);
-    if ($date === '') fail('Missing date.', 400);
-    if ($category === '') fail('Missing category.', 400);
-    if ($amount <= 0) fail('Invalid amount.', 400);
-
-    $e = fetch_event($pdo, $eventId);
-    if (!$e) fail('Event not found.', 404);
-
-    $uid = current_user_id();
-    $role = current_role();
-    if (!can_view_event($pdo, $e, $uid, $role)) {
-      fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-    }
-
-    $eventOrgId = (int)($e['org_id'] ?? 0);
-    if ($eventOrgId <= 0) {
-      fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
-    }
-
-    $sy = "{$e['start_year']}-{$e['end_year']}";
-    $sem = active_year_to_semester((int)$e['active_year']);
-    if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-      fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-    }
-
-    require_officer_for_expenses($pdo, $eventOrgId);
-    must_be_officer_for_event($pdo, $e);
-
-    if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
-      fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-    }
-
-if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
-
-    $fileKey = isset($_FILES['receipt_file']) ? 'receipt_file' : 'receipt';
-
-    $receiptRel = save_uploaded_file(
-      $fileKey,
-      EE_RECEIPTS_DIR,
-      ['png','jpg','jpeg','webp','pdf'],
-      8 * 1024 * 1024
-    );
-
-    $st = $pdo->prepare("
-      INSERT INTO event_debits
-        (event_id, debit_date, category, notes, amount, unit_price, quantity, receipt_path, receipt_number, recorded_by_user_id)
-      VALUES
-        (:eid, :d, :cat, :n, :amt, :up, :qty, :rp, :rn, :uid)
-    ");
-    $st->execute([
-      ':eid' => $eventId,
-      ':d' => $date,
-      ':cat' => $category,
-      ':n' => ($notes !== '' ? $notes : null),
-      ':amt' => $amount,
-      ':up' => $unitPriceF,
-      ':qty' => $quantity,
-      ':rp' => $receiptRel,
-      ':rn' => ($receiptNumber !== '' ? $receiptNumber : null),
-      ':uid' => $uid,
-    ]);
-
-    $debitId = (int)$pdo->lastInsertId();
-
-    // ✅ Ensure passbook entry exists (some DB triggers may be missing/disabled)
-    // Avoid duplicates if trigger already inserted.
-    $stChk = $pdo->prepare("
-      SELECT 1
-      FROM passbook_logs
-      WHERE ref_table = 'event_debits' AND ref_id = :rid
-      LIMIT 1
-    ");
-    $stChk->execute([':rid' => $debitId]);
-    $exists = (bool)$stChk->fetchColumn();
-
-    if (!$exists) {
-      $orgIdPB = (int)($e['org_id'] ?? 0);
-      if ($orgIdPB > 0) {
-        $stLast = $pdo->prepare("SELECT COALESCE(balance_after,0) FROM passbook_logs WHERE org_id=:org ORDER BY id DESC LIMIT 1");
-        $stLast->execute([':org' => $orgIdPB]);
-        $lastBal = (float)($stLast->fetchColumn() ?: 0);
-
-        $newBal = $lastBal - $amount;
-
-        $stPB = $pdo->prepare("
-          INSERT INTO passbook_logs
-            (org_id, event_id, txn_date, txn_type, title, notes, amount_in, amount_out, balance_after, ref_table, ref_id, recorded_by_user_id)
-          VALUES
-            (:org, :eid, :d, 'debit', :t, :n, 0, :aout, :bal, 'event_debits', :rid, :uid)
-        ");
-        $stPB->execute([
-          ':org' => $orgIdPB,
-          ':eid' => $eventId,
-          ':d' => $date,
-          ':t' => $category,
-          ':n' => ($notes !== '' ? $notes : null),
-          ':aout' => $amount,
-          ':bal' => $newBal,
-          ':rid' => $debitId,
-          ':uid' => $uid,
-        ]);
-      }
-    }
-
-    ok([
-      'message' => 'Expense added.',
-      'debit_id' => $debitId,
-      'receipt_url' => public_url($receiptRel),
-    ]);
+  $unitPriceRaw = pick($in, ['unit_price', 'unitPrice'], null);
+  $unitPriceF = null;
+  if ($unitPriceRaw !== null && $unitPriceRaw !== '' && is_numeric($unitPriceRaw)) {
+    $unitPriceF = (float)$unitPriceRaw;
+    if ($unitPriceF < 0) $unitPriceF = 0.0;
   }
 
+  $amount = f($in, ['amount'], 0.0);
+  if ($unitPriceF !== null && $amount <= 0) $amount = $unitPriceF * $quantity;
+
+  $receiptNumber = s($in, ['receipt_no', 'receipt_number'], '');
+
+  if ($eventId <= 0) fail('Missing event_id.', 400);
+  if ($date === '') fail('Missing date.', 400);
+  if ($category === '') fail('Missing category.', 400);
+  if ($amount <= 0) fail('Invalid amount.', 400);
+
+  $e = fetch_event($pdo, $eventId);
+  if (!$e) fail('Event not found.', 404);
+
+  $uid = current_user_id();
+  $role = current_role();
+  if (!can_view_event($pdo, $e, $uid, $role)) {
+    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+  }
+
+  $eventOrgId = (int)($e['org_id'] ?? 0);
+  if ($eventOrgId <= 0) {
+    fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
+  }
+
+  $sy = "{$e['start_year']}-{$e['end_year']}";
+  $sem = active_year_to_semester((int)$e['active_year']);
+  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+  }
+
+  require_officer_for_expenses($pdo, $eventOrgId);
+  must_be_officer_for_event($pdo, $e);
+
+  if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
+    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+  }
+
+  // Optional: Check for sufficient funds (remove if you don't want this validation)
+  $stCredits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_credits WHERE event_id = :eid");
+  $stCredits->execute([':eid' => $eventId]);
+  $totalCredits = (float)$stCredits->fetchColumn();
+  
+  $stDebits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_debits WHERE event_id = :eid");
+  $stDebits->execute([':eid' => $eventId]);
+  $totalDebits = (float)$stDebits->fetchColumn();
+  
+  $currentBalance = $totalCredits - $totalDebits;
+  
+  if ($amount > $currentBalance) {
+    // You can either block or just warn - uncomment to block
+    // fail("Insufficient funds. Current balance: ₱" . number_format($currentBalance, 2) . 
+    //      ", Attempted expense: ₱" . number_format($amount, 2), 400);
+    
+    // Or just log a warning
+    error_log("WARNING: Expense of ₱$amount exceeds current balance of ₱$currentBalance for event $eventId");
+  }
+
+  if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
+
+  $fileKey = isset($_FILES['receipt_file']) ? 'receipt_file' : 'receipt';
+
+  $receiptRel = save_uploaded_file(
+    $fileKey,
+    EE_RECEIPTS_DIR,
+    ['png','jpg','jpeg','webp','pdf'],
+    8 * 1024 * 1024
+  );
+
+  // ✅ INSERT ONLY INTO event_debits - NO PASSBOOK AUTO-INSERT
+  $st = $pdo->prepare("
+    INSERT INTO event_debits
+      (event_id, debit_date, category, notes, amount, unit_price, quantity, receipt_path, receipt_number, recorded_by_user_id)
+    VALUES
+      (:eid, :d, :cat, :n, :amt, :up, :qty, :rp, :rn, :uid)
+  ");
+  $st->execute([
+    ':eid' => $eventId,
+    ':d' => $date,
+    ':cat' => $category,
+    ':n' => ($notes !== '' ? $notes : null),
+    ':amt' => $amount,
+    ':up' => $unitPriceF,
+    ':qty' => $quantity,
+    ':rp' => $receiptRel,
+    ':rn' => ($receiptNumber !== '' ? $receiptNumber : null),
+    ':uid' => $uid,
+  ]);
+
+  $debitId = (int)$pdo->lastInsertId();
+
+  ok([
+    'message' => 'Expense added.',
+    'debit_id' => $debitId,
+    'receipt_url' => public_url($receiptRel),
+  ]);
+  }
 
   if ($action === 'submit_accomplishment') {
     require_login();
@@ -3170,139 +3305,123 @@ if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
   }
 
   if ($action === 'delete_credit') {
-    require_login();
+  require_login();
+  
+  $creditId = i($in, ['credit_id', 'id'], 0);
+  if ($creditId <= 0) fail('Missing credit_id.', 400);
+  
+  // Get credit details first
+  $stCredit = $pdo->prepare("
+    SELECT c.*, e.org_id, e.start_year, e.end_year, e.active_year, e.status, e.accomplishment_status
+    FROM event_credits c
+    INNER JOIN event_events e ON e.id = c.event_id
+    WHERE c.id = :id
+    LIMIT 1
+  ");
+  $stCredit->execute([':id' => $creditId]);
+  $credit = $stCredit->fetch(PDO::FETCH_ASSOC);
+  
+  if (!$credit) fail('Credit not found.', 404);
+  
+  $eventId = (int)$credit['event_id'];
+  $orgId = (int)$credit['org_id'];
+  $uid = current_user_id();
+  $role = current_role();
+  
+  // Check permissions
+  $sy = "{$credit['start_year']}-{$credit['end_year']}";
+  $sem = active_year_to_semester((int)$credit['active_year']);
+  
+  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+  }
+  
+  if (((string)($credit['accomplishment_status'] ?? '')) === 'Approved') {
+    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+  }
+  
+  $eventOrgId = (int)($credit['org_id'] ?? 0);
+  if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
+    fail('Forbidden. Only officers can delete credits.', 403);
+  }
+  
+  // Begin transaction
+  $pdo->beginTransaction();
+  
+  try {
+    // ✅ REMOVED: Delete associated passbook entry
+    // We no longer auto-create passbook entries, so nothing to delete there
     
-    $creditId = i($in, ['credit_id', 'id'], 0);
-    if ($creditId <= 0) fail('Missing credit_id.', 400);
+    // Delete the credit
+    $stDel = $pdo->prepare("DELETE FROM event_credits WHERE id = :id LIMIT 1");
+    $stDel->execute([':id' => $creditId]);
     
-    // Get credit details first
-    $stCredit = $pdo->prepare("
-        SELECT c.*, e.org_id, e.start_year, e.end_year, e.active_year, e.status, e.accomplishment_status
-        FROM event_credits c
-        INNER JOIN event_events e ON e.id = c.event_id
-        WHERE c.id = :id
-        LIMIT 1
-    ");
-    $stCredit->execute([':id' => $creditId]);
-    $credit = $stCredit->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$credit) fail('Credit not found.', 404);
-    
-    $eventId = (int)$credit['event_id'];
-    $orgId = (int)$credit['org_id'];
-    $uid = current_user_id();
-    $role = current_role();
-    
-    // Check permissions
-    $sy = "{$credit['start_year']}-{$credit['end_year']}";
-    $sem = active_year_to_semester((int)$credit['active_year']);
-    
-    if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-        fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-    }
-    
-    if (((string)($credit['accomplishment_status'] ?? '')) === 'Approved') {
-        fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-    }
-    
-    $eventOrgId = (int)($credit['org_id'] ?? 0);
-    if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
-        fail('Forbidden. Only officers can delete credits.', 403);
-    }
-    
-    // Begin transaction
-    $pdo->beginTransaction();
-    
-    try {
-        // Delete associated passbook entry first
-        $stDelPb = $pdo->prepare("
-            DELETE FROM passbook_logs 
-            WHERE ref_table = 'event_credits' AND ref_id = :rid
-            LIMIT 1
-        ");
-        $stDelPb->execute([':rid' => $creditId]);
-        
-        // Delete the credit
-        $stDel = $pdo->prepare("DELETE FROM event_credits WHERE id = :id LIMIT 1");
-        $stDel->execute([':id' => $creditId]);
-        
-        // Recompute passbook balances for this event
-        recompute_event_passbook_balances($pdo, $eventId);
-        
-        $pdo->commit();
-        ok(['message' => 'Credit deleted successfully.']);
-    } catch (\Throwable $e) {
-        $pdo->rollBack();
-        fail('Failed to delete credit: ' . $e->getMessage(), 500);
-    }
+    $pdo->commit();
+    ok(['message' => 'Credit deleted successfully.']);
+  } catch (\Throwable $e) {
+    $pdo->rollBack();
+    fail('Failed to delete credit: ' . $e->getMessage(), 500);
+  }
   }
 
   if ($action === 'delete_debit') {
-      require_login();
-      
-      $debitId = i($in, ['debit_id', 'id'], 0);
-      if ($debitId <= 0) fail('Missing debit_id.', 400);
-      
-      // Get debit details first
-      $stDebit = $pdo->prepare("
-          SELECT d.*, e.org_id, e.start_year, e.end_year, e.active_year, e.status, e.accomplishment_status
-          FROM event_debits d
-          INNER JOIN event_events e ON e.id = d.event_id
-          WHERE d.id = :id
-          LIMIT 1
-      ");
-      $stDebit->execute([':id' => $debitId]);
-      $debit = $stDebit->fetch(PDO::FETCH_ASSOC);
-      
-      if (!$debit) fail('Debit not found.', 404);
-      
-      $eventId = (int)$debit['event_id'];
-      $orgId = (int)$debit['org_id'];
-      $uid = current_user_id();
-      $role = current_role();
-      
-      // Check permissions
-      $sy = "{$debit['start_year']}-{$debit['end_year']}";
-      $sem = active_year_to_semester((int)$debit['active_year']);
-      
-      if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-          fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-      }
-      
-      if (((string)($debit['accomplishment_status'] ?? '')) === 'Approved') {
-          fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-      }
-      
-      $eventOrgId = (int)($debit['org_id'] ?? 0);
-      if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
-          fail('Forbidden. Only officers can delete expenses.', 403);
-      }
-      
-      // Begin transaction
-      $pdo->beginTransaction();
-      
-      try {
-          // Delete associated passbook entry first
-          $stDelPb = $pdo->prepare("
-              DELETE FROM passbook_logs 
-              WHERE ref_table = 'event_debits' AND ref_id = :rid
-              LIMIT 1
-          ");
-          $stDelPb->execute([':rid' => $debitId]);
-          
-          // Delete the debit
-          $stDel = $pdo->prepare("DELETE FROM event_debits WHERE id = :id LIMIT 1");
-          $stDel->execute([':id' => $debitId]);
-          
-          // Recompute passbook balances for this event
-          recompute_event_passbook_balances($pdo, $eventId);
-          
-          $pdo->commit();
-          ok(['message' => 'Expense deleted successfully.']);
-      } catch (\Throwable $e) {
-          $pdo->rollBack();
-          fail('Failed to delete expense: ' . $e->getMessage(), 500);
-      }
+  require_login();
+  
+  $debitId = i($in, ['debit_id', 'id'], 0);
+  if ($debitId <= 0) fail('Missing debit_id.', 400);
+  
+  // Get debit details first
+  $stDebit = $pdo->prepare("
+    SELECT d.*, e.org_id, e.start_year, e.end_year, e.active_year, e.status, e.accomplishment_status
+    FROM event_debits d
+    INNER JOIN event_events e ON e.id = d.event_id
+    WHERE d.id = :id
+    LIMIT 1
+  ");
+  $stDebit->execute([':id' => $debitId]);
+  $debit = $stDebit->fetch(PDO::FETCH_ASSOC);
+  
+  if (!$debit) fail('Debit not found.', 404);
+  
+  $eventId = (int)$debit['event_id'];
+  $orgId = (int)$debit['org_id'];
+  $uid = current_user_id();
+  $role = current_role();
+  
+  // Check permissions
+  $sy = "{$debit['start_year']}-{$debit['end_year']}";
+  $sem = active_year_to_semester((int)$debit['active_year']);
+  
+  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+  }
+  
+  if (((string)($debit['accomplishment_status'] ?? '')) === 'Approved') {
+    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+  }
+  
+  $eventOrgId = (int)($debit['org_id'] ?? 0);
+  if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
+    fail('Forbidden. Only officers can delete expenses.', 403);
+  }
+  
+  // Begin transaction
+  $pdo->beginTransaction();
+  
+  try {
+    // ✅ REMOVED: Delete associated passbook entry
+    // We no longer auto-create passbook entries, so nothing to delete there
+    
+    // Delete the debit
+    $stDel = $pdo->prepare("DELETE FROM event_debits WHERE id = :id LIMIT 1");
+    $stDel->execute([':id' => $debitId]);
+    
+    $pdo->commit();
+    ok(['message' => 'Expense deleted successfully.']);
+  } catch (\Throwable $e) {
+    $pdo->rollBack();
+    fail('Failed to delete expense: ' . $e->getMessage(), 500);
+  }
   }
 
   if ($action === 'save_proposed_expenses') {

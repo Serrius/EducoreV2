@@ -1,4 +1,8 @@
 <?php
+// Increase file upload limits
+ini_set('max_file_uploads', 50);
+ini_set('upload_max_filesize', '10M');
+ini_set('post_max_size', '20M');
 /**
  * php/accreditation-admin.php
  *

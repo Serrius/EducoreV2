@@ -540,29 +540,62 @@
   }
 
   function applyEventActionVisibility() {
-    const ro = isReadOnlyMode();
-    const approvedLocked = isEventApprovedLocked();
-    const ownOk = ownsSelectedEventOrg();
+  const ro = isReadOnlyMode();
+  const proposalApproved = !!state.gates?.proposal_approved;
+  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+  const status = state.selectedEvent?.status || '';
+  
+  // 🔒 When accomplishment is approved, EVERYTHING is locked
+  const isLocked = accomplishmentApproved;
 
-    const canAddCredit = !!state.permissions?.can_add_credit && !ro && !approvedLocked && (!isOfficerRole() || ownOk);
-    const canAddDebit = !!state.permissions?.can_add_debit && !ro && !approvedLocked && (!isOfficerRole() || ownOk);
+  // Can add entries ONLY when:
+  // 1. NOT locked (accomplishment not approved)
+  // 2. Proposal is approved
+  // 3. Not read-only
+  const canAddCredit = !!state.permissions?.can_add_credit && !ro && !isLocked && proposalApproved;
+  const canAddDebit = !!state.permissions?.can_add_debit && !ro && !isLocked && proposalApproved;
+  const canManagePassbook = !!state.permissions?.can_manage_passbook && !ro && !isLocked && proposalApproved;
+  const canSubmitForApproval = !!state.permissions?.can_submit_for_approval && !ro && !isLocked && (status === 'Draft' || status === 'Declined');
+  const canDelete = !!state.permissions?.can_delete && !ro && !isLocked;
 
-    hardHide(qs("#fundAddBtn"), !canAddCredit);
-    hardHide(qs("#debitAddBtn"), !canAddDebit);
+  // Hide/show main action buttons
+  hardHide(qs("#fundAddBtn"), !canAddCredit);
+  hardHide(qs("#debitAddBtn"), !canAddDebit);
+  hardHide(qs("#eeAddTxnBtn"), !canManagePassbook);
+  hardHide(qs("#eeSubmitForApprovalBtn"), !canSubmitForApproval);
 
-    setActionEnabled("#fundAddBtn", canAddCredit, ro ? "Read-only mode." : (approvedLocked ? "Locked: event is already approved." : "Not allowed."));
-    setActionEnabled("#debitAddBtn", canAddDebit, ro ? "Read-only mode." : (approvedLocked ? "Locked: event is already approved." : "Not allowed."));
+  // Update tooltips with clear reasons
+  setActionEnabled("#fundAddBtn", canAddCredit, 
+    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+    (!proposalApproved ? "❌ Proposal must be approved first" : 
+    (ro ? "🔒 Read-only mode." : "")));
 
-    const canPrintLedger = !!state.permissions?.can_print_ledger;
-    const canPrintPassbook = !!state.permissions?.can_print_passbook;
-    const canPrintLiqBase = !!state.permissions?.can_print_liquidation;
+  setActionEnabled("#debitAddBtn", canAddDebit,
+    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+    (!proposalApproved ? "❌ Proposal must be approved first" : 
+    (ro ? "🔒 Read-only mode." : "")));
 
-    hardHide(qs("#ledgerPrintBtn"), !canPrintLedger);
-    hardHide(qs("#eePassbookPrintBtn"), !canPrintPassbook);
-    hardHide(qs("#liqPrintBtn"), !(canPrintLiqBase && !!state.gates?.accomplishment_approved));
+  setActionEnabled("#eeAddTxnBtn", canManagePassbook,
+    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+    (!proposalApproved ? "❌ Proposal must be approved first" : 
+    (ro ? "🔒 Read-only mode." : "")));
 
-    setActionEnabled("#ledgerPrintBtn", canPrintLedger, "Not allowed.");
-    setActionEnabled("#eePassbookPrintBtn", canPrintPassbook, "Not allowed.");
+  setActionEnabled("#eeSubmitForApprovalBtn", canSubmitForApproval,
+    isLocked ? "🔒 Event is already finalized" : 
+    (ro ? "🔒 Read-only mode." : 
+    (status !== 'Draft' && status !== 'Declined' ? "❌ Can only submit Draft or Declined events" : "")));
+
+  // Print buttons visibility
+  const canPrintLedger = !!state.permissions?.can_print_ledger;
+  const canPrintPassbook = !!state.permissions?.can_print_passbook;
+  const canPrintLiqBase = !!state.permissions?.can_print_liquidation;
+
+  hardHide(qs("#ledgerPrintBtn"), !canPrintLedger);
+  hardHide(qs("#eePassbookPrintBtn"), !canPrintPassbook);
+  hardHide(qs("#liqPrintBtn"), !(canPrintLiqBase && accomplishmentApproved));
+
+  setActionEnabled("#ledgerPrintBtn", canPrintLedger, "Not allowed.");
+  setActionEnabled("#eePassbookPrintBtn", canPrintPassbook, "Not allowed.");
   }
 
   // -------------------------
@@ -1083,142 +1116,197 @@
   }
 
   function isEventApprovedLocked(ev = null) {
-    const e = ev || state.selectedEvent || {};
-    const st = deriveStatusesFromEvent(e);
-    const s = String(e?.status ?? e?.event_status ?? "").trim().toLowerCase();
-    return s === "approved" || st.proposalLc === "approved";
+  const e = ev || state.selectedEvent || {};
+  const st = deriveStatusesFromEvent(e);
+  
+  // Only accomplishment approved should lock everything
+  return st.accomplishmentLc === "approved";
+}
+
+function setGateBadges() {
+  const p = !!state.gates.proposal_approved;
+  const a = !!state.gates.accomplishment_approved;
+  const status = state.selectedEvent?.status || '';
+  const accompStatus = state.accomplishment?.status || 'Draft';
+
+  console.log("[GateBadges] Proposal approved:", p, "Accomplishment approved:", a, "Accomp status:", accompStatus);
+
+  // Update header badges
+  setHidden(qs("#eeProposalGateBadge"), p);
+  setHidden(qs("#eeAccompGateBadge"), a);
+  setHidden(qs("#eeUnlockedBadge"), !(p && a));
+
+  // Main event banner
+  const banner = qs("#eeEventGateBanner");
+  const txt = qs("#eeEventGateText");
+
+  if (status === 'Draft') {
+    setHidden(banner, false);
+    if (txt) txt.textContent = "📝 This event is in DRAFT mode. Submit for approval to proceed.";
+  } else if (status === 'Submitted') {
+    setHidden(banner, false);
+    if (txt) txt.textContent = "⏳ This event is PENDING APPROVAL. Please wait for reviewer action.";
+  } else if (!p) {
+    setHidden(banner, false);
+    if (txt) txt.textContent = "⚠️ Proposal is not approved yet. You cannot add funds or expenses until the proposal is approved.";
+  } else if (!a) {
+    setHidden(banner, false);
+    if (txt) txt.textContent = "✅ Proposal approved. You can now add funds and expenses. The liquidation report becomes available after accomplishment is approved.";
+  } else {
+    setHidden(banner, true);
   }
 
-  function setGateBadges() {
-    const p = !!state.gates.proposal_approved;
-    const a = !!state.gates.accomplishment_approved;
+  // Funds/Expenses tabs lock banners
+  const fundsLock = qs("#eeFundsLock");
+  const fundsLockText = qs("#eeFundsLockText");
+  const debitsLock = qs("#eeDebitsLock");
+  const debitsLockText = qs("#eeDebitsLockText");
 
-    setHidden(qs("#eeProposalGateBadge"), p);
-    setHidden(qs("#eeAccompGateBadge"), a);
-    setHidden(qs("#eeUnlockedBadge"), !(p && a));
+  if (!p) {
+    // Proposal not approved - show lock
+    setHidden(fundsLock, false);
+    setHidden(debitsLock, false);
+    if (fundsLockText) fundsLockText.textContent = "❌ Proposal must be approved first before adding funds.";
+    if (debitsLockText) debitsLockText.textContent = "❌ Proposal must be approved first before adding expenses.";
+  } else if (a) {
+    // Accomplishment approved - show lock (finalized)
+    setHidden(fundsLock, false);
+    setHidden(debitsLock, false);
+    if (fundsLockText) fundsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
+    if (debitsLockText) debitsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
+  } else {
+    // Proposal approved, accomplishment not approved - no lock
+    setHidden(fundsLock, true);
+    setHidden(debitsLock, true);
+  }
 
-    const banner = qs("#eeEventGateBanner");
-    const txt = qs("#eeEventGateText");
+  // Liquidation tab - only unlocked when accomplishment is approved
+  const liqLock = qs("#eeLiqLock");
+  const liqLockText = qs("#eeLiqLockText");
+  
+  // Liquidation is ONLY available when accomplishment is approved
+  // Show lock when accomplishment is NOT approved
+  setHidden(liqLock, a); // Hide lock when a=true (accomplishment approved), show when a=false
+  
+  if (!a) {
+    if (liqLockText) liqLockText.textContent = "📄 Liquidation report becomes available AFTER the accomplishment report is approved.";
+    // Also make sure the print button is disabled/hidden when locked
+    hardHide(qs("#liqPrintBtn"), true);
+  } else {
+    // When accomplishment is approved, make sure print button is visible
+    hardHide(qs("#liqPrintBtn"), false);
+  }
+
+  // Accomplishment tab - lock banner should ONLY show when proposal is NOT approved
+  const accompLock = qs("#eeAccompLock");
+  const accompLockText = qs("#eeAccompLockText");
+  
+  // Accomplishment tab is available when proposal is approved
+  // Show lock when proposal is NOT approved
+  setHidden(accompLock, p); // Hide when p=true (proposal approved), show when p=false
+  
+  if (!p) {
+    if (accompLockText) accompLockText.textContent = "📝 This report becomes available AFTER the event proposal is approved.";
+  }
+
+  // 🔥 FIXED: Accomplishment status alert - use gates as source of truth
+  const accompStatusAlert = qs("#accompStatusAlert");
+  const accompStatusText = qs("#accompStatusText");
+
+  if (accompStatusAlert && accompStatusText) {
+    // Use gates.accomplishment_approved as the ultimate source of truth
+    const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
+    
+    console.log("[GateBadges] Accomplishment check:", {
+      gatesApproved: isAccomplishmentApproved,
+      stateStatus: state.accomplishment?.status,
+      proposalApproved: p
+    });
 
     if (!p) {
-      setHidden(banner, false);
-      if (txt) txt.textContent = "Proposal is not approved yet. Some sections will remain locked.";
-    } else if (!a) {
-      setHidden(banner, false);
-      if (txt) txt.textContent = "Accomplishment report is not approved yet. Liquidation will remain locked.";
-    } else {
-      setHidden(banner, true);
+      // Proposal not approved - show warning
+      accompStatusAlert.className = "alert alert-warning py-2 mb-3 small";
+      accompStatusAlert.style.display = "block";
+      accompStatusText.textContent = "🔒 Accomplishment report is locked. Event proposal must be approved first.";
+    } 
+    else if (isAccomplishmentApproved) {
+      // ✅ Accomplishment IS approved - HIDE THE ALERT COMPLETELY
+      console.log("[GateBadges] Accomplishment is approved - HIDING alert");
+      accompStatusAlert.style.display = "none";
+    } 
+    else {
+      // Proposal approved but accomplishment NOT approved yet
+      // Use state.accomplishment.status for Draft/Submitted/Declined
+      const currentStatus = state.accomplishment?.status || 'Draft';
+      console.log("[GateBadges] Showing alert for status:", currentStatus);
+      
+      switch (currentStatus) {
+        case "Submitted":
+          accompStatusAlert.className = "alert alert-info py-2 mb-3 small";
+          accompStatusAlert.style.display = "block";
+          accompStatusText.textContent = "⏳ Accomplishment report is pending review by the coordinator.";
+          break;
+        case "Declined":
+          accompStatusAlert.className = "alert alert-danger py-2 mb-3 small";
+          accompStatusAlert.style.display = "block";
+          accompStatusText.textContent = "❌ Accomplishment report was declined. Please revise and resubmit.";
+          break;
+        default: // Draft or any other status
+          accompStatusAlert.className = "alert alert-secondary py-2 mb-3 small";
+          accompStatusAlert.style.display = "block";
+          accompStatusText.textContent = "📝 Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
+      }
     }
-
-    const fundsLock = qs("#eeFundsLock");
-    const fundsLockText = qs("#eeFundsLockText");
-    const debitsLock = qs("#eeDebitsLock");
-    const debitsLockText = qs("#eeDebitsLockText");
-    const liqLock = qs("#eeLiqLock");
-    const liqLockText = qs("#eeLiqLockText");
-    const accompLock = qs("#eeAccompLock");
-    const accompLockText = qs("#eeAccompLockText");
-
-    const ro = isReadOnlyMode();
-    const approvedLocked = isEventApprovedLocked();
-
-    const canAddCredit = !!state.permissions.can_add_credit && !ro && !approvedLocked;
-    const canAddDebit = !!state.permissions.can_add_debit && !ro && !approvedLocked;
-
-    if (!canAddCredit) {
-      setHidden(fundsLock, false);
-      if (fundsLockText) fundsLockText.textContent = ro
-        ? "Read-only mode: you can view credits, but you cannot add credits."
-        : (approvedLocked ? "Locked: this event is already approved. You can no longer add credits." : "You can view credits, but you cannot add credits with your role.");
-    } else setHidden(fundsLock, true);
-
-    if (!canAddDebit) {
-      setHidden(debitsLock, false);
-      if (debitsLockText) debitsLockText.textContent = ro
-        ? "Read-only mode: you can view expenses, but you cannot add expenses."
-        : (approvedLocked ? "Locked: this event is already approved. You can no longer add expenses." : "You can view expenses, but you cannot add expenses with your role.");
-    } else setHidden(debitsLock, true);
-
-    if (!a) {
-      setHidden(liqLock, false);
-      if (liqLockText) liqLockText.textContent = "This report becomes available after the accomplishment report is approved.";
-    } else setHidden(liqLock, true);
-
-    if (!p) {
-      setHidden(accompLock, false);
-      if (accompLockText) accompLockText.textContent = "This report becomes available after the event proposal is approved.";
-    } else setHidden(accompLock, true);
-
-    setActionEnabled("#fundAddBtn", canAddCredit, ro ? "Read-only mode." : (approvedLocked ? "Locked: event is already approved." : "Not allowed."));
-    setActionEnabled("#debitAddBtn", canAddDebit, ro ? "Read-only mode." : (approvedLocked ? "Locked: event is already approved." : "Not allowed."));
-
-    const canPrintLedger = !!state.permissions?.can_print_ledger;
-    const canPrintPassbook = !!state.permissions?.can_print_passbook;
-    const canPrintLiq = !!state.permissions?.can_print_liquidation && !!a;
-    const canPrintAccomp = !!state.permissions?.can_print_accomplishment && !!p;
-
-    setActionEnabled("#ledgerPrintBtn", canPrintLedger, "Not allowed.");
-    setActionEnabled("#eePassbookPrintBtn", canPrintPassbook, "Not allowed.");
-    setActionEnabled("#liqPrintBtn", canPrintLiq, a ? "Not allowed." : "Locked until accomplishment is approved.");
-    
-    // Don't disable the print button here - it's handled in renderAccomplishment
-    // setActionEnabled("#eePrintAccompBtn", canPrintAccomp, p ? "Not allowed." : "Locked until proposal is approved.");
-
-    hardHide(qs("#liqPrintBtn"), !canPrintLiq);
-    
-    applyEventActionVisibility();
   }
+
+  // Update button visibility based on current state
+  applyEventActionVisibility();
+  applyAccomplishmentSubmitButton();
+}
 
   function applyApprovalButtons() {
-    const wrap = qs("#eeApprovalWrap");
-    if (!wrap) return;
+  const wrap = qs("#eeApprovalWrap");
+  if (!wrap) return;
 
-    const e = state.selectedEvent || {};
-    const role = state.permissions.role || "";
-    const approver = isApproverRole(role);
-    const ro = isReadOnlyMode();
+  const e = state.selectedEvent || {};
+  const role = state.permissions.role || "";
+  const approver = isApproverRole(role);
+  const ro = isReadOnlyMode();
 
-    if (!approver || ro) {
-      setHidden(wrap, true);
-      return;
-    }
+  if (!approver || ro) {
+    setHidden(wrap, true);
+    return;
+  }
 
-    const st = deriveStatusesFromEvent(e);
+  const st = deriveStatusesFromEvent(e);
+  const status = e.status || '';
 
-    const proposalApproved = (state.gates.proposal_approved != null)
-      ? !!state.gates.proposal_approved
-      : (st.proposalLc === "approved");
+  const proposalApproved = (state.gates.proposal_approved != null)
+    ? !!state.gates.proposal_approved
+    : (st.proposalLc === "approved");
 
-    const accompApproved = (state.gates.accomplishment_approved != null)
-      ? !!state.gates.accomplishment_approved
-      : (st.accomplishmentLc === "approved");
+  const accompApproved = (state.gates.accomplishment_approved != null)
+    ? !!state.gates.accomplishment_approved
+    : (st.accomplishmentLc === "approved");
 
-    const proposalNeedsDecision =
-      !proposalApproved && (
-        st.proposalLc.includes("submitted") ||
-        st.proposalLc.includes("pending") ||
-        st.proposalLc.includes("review")
-      );
+  // Proposal needs decision when status is Submitted
+  const proposalNeedsDecision = !proposalApproved && status === 'Submitted';
 
-    const accompNeedsDecision =
-      proposalApproved && !accompApproved && (
-        st.accomplishmentLc.includes("submitted") ||
-        st.accomplishmentLc.includes("pending") ||
-        st.accomplishmentLc.includes("review")
-      );
+  // Accomplishment needs decision when proposal approved and accomplishment is Submitted
+  const accompNeedsDecision = proposalApproved && !accompApproved && st.accomplishmentLc === 'submitted';
 
-    const apProp = qs("#eeApproveProposalBtn");
-    const dcProp = qs("#eeDeclineProposalBtn");
-    const apAcc = qs("#eeApproveAccompBtn");
-    const dcAcc = qs("#eeDeclineAccompBtn");
+  const apProp = qs("#eeApproveProposalBtn");
+  const dcProp = qs("#eeDeclineProposalBtn");
+  const apAcc = qs("#eeApproveAccompBtn");
+  const dcAcc = qs("#eeDeclineAccompBtn");
 
-    setHidden(apProp, !proposalNeedsDecision);
-    setHidden(dcProp, !proposalNeedsDecision);
-    setHidden(apAcc, !accompNeedsDecision);
-    setHidden(dcAcc, !accompNeedsDecision);
+  setHidden(apProp, !proposalNeedsDecision);
+  setHidden(dcProp, !proposalNeedsDecision);
+  setHidden(apAcc, !accompNeedsDecision);
+  setHidden(dcAcc, !accompNeedsDecision);
 
-    const anyVisible = [apProp, dcProp, apAcc, dcAcc].some((x) => x && !x.classList.contains("d-none"));
-    setHidden(wrap, !anyVisible);
+  const anyVisible = [apProp, dcProp, apAcc, dcAcc].some((x) => x && !x.classList.contains("d-none"));
+  setHidden(wrap, !anyVisible);
   }
 
   // Proposed expenses functions
@@ -1391,14 +1479,21 @@
   function renderAccomplishment() {
   const e = state.selectedEvent || {};
   const accomp = state.accomplishment || {};
-  const status = String(accomp.status || "Draft");
-  const isCoord = isCoordinator();
-
+  
+  // Use gates as source of truth for approval
   const proposalApproved = !!state.gates?.proposal_approved;
+  const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
+  
+  // Override status if gates says it's approved
+  const status = isAccomplishmentApproved ? 'Approved' : (accomp.status || 'Draft');
+  
+  const isCoord = isCoordinator();
   const canSubmit = !!state.permissions?.can_submit_accomplishment;
   const canApprove = !!state.permissions?.can_approve_accomplishment;
   const canDecline = !!state.permissions?.can_decline_accomplishment;
   const canPrintBase = !!state.permissions?.can_print_accomplishment;
+
+  console.log("[Accomplishment] Rendering with status:", status, "Gates approved:", isAccomplishmentApproved);
 
   // -------------------------
   // Basic event info
@@ -1459,6 +1554,7 @@
     proposalApproved &&
     !isReadOnlyMode() &&
     isOfficerRole() &&
+    !isAccomplishmentApproved &&
     (status === "Draft" || status === "Declined");
 
   if (objectivesInput) objectivesInput.value = objectivesText;
@@ -1504,33 +1600,14 @@
   setHidden(challengesView, isEditable);
 
   // -------------------------
-  // Financial summary - FIXED BALANCE CALCULATION
+  // Financial summary
   // -------------------------
   const credits = Number(e.total_credits ?? 0);
   const debits = Number(e.total_debits ?? 0);
   const proposed = Number(state.proposedTotal || 0);
   
-  // Calculate balance from passbook transactions if available
-  let balance = 0;
-  if (Array.isArray(state.passbook) && state.passbook.length > 0) {
-    // Sort by date and calculate running balance
-    const sorted = [...state.passbook].sort((a, b) => {
-      const dateA = a.date || a.txn_date || '';
-      const dateB = b.date || b.txn_date || '';
-      if (dateA < dateB) return -1;
-      if (dateA > dateB) return 1;
-      return (a.id || 0) - (b.id || 0);
-    });
-    
-    for (const txn of sorted) {
-      const w = Number(txn.amount_out ?? txn.debit ?? 0) || 0;
-      const d = Number(txn.amount_in ?? txn.credit ?? 0) || 0;
-      balance += d - w;
-    }
-  } else {
-    // Fallback to simple calculation if no passbook
-    balance = credits - debits;
-  }
+  // Calculate balance from credits and debits only
+  const balance = credits - debits;
 
   const elProposed = qs("#accompProposedTotal");
   const elActual = qs("#accompActualTotal");
@@ -1561,16 +1638,17 @@
     proposalApproved &&
     !isReadOnlyMode() &&
     isOfficerRole() &&
+    !isAccomplishmentApproved &&
     (status === "Draft" || status === "Declined");
 
   setHidden(qs("#eeSubmitAccompBtn"), !showSubmitButton);
 
-  setHidden(qs("#accompApproveBtn"), !(canApprove && status === "Submitted"));
-  setHidden(qs("#accompDeclineBtn"), !(canDecline && status === "Submitted"));
+  setHidden(qs("#accompApproveBtn"), !(canApprove && status === "Submitted" && !isAccomplishmentApproved));
+  setHidden(qs("#accompDeclineBtn"), !(canDecline && status === "Submitted" && !isAccomplishmentApproved));
 
   let showPrintButton = false;
   if (canPrintBase && proposalApproved) {
-    if (status === "Approved") {
+    if (status === "Approved" || isAccomplishmentApproved) {
       showPrintButton = true;
     } else if ((status === "Draft" || status === "Submitted" || status === "Declined") && isCoord) {
       showPrintButton = true;
@@ -1594,23 +1672,26 @@
   if (alert && alertText) {
     if (!proposalApproved) {
       alert.className = "alert alert-warning py-2 mb-3 small";
+      alert.style.display = "block";
       alertText.textContent = "Accomplishment report is locked. Event proposal must be approved first.";
+    } else if (isAccomplishmentApproved) {
+      // Hide alert when approved
+      alert.style.display = "none";
     } else {
       switch (status) {
-        case "Approved":
-          alert.className = "alert alert-success py-2 mb-3 small";
-          alertText.textContent = "Accomplishment report has been approved and is finalized.";
-          break;
         case "Submitted":
           alert.className = "alert alert-info py-2 mb-3 small";
+          alert.style.display = "block";
           alertText.textContent = "Accomplishment report is pending review by the coordinator.";
           break;
         case "Declined":
           alert.className = "alert alert-danger py-2 mb-3 small";
+          alert.style.display = "block";
           alertText.textContent = "Accomplishment report was declined. Please revise and resubmit.";
           break;
         default:
           alert.className = "alert alert-secondary py-2 mb-3 small";
+          alert.style.display = "block";
           alertText.textContent = "Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
       }
     }
@@ -1716,8 +1797,9 @@
   if (!tb) return;
 
   const ro = isReadOnlyMode();
-  const approvedLocked = isEventApprovedLocked();
-  const canDelete = !ro && !approvedLocked && !!state.permissions?.can_add_credit;
+  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+  const isLocked = accomplishmentApproved;
+  const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
 
   if (!state.credits.length) {
     tb.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No credits yet.</td></tr>`;
@@ -1748,28 +1830,29 @@
     `;
   }).join("");
   
-  // Bind delete events after rendering
-  qsa(".ee-credit-delete").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const creditId = btn.getAttribute("data-credit-id");
-      if (!creditId) return;
-      
-      // Store credit ID in modal
-      const modal = qs("#eeDecisionModal");
-      modal.dataset.creditId = creditId;
-      
-      openDecisionModal({
-        action: "delete_credit",
-        title: "Delete Credit?",
-        text: "This will permanently delete this credit and remove its passbook entry. This action cannot be undone.",
-        confirmText: "Delete",
-        confirmBtnClass: "btn-danger",
-        showNoteField: false
+  // Bind delete events after rendering (only if canDelete is true)
+  if (canDelete) {
+    qsa(".ee-credit-delete").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const creditId = btn.getAttribute("data-credit-id");
+        if (!creditId) return;
+        
+        const modal = qs("#eeDecisionModal");
+        modal.dataset.creditId = creditId;
+        
+        openDecisionModal({
+          action: "delete_credit",
+          title: "Delete Credit?",
+          text: "This will permanently delete this credit. This action cannot be undone.",
+          confirmText: "Delete",
+          confirmBtnClass: "btn-danger",
+          showNoteField: false
+        });
       });
     });
-  });
+  }
   }
 
   function renderDebits() {
@@ -1778,8 +1861,9 @@
   if (!tb) return;
 
   const ro = isReadOnlyMode();
-  const approvedLocked = isEventApprovedLocked();
-  const canDelete = !ro && !approvedLocked && !!state.permissions?.can_add_debit;
+  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+  const isLocked = accomplishmentApproved;
+  const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
 
   if (!state.debits.length) {
     tb.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No expenses yet.</td></tr>`;
@@ -1851,28 +1935,29 @@
     btn.addEventListener("click", () => openNewTab(btn.getAttribute("data-ee-openfile") || ""));
   });
   
-  // Bind delete events after rendering
-  qsa(".ee-debit-delete").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const debitId = btn.getAttribute("data-debit-id");
-      if (!debitId) return;
-      
-      // Store debit ID in modal
-      const modal = qs("#eeDecisionModal");
-      modal.dataset.debitId = debitId;
-      
-      openDecisionModal({
-        action: "delete_debit",
-        title: "Delete Expense?",
-        text: "This will permanently delete this expense and remove its passbook entry. This action cannot be undone.",
-        confirmText: "Delete",
-        confirmBtnClass: "btn-danger",
-        showNoteField: false
+  // Bind delete events after rendering (only if canDelete is true)
+  if (canDelete) {
+    qsa(".ee-debit-delete").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const debitId = btn.getAttribute("data-debit-id");
+        if (!debitId) return;
+        
+        const modal = qs("#eeDecisionModal");
+        modal.dataset.debitId = debitId;
+        
+        openDecisionModal({
+          action: "delete_debit",
+          title: "Delete Expense?",
+          text: "This will permanently delete this expense. This action cannot be undone.",
+          confirmText: "Delete",
+          confirmBtnClass: "btn-danger",
+          showNoteField: false
+        });
       });
     });
-  });
+  }
   }
 
   async function deleteCredit(creditId) {
@@ -1910,80 +1995,211 @@
   }
 
   function renderLedger() {
-    const tb = qs("#ledgerTbody");
-    if (!tb) return;
+  const tb = qs("#ledgerTbody");
+  if (!tb) {
+    console.error("[Ledger] Table body element #ledgerTbody not found!");
+    return;
+  }
 
-    if (!state.ledger.length) {
-      tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No entries.</td></tr>`;
-      return;
-    }
+  console.log("[Ledger] Rendering ledger with data:", state.ledger);
+  console.log("[Ledger] Data type:", typeof state.ledger);
+  console.log("[Ledger] Is array:", Array.isArray(state.ledger));
+  console.log("[Ledger] Length:", state.ledger?.length);
 
-    tb.innerHTML = state.ledger.map((x) => {
-      const dt = escapeHtml(x.date || x.created_at || "—");
-      const type = escapeHtml(x.type || "—");
-      const desc = escapeHtml(x.description || x.notes || "—");
-      const cr = x.credit ? money(x.credit) : "—";
-      const dr = x.debit ? money(x.debit) : "—";
-      const ref = escapeHtml(x.reference || x.ref || "—");
-      const bal = (x.balance != null) ? money(x.balance) : "—";
+  // If ledger is empty but we have credits/debits, create a simple ledger on the fly
+  if ((!state.ledger || state.ledger.length === 0) && (state.credits?.length > 0 || state.debits?.length > 0)) {
+    console.log("[Ledger] Creating simple ledger from credits/debits");
+    const simpleLedger = [];
+    let balance = 0;
+    
+    // Create entries from credits
+    state.credits.forEach(c => {
+      balance += c.amount;
+      simpleLedger.push({
+        date: c.date,
+        type: 'CREDIT',
+        description: c.source + (c.notes ? ' - ' + c.notes : ''),
+        credit: c.amount,
+        debit: 0,
+        balance: balance,
+        recorded_by_name: 'User ' + (c.recorded_by || ''),
+        reference: 'credit#' + c.id
+      });
+    });
+    
+    // Create entries from debits
+    state.debits.forEach(d => {
+      balance -= d.amount;
+      simpleLedger.push({
+        date: d.date,
+        type: 'DEBIT',
+        description: d.category + (d.notes ? ' - ' + d.notes : ''),
+        credit: 0,
+        debit: d.amount,
+        balance: balance,
+        recorded_by_name: 'User ' + (d.recorded_by || ''),
+        reference: 'debit#' + d.id
+      });
+    });
+    
+    // Sort by date
+    simpleLedger.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // Recalculate running balance after sorting
+    let runningBalance = 0;
+    simpleLedger.forEach(entry => {
+      runningBalance += (entry.credit || 0) - (entry.debit || 0);
+      entry.balance = runningBalance;
+    });
+    
+    state.ledger = simpleLedger;
+    console.log("[Ledger] Created simple ledger:", state.ledger);
+  }
 
-      return `
-        <tr>
-          <td>${dt}</td>
-          <td>${type}</td>
-          <td>${desc}</td>
-          <td>${escapeHtml(x.recorded_by_name || "—")}</td>
-          <td class="text-end">${cr}</td>
-          <td class="text-end">${dr}</td>
-          <td class="text-end">${ref}</td>
-          <td class="text-end">${bal}</td>
-        </tr>
+  if (!state.ledger || !Array.isArray(state.ledger) || state.ledger.length === 0) {
+    tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No ledger entries found. Try adding some credits or debits first.</td></tr>`;
+    return;
+  }
+
+  let totalCredits = 0;
+  let totalDebits = 0;
+  let finalBalance = 0;
+
+  tb.innerHTML = state.ledger.map((x, index) => {
+    // Ensure we have valid numbers
+    const credit = typeof x.credit === 'number' ? x.credit : (typeof x.amount_in === 'number' ? x.amount_in : 0);
+    const debit = typeof x.debit === 'number' ? x.debit : (typeof x.amount_out === 'number' ? x.amount_out : 0);
+    const balance = typeof x.balance === 'number' ? x.balance : (typeof x.balance_after === 'number' ? x.balance_after : 0);
+    
+    const dt = escapeHtml(x.date || x.txn_date || "—");
+    const type = escapeHtml(x.type || (credit > 0 ? 'CREDIT' : 'DEBIT') || "—");
+    const desc = escapeHtml(x.description || x.notes || "—");
+    const recordedBy = escapeHtml(x.recorded_by_name || x.recorded_by || "—");
+    const cr = credit > 0 ? money(credit) : "—";
+    const dr = debit > 0 ? money(debit) : "—";
+    const bal = money(balance);
+    const ref = escapeHtml(x.reference || x.ref || (x.id ? '#' + x.id : '—'));
+    
+    totalCredits += credit;
+    totalDebits += debit;
+    finalBalance = balance;
+
+    const rowClass = balance < 0 ? 'table-danger' : '';
+
+    return `
+      <tr class="${rowClass}">
+        <td>${dt}</td>
+        <td><span class="badge ${type === 'CREDIT' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
+        <td>${desc}</td>
+        <td>${recordedBy}</td>
+        <td class="text-end fw-semibold text-success">${cr}</td>
+        <td class="text-end fw-semibold text-danger">${dr}</td>
+        <td class="text-end"><small class="text-muted">${ref}</small></td>
+        <td class="text-end fw-bold ${balance < 0 ? 'text-danger' : ''}">${bal}</td>
+      </tr>
+    `;
+  }).join("");
+
+  // Add summary row with correct colspan (now 8 columns)
+  const summaryRow = `
+    <tr class="table-secondary fw-bold">
+      <td colspan="4" class="text-end">TOTALS:</td>
+      <td class="text-end text-success">${money(totalCredits)}</td>
+      <td class="text-end text-danger">${money(totalDebits)}</td>
+      <td class="text-end"></td>
+      <td class="text-end ${finalBalance < 0 ? 'text-danger' : ''}">${money(finalBalance)}</td>
+    </tr>
+  `;
+  tb.innerHTML += summaryRow;
+
+  // Update overview
+  updateOverviewFinancials(totalCredits, totalDebits, finalBalance);
+  }
+
+    function showBalanceWarning(balance) {
+    // Remove existing warning
+    const existingWarning = qs("#balanceWarning");
+    if (existingWarning) existingWarning.remove();
+    
+    if (balance < 0) {
+      const warningDiv = document.createElement('div');
+      warningDiv.id = 'balanceWarning';
+      warningDiv.className = 'alert alert-danger mt-2 py-2 small';
+      warningDiv.innerHTML = `
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>FINANCIAL WARNING:</strong> Expenses exceed funds by ₱${Math.abs(balance).toFixed(2)}. 
+        This event is over budget.
       `;
-    }).join("");
-  }
-  
-  // -------------------------
-  // Passbook Log (per-event)
-  // -------------------------
-  function formatMDY(ymd) {
-    const s = String(ymd || "");
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return s;
-    return `${m[2]}/${m[3]}/${m[1]}`;
+      
+      // Insert after the overview card
+      const overviewCard = qs("#pane-overview .row");
+      if (overviewCard) {
+        overviewCard.parentNode.insertBefore(warningDiv, overviewCard.nextSibling);
+      }
+    }
   }
 
-  function peso(v) {
-    const n = Number(v || 0);
-    const sign = n < 0 ? "-" : "";
-    return `${sign}₱${fmtMoney(Math.abs(n))}`;
+  function updateOverviewFinancials(credits, debits, balance) {
+    const ovCredits = qs("#ovCredits");
+    const ovDebits = qs("#ovDebits");
+    const ovBalance = qs("#ovBalance");
+
+    if (ovCredits) {
+      ovCredits.textContent = money(credits);
+      ovCredits.className = credits > 0 ? 'fs-5 text-success' : 'fs-5';
+    }
+    if (ovDebits) {
+      ovDebits.textContent = money(debits);
+      ovDebits.className = debits > 0 ? 'fs-5 text-danger' : 'fs-5';
+    }
+    if (ovBalance) {
+      ovBalance.textContent = money(balance);
+      ovBalance.className = balance < 0 ? 'fs-5 text-danger fw-bold' : 'fs-5 text-success fw-bold';
+    }
+    
+    showBalanceWarning(balance);
   }
 
-  function renderPassbookLog(rows, ev, perms) {
+  function renderPassbookLog(rows) {
   const tb = qs("#eePassbookTbody");
   if (!tb) {
     console.warn("[Passbook] Missing tbody #eePassbookTbody. Passbook section will not render.");
     return;
   }
 
-  const canManage = !!(perms && perms.can_manage_passbook);
-  const approvedLocked = isEventApprovedLocked(ev);
-  const locked = !!(perms && perms.passbook_locked) || approvedLocked || String(ev?.accomplishment_status || "") === "Approved";
+  const proposalApproved = !!state.gates?.proposal_approved;
+  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+  const canManage = !!state.permissions?.can_manage_passbook;
+  const ro = isReadOnlyMode();
+  
+  // Passbook is locked if:
+  // 1. Accomplishment approved OR
+  // 2. Proposal not approved OR
+  // 3. Read-only mode
+  const locked = ro || !proposalApproved || accomplishmentApproved;
 
   const btnAdd = qs("#eeAddTxnBtn");
   if (btnAdd) {
-    btnAdd.disabled = (!canManage || locked);
-    btnAdd.classList.toggle("disabled", (!canManage || locked));
+    btnAdd.disabled = locked || !canManage;
+    btnAdd.classList.toggle("disabled", locked || !canManage);
+    btnAdd.title = locked ? 
+      (accomplishmentApproved ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+       !proposalApproved ? "❌ Proposal must be approved first" : 
+       "🔒 Read-only mode") : 
+      "";
   }
 
   let totalW = 0;
   let totalD = 0;
   let runningBalance = 0;
 
-  if (!Array.isArray(rows) || rows.length === 0) {
-    tb.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">No transactions yet.</td></tr>`;
+  const passbookRows = Array.isArray(rows) ? rows : [];
+
+  if (!passbookRows.length) {
+    tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No transactions yet.</td></tr>`;
   } else {
     // Sort by date and ID to ensure correct running balance
-    const sortedRows = [...rows].sort((a, b) => {
+    const sortedRows = [...passbookRows].sort((a, b) => {
       const dateA = a.date || a.txn_date || '';
       const dateB = b.date || b.txn_date || '';
       if (dateA < dateB) return -1;
@@ -1994,7 +2210,7 @@
     tb.innerHTML = sortedRows.map(r => {
       const date = formatMDY(r.date || r.txn_date || "");
       const typeLabel = String(r.title || "").trim() || (String(r.type || "").toLowerCase() === "debit" ? "Withdrawal" : "Deposit");
-      const fullname = String(r.recorded_by_name || "").trim() || `User #${Number(r.recorded_by_user_id || r.recorded_by || 0)}`;
+      const fullname = String(r.recorded_by_name || "").trim() || `User #${Number(r.recorded_by_user_id || 0)}`;
       const desc = String(r.notes || "").trim() || String(r.description || "").trim();
 
       const w = Number(r.amount_out ?? r.debit ?? 0) || 0;
@@ -2003,7 +2219,6 @@
       totalW += w;
       totalD += d;
       
-      // Calculate running balance correctly
       runningBalance += d - w;
 
       const canDeleteRow = canManage && !locked && !!r.is_manual;
@@ -2032,6 +2247,22 @@
   if (elW) elW.textContent = peso(totalW);
   if (elD) elD.textContent = peso(totalD);
   if (elB) elB.textContent = peso(runningBalance);
+  }
+  
+  // -------------------------
+  // Passbook Log (per-event)
+  // -------------------------
+  function formatMDY(ymd) {
+    const s = String(ymd || "");
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return s;
+    return `${m[2]}/${m[3]}/${m[1]}`;
+  }
+
+  function peso(v) {
+    const n = Number(v || 0);
+    const sign = n < 0 ? "-" : "";
+    return `${sign}₱${fmtMoney(Math.abs(n))}`;
   }
 
   function bindPassbookUI() {
@@ -2160,120 +2391,142 @@
   }
 
   async function openEvent(eventId, opts = {}) {
-    state.selectedEventId = Number(eventId) || 0;
-    if (!state.selectedEventId) return;
+  state.selectedEventId = Number(eventId) || 0;
+  if (!state.selectedEventId) return;
 
-    const termId = Number(state.selectedTermId || 0);
+  const termId = Number(state.selectedTermId || 0);
 
-    const data = await postJSON({
-      action: "get_event",
-      event_id: state.selectedEventId,
-      term_id: termId,
-    });
+  console.log("[openEvent] Fetching event data for ID:", eventId);
+  
+  const data = await postJSON({
+    action: "get_event",
+    event_id: state.selectedEventId,
+    term_id: termId,
+  });
 
-    state.selectedEvent = data.event || data.row || null;
+  console.log("[openEvent] Full response:", data);
+  console.log("[openEvent] Ledger data:", data.ledger);
+  console.log("[openEvent] Credits data:", data.credits);
+  console.log("[openEvent] Debits data:", data.debits);
 
-    state.permissions = { ...state.permissions, ...(data.permissions || {}) };
-    state.gates = { ...state.gates, ...(data.gates || {}) };
+  state.selectedEvent = data.event || data.row || null;
 
-    // Ensure role is properly set
-    if (!state.permissions.role && data.permissions?.role) {
-      state.permissions.role = data.permissions.role;
+  state.permissions = { ...state.permissions, ...(data.permissions || {}) };
+  state.gates = { ...state.gates, ...(data.gates || {}) };
+  
+  console.log("[openEvent] Gates after update:", state.gates);
+
+  // Ensure role is properly set
+  if (!state.permissions.role && data.permissions?.role) {
+    state.permissions.role = data.permissions.role;
+  }
+
+  applyAddEventVisibility();
+
+  if (!data.gates && state.selectedEvent) {
+    const st = deriveStatusesFromEvent(state.selectedEvent);
+    state.gates.proposal_approved = st.proposalLc === "approved";
+    state.gates.accomplishment_approved = st.accomplishmentLc === "approved";
+  }
+
+  // Load proposed expenses
+  if (data.proposed_expenses && Array.isArray(data.proposed_expenses)) {
+    state.proposedExpenses = data.proposed_expenses;
+    state.proposedTotal = data.proposed_total || 0;
+  } else {
+    try {
+      const propData = await postJSON({
+        action: "get_proposed_expenses",
+        event_id: state.selectedEventId
+      }).catch(() => ({ items: [], total: 0 }));
+      
+      state.proposedExpenses = propData.items || [];
+      state.proposedTotal = propData.total || 0;
+    } catch (e) {
+      state.proposedExpenses = [];
+      state.proposedTotal = 0;
     }
+  }
 
-    applyAddEventVisibility();
+  // Load accomplishment data - use gates as source of truth
+  const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
+  
+  if (data.accomplishment) {
+    state.accomplishment = {
+      objectives: data.accomplishment.objectives || '',
+      outcomes: data.accomplishment.outcomes || '',
+      challenges: data.accomplishment.challenges || '',
+      status: isAccomplishmentApproved ? 'Approved' : (data.accomplishment.status || 'Draft'),
+      submitted_by: data.accomplishment.submitted_by || 0,
+      submitted_at: data.accomplishment.submitted_at || null,
+      approved_by: data.accomplishment.approved_by || 0,
+      approved_at: data.accomplishment.approved_at || null,
+      declined_reason: data.accomplishment.declined_reason || '',
+      generated_pdf: data.accomplishment.generated_pdf || null
+    };
+  } else {
+    state.accomplishment = {
+      objectives: '',
+      outcomes: '',
+      challenges: '',
+      status: isAccomplishmentApproved ? 'Approved' : 'Draft',
+      submitted_by: 0,
+      submitted_at: null,
+      approved_by: 0,
+      approved_at: null,
+      declined_reason: '',
+      generated_pdf: null
+    };
+  }
 
-    if (!data.gates && state.selectedEvent) {
-      const st = deriveStatusesFromEvent(state.selectedEvent);
-      state.gates.proposal_approved = st.proposalLc === "approved";
-      state.gates.accomplishment_approved = st.accomplishmentLc === "approved";
-    }
+  console.log("[openEvent] Loaded accomplishment:", state.accomplishment);
 
-    // Load proposed expenses
-    if (data.proposed_expenses && Array.isArray(data.proposed_expenses)) {
-      state.proposedExpenses = data.proposed_expenses;
-      state.proposedTotal = data.proposed_total || 0;
-    } else {
-      try {
-        const propData = await postJSON({
-          action: "get_proposed_expenses",
-          event_id: state.selectedEventId
-        }).catch(() => ({ items: [], total: 0 }));
-        
-        state.proposedExpenses = propData.items || [];
-        state.proposedTotal = propData.total || 0;
-      } catch (e) {
-        state.proposedExpenses = [];
-        state.proposedTotal = 0;
-      }
-    }
+  state.credits = Array.isArray(data.credits) ? data.credits : [];
+  state.debits = Array.isArray(data.debits) ? data.debits : [];
+  state.ledger = Array.isArray(data.ledger) ? data.ledger : [];
 
-    // Load accomplishment data
-    if (data.accomplishment) {
-      state.accomplishment = {
-        objectives: data.accomplishment.objectives || '',
-        outcomes: data.accomplishment.outcomes || '',
-        challenges: data.accomplishment.challenges || '',
-        status: data.accomplishment.status || 'Draft',
-        finalized: data.accomplishment.finalized || false,
-        finalized_at: data.accomplishment.finalized_at || null,
-        finalized_by: data.accomplishment.finalized_by || null,
-        generated_pdf: data.accomplishment.generated_pdf || null
-      };
-    } else {
-      state.accomplishment = {
-        objectives: '',
-        outcomes: '',
-        challenges: '',
-        status: 'Draft',
-        finalized: false,
-        finalized_at: null,
-        finalized_by: null,
-        generated_pdf: null
-      };
-    }
+  console.log("[openEvent] State after update:", {
+    credits: state.credits.length,
+    debits: state.debits.length,
+    ledger: state.ledger.length
+  });
 
-    state.credits = Array.isArray(data.credits) ? data.credits : [];
-    state.debits = Array.isArray(data.debits) ? data.debits : [];
-    state.ledger = Array.isArray(data.ledger) ? data.ledger : [];
+  showView("event");
+  renderOverview();
+  applyEventActionVisibility();
+  setGateBadges();
+  applyPrintVisibility();
+  applyApprovalButtons();
+  applyAccomplishmentSubmitButton();
+  applyEventSubmitForApprovalButton();
+  renderCredits();
+  renderDebits();
+  renderLedger();
+  renderAccomplishment();
+  renderAccomplishmentPdfPreview();
+  renderLiquidation();
 
-    showView("event");
-    renderOverview();
-    applyEventActionVisibility();
-    setGateBadges();
-    applyPrintVisibility();
-    applyApprovalButtons();
-    applyAccomplishmentSubmitButton();
-    applyEventSubmitForApprovalButton();
-    renderCredits();
-    renderDebits();
-    renderLedger();
-    renderAccomplishment();
-    renderAccomplishmentPdfPreview();
-    renderLiquidation();
-    renderAccomplishment();
+  const pbRows =
+    (Array.isArray(data.passbook) && data.passbook) ||
+    (Array.isArray(data.passbook_logs) && data.passbook_logs) ||
+    (Array.isArray(data.passbookLog) && data.passbookLog) ||
+    (Array.isArray(data.passbook_rows) && data.passbook_rows) ||
+    [];
 
-    const pbRows =
-      (Array.isArray(data.passbook) && data.passbook) ||
-      (Array.isArray(data.passbook_logs) && data.passbook_logs) ||
-      (Array.isArray(data.passbookLog) && data.passbookLog) ||
-      (Array.isArray(data.passbook_rows) && data.passbook_rows) ||
-      [];
+  state.passbook = pbRows;
 
-    state.passbook = pbRows;
+  const pbPerms =
+    data.passbook_permissions ||
+    data.passbookPerms ||
+    data.passbook_perms ||
+    data.permissions ||
+    {};
 
-    const pbPerms =
-      data.passbook_permissions ||
-      data.passbookPerms ||
-      data.passbook_perms ||
-      data.permissions ||
-      {};
-
-    renderPassbookLog(state.passbook, state.selectedEvent || {}, pbPerms);
-    bindPassbookUI();
-    renderLiquidationPassbook();
-    
-    toast("Event loaded.");
+  renderPassbookLog(state.passbook, state.selectedEvent || {}, pbPerms);
+  bindPassbookUI();
+  renderLiquidationPassbook();
+  
+  toast("Event loaded.");
   }
 
   // ==================== Accomplishment Report Functions ====================
@@ -2430,103 +2683,127 @@
   // ==================== Enhanced Liquidation Functions ====================
 
   function renderLiquidationProposed() {
-    const proposedTbody = qs("#proposedBreakdownTbody");
-    const proposedTotalEl = qs("#proposedBreakdownTotal");
-    const liqProposedTotal = qs("#liqProposedTotal");
+  const proposedTbody = qs("#proposedBreakdownTbody");
+  const proposedTotalEl = qs("#proposedBreakdownTotal");
+  const liqProposedTotal = qs("#liqProposedTotal");
+  const liqActualTotal = qs("#liqActualTotal");
+  const liqVariance = qs("#liqVariance");
+  const varianceBox = qs("#liqVarianceBox");
+  
+  if (!proposedTbody) return;
+  
+  const items = Array.isArray(state.proposedExpenses) ? state.proposedExpenses : [];
+  const proposedTotal = state.proposedTotal || 0;
+  
+  // Calculate actual expenses from debits
+  const actualExpenses = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+  const variance = proposedTotal - actualExpenses;
+  
+  console.log("[LiquidationProposed] Proposed:", proposedTotal, "Actual:", actualExpenses, "Variance:", variance);
+  
+  if (!items.length) {
+    proposedTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No proposed expenses submitted.</td></tr>';
+  } else {
+    proposedTbody.innerHTML = items.map((item, idx) => {
+      const desc = escapeHtml(item.description || '—');
+      const qty = Number(item.quantity || 1);
+      const cost = Number(item.estimated_cost || 0);
+      const total = qty * cost;
+      
+      return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${desc}</td>
+          <td class="text-center">${qty}</td>
+          <td class="text-end">${money(cost)}</td>
+          <td class="text-end fw-semibold">${money(total)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+  
+  if (proposedTotalEl) proposedTotalEl.textContent = money(proposedTotal);
+  if (liqProposedTotal) liqProposedTotal.textContent = money(proposedTotal);
+  if (liqActualTotal) liqActualTotal.textContent = money(actualExpenses);
+  
+  if (liqVariance) {
+    liqVariance.textContent = money(variance);
     
-    if (!proposedTbody) return;
-    
-    const items = state.proposedExpenses || [];
-    const proposedTotal = state.proposedTotal || 0;
-    
-    if (!items.length) {
-      proposedTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No proposed expenses submitted.</td></tr>';
-    } else {
-      proposedTbody.innerHTML = items.map((item, idx) => {
-        const desc = escapeHtml(item.description || '—');
-        const qty = Number(item.quantity || 1);
-        const cost = Number(item.estimated_cost || 0);
-        const total = qty * cost;
-        
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${desc}</td>
-            <td class="text-center">${qty}</td>
-            <td class="text-end">${money(cost)}</td>
-            <td class="text-end fw-semibold">${money(total)}</td>
-          </tr>
-        `;
-      }).join('');
+    if (varianceBox) {
+      if (variance >= 0) {
+        varianceBox.style.backgroundColor = '#d4edda';
+        varianceBox.style.borderColor = '#c3e6cb';
+      } else {
+        varianceBox.style.backgroundColor = '#f8d7da';
+        varianceBox.style.borderColor = '#f5c6cb';
+      }
     }
-    
-    if (proposedTotalEl) proposedTotalEl.textContent = money(proposedTotal);
-    if (liqProposedTotal) liqProposedTotal.textContent = money(proposedTotal);
-    
-    updateVariance();
+  }
   }
 
   function renderLiquidationPassbook() {
-    const tbody = qs("#passbookLiquidationTbody");
-    const depositsEl = qs("#passbookTotalDeposits");
-    const withdrawalsEl = qs("#passbookTotalWithdrawals");
-    const balanceEl = qs("#passbookFinalBalance");
+  const tbody = qs("#passbookLiquidationTbody");
+  const depositsEl = qs("#passbookTotalDeposits");
+  const withdrawalsEl = qs("#passbookTotalWithdrawals");
+  const balanceEl = qs("#passbookFinalBalance");
+  
+  if (!tbody) return;
+  
+  const rows = Array.isArray(state.passbook) ? state.passbook : [];
+  
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No passbook transactions recorded.</td></tr>';
+    return;
+  }
+  
+  // Sort by date for correct running balance
+  const sortedRows = [...rows].sort((a, b) => {
+    const dateA = a.date || a.txn_date || '';
+    const dateB = b.date || b.txn_date || '';
+    if (dateA < dateB) return -1;
+    if (dateA > dateB) return 1;
+    return (a.id || 0) - (b.id || 0);
+  });
+  
+  let totalDeposits = 0;
+  let totalWithdrawals = 0;
+  let runningBalance = 0;
+  
+  tbody.innerHTML = sortedRows.map((r, idx) => {
+    const date = escapeHtml(r.date || r.txn_date || '—');
+    const type = r.txn_type === 'credit' ? 'DEPOSIT' : 'WITHDRAWAL';
+    const typeClass = r.txn_type === 'credit' ? 'text-success' : 'text-danger';
     
-    if (!tbody) return;
+    const title = escapeHtml(r.title || '');
+    const notes = escapeHtml(r.notes || '');
+    const desc = notes ? `${title} - ${notes}` : (title || '—');
     
-    const rows = state.passbook || [];
-    let totalDeposits = 0;
-    let totalWithdrawals = 0;
-    let runningBalance = 0;
+    const deposit = Number(r.amount_in || r.credit || 0);
+    const withdrawal = Number(r.amount_out || r.debit || 0);
     
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No passbook transactions recorded.</td></tr>';
-    } else {
-      // Sort by date for correct running balance
-      const sortedRows = [...rows].sort((a, b) => {
-        const dateA = a.date || a.txn_date || '';
-        const dateB = b.date || b.txn_date || '';
-        if (dateA < dateB) return -1;
-        if (dateA > dateB) return 1;
-        return (a.id || 0) - (b.id || 0);
-      });
-      
-      tbody.innerHTML = sortedRows.map((r, idx) => {
-        const date = escapeHtml(r.date || r.txn_date || '—');
-        const type = r.txn_type === 'credit' ? 'DEPOSIT' : 'WITHDRAWAL';
-        const typeClass = r.txn_type === 'credit' ? 'text-success' : 'text-danger';
-        
-        const title = escapeHtml(r.title || '');
-        const notes = escapeHtml(r.notes || '');
-        const desc = notes ? `${title} - ${notes}` : (title || '—');
-        
-        const deposit = Number(r.amount_in || r.credit || 0);
-        const withdrawal = Number(r.amount_out || r.debit || 0);
-        
-        totalDeposits += deposit;
-        totalWithdrawals += withdrawal;
-        runningBalance += deposit - withdrawal;
-        
-        const ref = escapeHtml(r.ref_table ? `${r.ref_table}#${r.ref_id}` : '—');
-        
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${date}</td>
-            <td class="${typeClass} fw-semibold">${type}</td>
-            <td>${desc}</td>
-            <td class="text-end">${deposit > 0 ? money(deposit) : '—'}</td>
-            <td class="text-end">${withdrawal > 0 ? money(withdrawal) : '—'}</td>
-            <td class="text-end fw-semibold">${money(runningBalance)}</td>
-            <td><small class="text-muted">${ref}</small></td>
-          </tr>
-        `;
-      }).join('');
-    }
+    totalDeposits += deposit;
+    totalWithdrawals += withdrawal;
+    runningBalance += deposit - withdrawal;
     
-    if (depositsEl) depositsEl.textContent = money(totalDeposits);
-    if (withdrawalsEl) withdrawalsEl.textContent = money(totalWithdrawals);
-    if (balanceEl) balanceEl.textContent = money(runningBalance);
+    const ref = escapeHtml(r.ref_table ? `${r.ref_table}#${r.ref_id}` : '—');
+    
+    return `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${date}</td>
+        <td class="${typeClass} fw-semibold">${type}</td>
+        <td>${desc}</td>
+        <td class="text-end">${deposit > 0 ? money(deposit) : '—'}</td>
+        <td class="text-end">${withdrawal > 0 ? money(withdrawal) : '—'}</td>
+        <td class="text-end fw-semibold">${money(runningBalance)}</td>
+        <td><small class="text-muted">${ref}</small></td>
+      </tr>
+    `;
+  }).join('');
+  
+  if (depositsEl) depositsEl.textContent = money(totalDeposits);
+  if (withdrawalsEl) withdrawalsEl.textContent = money(totalWithdrawals);
+  if (balanceEl) balanceEl.textContent = money(runningBalance);
   }
 
   function updateVariance() {
@@ -2555,31 +2832,110 @@
   }
 
   function renderLiquidation() {
-    const e = state.selectedEvent || {};
-    
-    const liqEvent = qs("#liqEvent");
-    const liqOrg = qs("#liqOrg");
-    const liqDate = qs("#liqDate");
-    const liqYear = qs("#liqYear");
-    const liqCredits = qs("#liqCredits");
-    const liqDebits = qs("#liqDebits");
-    const liqBalance = qs("#liqBalance");
+  const e = state.selectedEvent || {};
+  
+  const liqEvent = qs("#liqEvent");
+  const liqOrg = qs("#liqOrg");
+  const liqDate = qs("#liqDate");
+  const liqYear = qs("#liqYear");
+  const liqCredits = qs("#liqCredits");
+  const liqDebits = qs("#liqDebits");
+  const liqBalance = qs("#liqBalance");
 
-    if (liqEvent) liqEvent.textContent = e.title || e.event_name || "—";
-    if (liqOrg) liqOrg.textContent = e.org_name || e.organization || "—";
-    if (liqDate) liqDate.textContent = e.event_date || e.date || "—";
-    if (liqYear) liqYear.textContent = e.school_year || "—";
-    
-    const credits = Number(e.total_credits ?? 0);
-    const debits = Number(e.total_debits ?? 0);
-    const balance = credits - debits;
-    
-    if (liqCredits) liqCredits.textContent = money(credits);
-    if (liqDebits) liqDebits.textContent = money(debits);
-    if (liqBalance) liqBalance.textContent = money(balance);
-    
+  if (liqEvent) liqEvent.textContent = e.title || e.event_name || "—";
+  if (liqOrg) liqOrg.textContent = e.org_name || e.organization || "—";
+  if (liqDate) liqDate.textContent = e.event_date || e.date || "—";
+  if (liqYear) liqYear.textContent = e.school_year || "—";
+  
+  // Calculate totals from credits and debits directly
+  const credits = Array.isArray(state.credits) ? state.credits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+  const debits = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+  const balance = credits - debits;
+  
+  console.log("[Liquidation] Credits:", credits, "Debits:", debits, "Balance:", balance);
+  
+  if (liqCredits) {
+    liqCredits.textContent = money(credits);
+    liqCredits.className = credits > 0 ? 'text-success' : '';
+  }
+  if (liqDebits) {
+    liqDebits.textContent = money(debits);
+    liqDebits.className = debits > 0 ? 'text-danger' : '';
+  }
+  if (liqBalance) {
+    liqBalance.textContent = money(balance);
+    liqBalance.className = balance < 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
+  }
+  
+  // Call these functions only if they exist
+  if (typeof renderLiquidationProposed === 'function') {
     renderLiquidationProposed();
+  }
+  if (typeof renderLiquidationPassbook === 'function') {
     renderLiquidationPassbook();
+  }
+  }
+
+  function renderLiquidationPassbook() {
+    const tbody = qs("#passbookLiquidationTbody");
+    const depositsEl = qs("#passbookTotalDeposits");
+    const withdrawalsEl = qs("#passbookTotalWithdrawals");
+    const balanceEl = qs("#passbookFinalBalance");
+    
+    if (!tbody) return;
+    
+    const rows = state.passbook || [];
+    
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No passbook transactions recorded.</td></tr>';
+      return;
+    }
+    
+    const sortedRows = [...rows].sort((a, b) => {
+      const dateA = a.date || a.txn_date || '';
+      const dateB = b.date || b.txn_date || '';
+      if (dateA < dateB) return -1;
+      if (dateA > dateB) return 1;
+      return (a.id || 0) - (b.id || 0);
+    });
+    
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
+    let runningBalance = 0;
+    
+    tbody.innerHTML = sortedRows.map((r, idx) => {
+      const date = escapeHtml(r.date || r.txn_date || '—');
+      const type = r.txn_type === 'credit' ? 'DEPOSIT' : 'WITHDRAWAL';
+      const typeClass = r.txn_type === 'credit' ? 'text-success' : 'text-danger';
+      
+      const title = escapeHtml(r.title || '');
+      const notes = escapeHtml(r.notes || '');
+      const desc = notes ? `${title} - ${notes}` : (title || '—');
+      
+      const deposit = Number(r.amount_in || 0);
+      const withdrawal = Number(r.amount_out || 0);
+      
+      totalDeposits += deposit;
+      totalWithdrawals += withdrawal;
+      runningBalance += deposit - withdrawal;
+      
+      return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${date}</td>
+          <td class="${typeClass} fw-semibold">${type}</td>
+          <td>${desc}</td>
+          <td class="text-end">${deposit > 0 ? money(deposit) : '—'}</td>
+          <td class="text-end">${withdrawal > 0 ? money(withdrawal) : '—'}</td>
+          <td class="text-end fw-semibold">${money(runningBalance)}</td>
+          <td><small class="text-muted">PB#${r.id}</small></td>
+        </tr>
+      `;
+    }).join('');
+    
+    if (depositsEl) depositsEl.textContent = money(totalDeposits);
+    if (withdrawalsEl) withdrawalsEl.textContent = money(totalWithdrawals);
+    if (balanceEl) balanceEl.textContent = money(runningBalance);
   }
 
   // ==================== End New Functions ====================
