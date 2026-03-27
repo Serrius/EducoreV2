@@ -68,6 +68,8 @@ try {
   $officerTermId = null;
   $officerPosition = null;
   $officerSchoolYear = null;
+  $orgName = '';
+  $orgAbbr = '';
 
   // get ACTIVE academic term (id + school_year)
   $stTerm = $pdo->prepare("
@@ -85,7 +87,7 @@ try {
 
   if ($activeTermId > 0 && $activeSchoolYear !== '') {
     // Find officer record for THIS USER in ANY term under the SAME school_year
-    // (so officers from 1st/2nd remain officers even when the other semester is active)
+    // Prioritize the most recently created/updated record
     $stOff = $pdo->prepare("
       SELECT oo.academic_term_id, oo.position, at.school_year
       FROM organization_officers oo
@@ -102,8 +104,6 @@ try {
     ]);
 
     $offRow = $stOff->fetch(PDO::FETCH_ASSOC);
-    $orgName = '';
-    $orgAbbr = '';
 
     if ($offRow && !empty($offRow['position'])) {
         // Get organization details for this officer
@@ -143,6 +143,18 @@ try {
   }
 
   // -----------------------------
+  // Check if user has dual account (student + officer)
+  // This includes org_president, treasurer, org_officer who are also students
+  // -----------------------------
+  $hasDualAccount = false;
+  if ($isOfficer && ($roleLower === 'student' || $roleLower === 'org_president' || $roleLower === 'treasurer' || $roleLower === 'org_officer')) {
+    $hasDualAccount = true;
+  }
+
+  // Store the original role for reference
+  $originalRole = (string)$user['role'];
+
+  // -----------------------------
   // E-signature: set ONLY when user is NOT an officer
   // -----------------------------
   $signatureFile = null;
@@ -170,6 +182,7 @@ try {
   $_SESSION['user_id'] = (int)$user['id'];
   $_SESSION['role'] = $effectiveRole;
   $_SESSION['is_officer'] = $isOfficer ? 1 : 0;
+  $_SESSION['has_dual_account'] = $hasDualAccount ? 1 : 0;
 
   // keep these for UI/display/filters
   $_SESSION['active_term_id'] = $activeTermId;
@@ -200,8 +213,10 @@ try {
 
     'role' => $effectiveRole,               // "Officer" only if elevated
     'raw_role' => (string)$user['role'],    // original DB role
+    'original_role' => $originalRole,       // original role for reference
 
     'is_officer' => $isOfficer,
+    'has_dual_account' => $hasDualAccount,  // Flag for dual account users
     'active_term_id' => $activeTermId,
     'active_school_year' => $activeSchoolYear,
 
@@ -224,5 +239,6 @@ try {
   ]);
 
 } catch (Throwable $e) {
+  error_log('Login error: ' . $e->getMessage());
   out(false, 'Server error in login.php.');
 }

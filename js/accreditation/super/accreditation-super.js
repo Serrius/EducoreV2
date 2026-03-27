@@ -114,6 +114,9 @@
   // Modals
   // -------------------------
   function safeShowError(msg) {
+    // Prefer the app-wide global (same one used by admin + special admin panels)
+    if (typeof window.showError === "function") return window.showError(msg);
+    // Fallback: the local modal still in the HTML
     const m = rqs("#suErrorModal");
     if (m && window.bootstrap) {
       const body = m.querySelector("[data-role='message']");
@@ -125,6 +128,9 @@
   }
 
   function safeShowSuccess(msg) {
+    // Prefer the app-wide global
+    if (typeof window.showSuccess === "function") return window.showSuccess(msg);
+    // Fallback: the local modal still in the HTML
     const m = rqs("#suSuccessModal");
     if (m && window.bootstrap) {
       const body = m.querySelector("[data-role='message']");
@@ -575,60 +581,30 @@
   // Init
   // -------------------------
   async function init(root = document) {
-    if (store.__inited) return;
-    store.__inited = true;
+    // Always update root so rqs() targets the right element after re-navigation
     store._root = root;
 
-    try {
-      await loadTerms();
-    } catch (e) {
-      console.warn("Could not load terms:", e);
-    }
+    // Reset store so re-entering the page always starts fresh
+    store.search = "";
+    store.recommended = { items: [], page: 1, perPage: store.recommended?.perPage || 10, total: 0, year: "", termId: "" };
+    store.active      = { items: [], page: 1, perPage: store.active?.perPage      || 10, total: 0, year: "", termId: "" };
 
-    fillYearSelect(rqs("#suRecYearFilter"), { includeAllLabel: "All Years" });
-    fillYearSelect(rqs("#suActiveYearFilter"), { includeAllLabel: "All Years" });
-
-    bootModules(root);
-    bindPreviewDelegation(root);
-
-    // Bind recommended modal open + activate
-    const host = root || document;
-    if (!host.__suRecViewBound) {
-      host.__suRecViewBound = true;
-
-      host.addEventListener("click", (e) => {
-        const btn = e.target?.closest?.("[data-su-open-rec]");
-        if (!btn) return;
-        e.preventDefault();
-        const id = Number(btn.getAttribute("data-id") || 0);
-        if (!id) return;
-        openPreviewModal(window.SUAccreditation, id);
-      });
-
-      
-     /* const activateBtn = rqs("#suActivateBtn");
-      if (activateBtn && !activateBtn.__suBound) {
-        activateBtn.__suBound = true;
-        activateBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          activateFromModal(window.SUAccreditation);
-        });
-      } */
-    }
-
-    // Search
+    // Reset search input to match cleared store
     const searchEl = rqs("#suAccSearch");
-    if (searchEl && !searchEl.__suBound) {
-      searchEl.__suBound = true;
-      searchEl.addEventListener(
-        "input",
-        debounce(() => {
-          store.search = String(searchEl.value || "").trim();
-          store.recommended.page = 1;
-          store.active.page = 1;
-          window.SUAccreditation?.refreshAll?.();
-        }, 250)
-      );
+    if (searchEl) {
+      searchEl.value = "";
+      if (!searchEl.__suBound) {
+        searchEl.__suBound = true;
+        searchEl.addEventListener(
+          "input",
+          debounce(() => {
+            store.search = String(searchEl.value || "").trim();
+            store.recommended.page = 1;
+            store.active.page = 1;
+            window.SUAccreditation?.refreshAll?.();
+          }, 250)
+        );
+      }
     }
 
     const refreshBtn = rqs("#suAccRefreshBtn");
@@ -636,6 +612,32 @@
       refreshBtn.__suBound = true;
       refreshBtn.addEventListener("click", () => {
         window.SUAccreditation?.refreshAll?.();
+      });
+    }
+
+    try {
+      await loadTerms();
+    } catch (e) {
+      console.warn("Could not load terms:", e);
+    }
+
+    fillYearSelect(rqs("#suRecommendedYearFilter"), { includeAllLabel: "All Years" });
+    fillYearSelect(rqs("#suActiveYearFilter"), { includeAllLabel: "All Years" });
+
+    bootModules(root);
+    bindPreviewDelegation(root);
+
+    // Bind recommended modal open trigger (guard per host element)
+    const host = root || document;
+    if (!host.__suRecViewBound) {
+      host.__suRecViewBound = true;
+      host.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-su-open-rec]");
+        if (!btn) return;
+        e.preventDefault();
+        const id = Number(btn.getAttribute("data-id") || 0);
+        if (!id) return;
+        openPreviewModal(window.SUAccreditation, id);
       });
     }
 

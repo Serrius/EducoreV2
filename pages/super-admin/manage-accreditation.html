@@ -196,32 +196,72 @@
     </div>
   </div>
 
-  <!-- Success Modal -->
-  <div class="modal fade" id="suSuccessModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content rounded-4">
-        <div class="modal-header">
-          <div class="modal-title h5 mb-0">Success</div>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body" data-role="message">Done.</div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Success/Error modals removed: the app-wide window.showSuccess / window.showError are used instead.
+       The local #suSuccessModal and #suErrorModal are kept as fallback only if the globals are absent.
+       If you still want the local modals as an extra safety net, uncomment them. -->
 
-  <!-- Error Modal -->
-  <div class="modal fade" id="suErrorModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content rounded-4">
+  <!-- =========================
+       VIEW ACTIVE ORGANIZATION
+  ========================== -->
+  <div class="modal fade" id="suViewActiveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-content rounded-4 border-0 shadow">
         <div class="modal-header">
-          <div class="modal-title h5 mb-0">Error</div>
+          <div class="min-w-0">
+            <h5 class="modal-title fw-semibold mb-0">Active Organization</h5>
+            <div class="text-muted small" id="suViewActiveSub">—</div>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body" data-role="message">Something went wrong.</div>
-        <div class="modal-footer">
+        <div class="modal-body">
+
+          <!-- Logo + quick info -->
+          <div class="d-flex flex-wrap gap-3 align-items-center mb-4">
+            <div class="rounded-4 border bg-light d-flex align-items-center justify-content-center overflow-hidden flex-shrink-0"
+                 style="width:72px;height:72px;">
+              <img id="suViewActiveLogoImg" alt="Org Logo"
+                   style="width:100%;height:100%;object-fit:cover;display:none;">
+              <i id="suViewActiveLogoFallback" class="bi bi-image text-muted fs-1"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="fw-semibold fs-5" id="suViewActiveOrgName">—</div>
+              <div class="text-muted small" id="suViewActiveOrgAbbr">—</div>
+            </div>
+            <div class="ms-auto">
+              <span class="badge text-bg-success px-3 py-2" id="suViewActiveStatus">Active</span>
+            </div>
+          </div>
+
+          <!-- Detail grid -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <div class="text-muted small">Scope</div>
+              <div class="fw-semibold" id="suViewActiveScope">—</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Program</div>
+              <div class="fw-semibold" id="suViewActiveProgram">—</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Term</div>
+              <div class="fw-semibold" id="suViewActiveTerm">—</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Coordinator</div>
+              <div class="fw-semibold" id="suViewActiveCoordinator">—</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Moderator (Org President)</div>
+              <div class="fw-semibold" id="suViewActiveModerator">—</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer d-flex justify-content-between align-items-center">
+          <a class="btn btn-outline-primary btn-sm" id="suViewActiveCertBtn"
+             href="#" target="_blank" rel="noopener">
+            <i class="bi bi-printer me-1"></i> Print Certificate
+          </a>
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
         </div>
       </div>

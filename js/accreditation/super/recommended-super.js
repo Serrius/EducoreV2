@@ -261,10 +261,11 @@
   }
 
   window.SUAccreditationRecommended = {
-    init() {
+    init(root) {
       const A = mustBase();
+      // Always re-bind (helpers guard per-element) and always fetch fresh
       bindUI(A);
-      return fetchRecommended(A);
+      return fetchRecommended(A).catch((e) => A.safeShowError(e.message));
     },
     fetchRecommended,
     activateFromModal: function () {

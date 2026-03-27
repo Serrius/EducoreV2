@@ -675,6 +675,9 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
             <button class="btn btn-outline-secondary" type="button" id="saAssignModeratorBtn" style="display: none;">
               <i class="bi bi-person-check me-1"></i> Assign Moderator
             </button>
+            <button class="btn btn-outline-primary" type="button" id="saEditAssignmentBtn">
+              <i class="bi bi-pencil-square me-1"></i> Edit Assignment
+            </button>
             <button class="btn btn-success" type="button" id="saOpenRecommendationBtn">
               <i class="bi bi-file-earmark-arrow-up me-1"></i> Submit Recommendation
             </button>
@@ -937,6 +940,66 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
 </div>
 
 <!-- Assign Moderator Modal -->
+<!-- =====================================================
+     Edit Assignment Modal (moderator + coordinator)
+     ===================================================== -->
+<div class="modal fade" id="saEditAssignmentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">
+          <i class="bi bi-pencil-square me-2"></i>Edit Assignment
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="saEditAssignmentForm">
+        <div class="modal-body">
+          <input type="hidden" id="saEditAssignRequestId">
+
+          <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 mb-3">
+            <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+            <div class="small">
+              Select a new <strong>Moderator</strong> (org_president) and/or a new
+              <strong>Coordinator</strong> (faculty admin). Leave a dropdown on
+              <em>Keep current</em> to leave that assignment unchanged.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Moderator (Org President)
+              <i class="bi bi-info-circle ms-1 text-muted"
+                 data-bs-toggle="tooltip"
+                 title="The org_president who manages this accreditation request."></i>
+            </label>
+            <select class="form-select" id="saEditModeratorSelect">
+              <option value="">— Keep current —</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Coordinator (Faculty Admin)
+              <i class="bi bi-info-circle ms-1 text-muted"
+                 data-bs-toggle="tooltip"
+                 title="The faculty admin who coordinates this accreditation."></i>
+            </label>
+            <select class="form-select" id="saEditCoordinatorSelect">
+              <option value="">— Keep current —</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="saAssignModeratorModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content rounded-4 border-0 shadow" id="saAssignModeratorForm">

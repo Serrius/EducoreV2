@@ -643,27 +643,31 @@
   // ---------- init (called by base)
   function init(root) {
     const A = mustBase();
-
     const r = root || document;
-    if (r.__saFilesInited) return;
-    r.__saFilesInited = true;
 
+    // Always re-bind DOM listeners (bind helpers guard per-element)
     bindManageFiles(A, r);
+
+    // Always fetch fresh data on init / re-navigation
     fetchRequirements(A).catch((e) => A.safeShowError(e.message));
 
-    // react to global search & refresh
-    A.bus.on("search:changed", () => {
-      A.store.reqs.page = 1;
-      fetchRequirements(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load
+    if (!window.__saFilesBusListening) {
+      window.__saFilesBusListening = true;
 
-    A.bus.on("refresh:all", () => {
-      fetchRequirements(A).catch((e) => A.safeShowError(e.message));
-      // mark all templates as stale
-      for (const k of Object.keys(A.store.templatesByReq || {})) {
-        if (A.store.templatesByReq[k]) A.store.templatesByReq[k].loaded = false;
-      }
-    });
+      A.bus.on("search:changed", () => {
+        A.store.reqs.page = 1;
+        fetchRequirements(A).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on("refresh:all", () => {
+        fetchRequirements(A).catch((e) => A.safeShowError(e.message));
+        // mark all templates as stale so they re-load on next expand
+        for (const k of Object.keys(A.store.templatesByReq || {})) {
+          if (A.store.templatesByReq[k]) A.store.templatesByReq[k].loaded = false;
+        }
+      });
+    }
   }
 
   // Allow base to call: window.SAAccreditationFiles.init(root)

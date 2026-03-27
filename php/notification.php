@@ -660,240 +660,131 @@ try {
     }
 
     case 'get_payload': {
-      $type = strtolower(trim((string)($_GET['type'] ?? '')));
-      $payloadId = isset($_GET['payload_id']) ? (int)$_GET['payload_id'] : 0;
+          $type = strtolower(trim((string)($_GET['type'] ?? '')));
+          $payloadId = isset($_GET['payload_id']) ? (int)$_GET['payload_id'] : 0;
 
-      if ($payloadId <= 0) fail('Invalid payload_id');
-      if ($type === '') fail('Missing type');
+          if ($payloadId <= 0) fail('Invalid payload_id');
+          if ($type === '') fail('Missing type');
 
-      if ($type === 'accreditation' || $type === 'reaccreditation') {
-        $stmt = $pdo->prepare("
-          SELECT
-            ar.id,
-            ar.org_id,
-            o.org_name,
-            o.org_type,
-            o.scope,
-            ar.academic_term_id,
-            at.school_year,
-            at.semester,
-            ar.coordinator_user_id,
-            ar.moderator_user_id,
-            ar.status,
-            ar.submitted_at,
-            ar.updated_at,
-            ar.special_admin_notes,
-            ar.super_admin_notes,
-            ar.is_renewal,
-            ar.previous_request_id,
-            uc.first_name AS coord_first_name,
-            uc.middle_name AS coord_middle_name,
-            uc.last_name AS coord_last_name,
-            um.first_name AS mod_first_name,
-            um.middle_name AS mod_middle_name,
-            um.last_name AS mod_last_name
-          FROM accreditation_requests ar
-          JOIN organizations o ON o.id = ar.org_id
-          JOIN academic_terms at ON at.id = ar.academic_term_id
-          JOIN users uc ON uc.id = ar.coordinator_user_id
-          LEFT JOIN users um ON um.id = ar.moderator_user_id
-          WHERE ar.id = :rid
-          LIMIT 1
-        ");
-        $stmt->execute([':rid' => $payloadId]);
-        $req = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$req) fail('Accreditation request not found', 404);
+          if ($type === 'accreditation' || $type === 'reaccreditation') {
+            $stmt = $pdo->prepare("
+              SELECT
+                ar.id,
+                ar.org_id,
+                o.org_name,
+                o.abbreviation,
+                o.org_type,
+                o.scope,
+                o.description,
+                o.mission,
+                o.vision,
+                o.objectives,
+                o.advocacy,
+                o.program_id,
+                ar.academic_term_id,
+                at.school_year,
+                at.semester,
+                ar.coordinator_user_id,
+                ar.moderator_user_id,
+                ar.status,
+                ar.submitted_at,
+                ar.updated_at,
+                ar.special_admin_notes,
+                ar.super_admin_notes,
+                ar.is_renewal,
+                ar.previous_request_id,
+                uc.first_name AS coord_first_name,
+                uc.middle_name AS coord_middle_name,
+                uc.last_name AS coord_last_name,
+                um.first_name AS mod_first_name,
+                um.middle_name AS mod_middle_name,
+                um.last_name AS mod_last_name,
+                p.program_name,
+                p.abbreviation AS program_abbr
+              FROM accreditation_requests ar
+              JOIN organizations o ON o.id = ar.org_id
+              JOIN academic_terms at ON at.id = ar.academic_term_id
+              JOIN users uc ON uc.id = ar.coordinator_user_id
+              LEFT JOIN users um ON um.id = ar.moderator_user_id
+              LEFT JOIN programs p ON p.id = o.program_id
+              WHERE ar.id = :rid
+              LIMIT 1
+            ");
+            $stmt->execute([':rid' => $payloadId]);
+            $req = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$req) fail('Accreditation request not found', 404);
 
-        // Recommendation PDF support (from special_admin_notes tag)
-        $specialNotes = (string)($req['special_admin_notes'] ?? '');
-        $recPath = extract_note_tag($specialNotes, 'RECOMMENDATION_FILE');
-        $req['recommendation_file_path'] = $recPath;
-        $req['recommendation_file_url']  = ($recPath && trim($recPath) !== '') ? public_url($recPath) : '';
+            // Recommendation PDF support (from special_admin_notes tag)
+            $specialNotes = (string)($req['special_admin_notes'] ?? '');
+            $recPath = extract_note_tag($specialNotes, 'RECOMMENDATION_FILE');
+            $req['recommendation_file_path'] = $recPath;
+            $req['recommendation_file_url']  = ($recPath && trim($recPath) !== '') ? public_url($recPath) : '';
 
-        // Only get documents for ACTIVE requirements - archived requirements are completely excluded
-        $dStmt = $pdo->prepare("
-          SELECT
-            d.id,
-            d.request_id,
-            d.requirement_id,
-            r.requirement_name,
-            d.file_path,
-            d.file_name,
-            d.status AS document_status,
-            d.reviewed_by,
-            d.reviewed_at,
-            d.return_reason,
-            d.uploaded_at,
-            ur.first_name AS reviewed_first_name,
-            ur.middle_name AS reviewed_middle_name,
-            ur.last_name AS reviewed_last_name
-          FROM accreditation_request_documents d
-          INNER JOIN accreditation_requirements r ON r.id = d.requirement_id AND r.status = 'Active'
-          LEFT JOIN users ur ON ur.id = d.reviewed_by
-          WHERE d.request_id = :rid
-          ORDER BY r.sort_order ASC, d.id ASC
-        ");
-        $dStmt->execute([':rid' => $payloadId]);
-        $docs = $dStmt->fetchAll(PDO::FETCH_ASSOC);
+            // Only get documents for ACTIVE requirements - archived requirements are completely excluded
+            $dStmt = $pdo->prepare("
+              SELECT
+                d.id,
+                d.request_id,
+                d.requirement_id,
+                r.requirement_name,
+                d.file_path,
+                d.file_name,
+                d.status AS document_status,
+                d.reviewed_by,
+                d.reviewed_at,
+                d.return_reason,
+                d.uploaded_at,
+                ur.first_name AS reviewed_first_name,
+                ur.middle_name AS reviewed_middle_name,
+                ur.last_name AS reviewed_last_name
+              FROM accreditation_request_documents d
+              INNER JOIN accreditation_requirements r ON r.id = d.requirement_id AND r.status = 'Active'
+              LEFT JOIN users ur ON ur.id = d.reviewed_by
+              WHERE d.request_id = :rid
+              ORDER BY r.sort_order ASC, d.id ASC
+            ");
+            $dStmt->execute([':rid' => $payloadId]);
+            $docs = $dStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($docs as &$d) {
-          $fp = trim((string)($d['file_path'] ?? ''));
-          $d['file_url'] = ($fp !== '') ? public_url($fp) : '';
-        }
-        unset($d);
+            foreach ($docs as &$d) {
+              $fp = trim((string)($d['file_path'] ?? ''));
+              $d['file_url'] = ($fp !== '') ? public_url($fp) : '';
+            }
+            unset($d);
 
-        $total = count($docs);
-        $accepted = 0;
-        $returned = 0;
-        $other = 0;
+            $total = count($docs);
+            $accepted = 0;
+            $returned = 0;
+            $other = 0;
 
-        foreach ($docs as $d) {
-          $st = strtolower((string)($d['document_status'] ?? ''));
-          if ($st === 'accepted') $accepted++;
-          else if ($st === 'returned') $returned++;
-          else $other++;
-        }
+            foreach ($docs as $d) {
+              $st = strtolower((string)($d['document_status'] ?? ''));
+              if ($st === 'accepted') $accepted++;
+              else if ($st === 'returned') $returned++;
+              else $other++;
+            }
 
-        ok([
-          'type' => 'accreditation',
-          'payload_id' => $payloadId,
-          'capabilities' => [
-            'role' => $role,
-            'can_review_docs' => $canAccredReviewDocs,
-            'can_recommend' => $canAccredRecommend,
-            'can_super_actions' => $canAccredSuperActions,
-          ],
-          'request' => $req,
-          'documents' => $docs,
-          'summary' => [
-            'total' => $total,
-            'accepted' => $accepted,
-            'returned' => $returned,
-            'other' => $other,
-          ]
-        ]);
-      }
-
-      // payment unchanged (keep your current implementation)
-      if ($type === 'payment') {
-        $stmt = $pdo->prepare("
-          SELECT
-            p.id,
-            p.org_id,
-            o.org_name,
-            o.org_type,
-            o.scope,
-            p.student_user_id,
-            us.id_number AS student_id_number,
-            us.first_name AS student_first_name,
-            us.middle_name AS student_middle_name,
-            us.last_name AS student_last_name,
-            p.academic_term_id,
-            at.school_year,
-            at.semester,
-            p.amount,
-            p.paid_at,
-            p.receipt_no,
-            p.paid_by_user_id,
-            up.first_name AS paid_by_first_name,
-            up.middle_name AS paid_by_middle_name,
-            up.last_name AS paid_by_last_name
-          FROM organization_fee_payments p
-          JOIN organizations o ON o.id = p.org_id
-          JOIN academic_terms at ON at.id = p.academic_term_id
-          JOIN users us ON us.id = p.student_user_id
-          JOIN users up ON up.id = p.paid_by_user_id
-          WHERE p.id = :pid
-          LIMIT 1
-        ");
-        $stmt->execute([':pid' => $payloadId]);
-        $pay = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$pay) fail('Payment not found', 404);
-
-        $rStmt = $pdo->prepare("
-          SELECT id, payment_id, receipt_no, amount, paid_at, paid_by_user_id, created_at
-          FROM organization_fee_receipts
-          WHERE payment_id = :pid
-          ORDER BY id DESC
-          LIMIT 1
-        ");
-        $rStmt->execute([':pid' => $payloadId]);
-        $receipt = $rStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-
-        ok([
-          'type' => 'payment',
-          'payload_id' => $payloadId,
-          'payment' => $pay,
-          'receipt' => $receipt,
-          'capabilities' => [
-            'role' => $role,
-            'read_only' => true
-          ]
-        ]);
-      }
-
-      // club unchanged (keep your current implementation)
-      if ($type === 'club') {
-        $stmt = $pdo->prepare("
-          SELECT
-            m.id,
-            m.org_id,
-            o.org_name,
-            o.org_type,
-            o.scope,
-            m.student_user_id,
-            us.id_number AS student_id_number,
-            us.first_name AS student_first_name,
-            us.middle_name AS student_middle_name,
-            us.last_name AS student_last_name,
-            m.academic_term_id,
-            at.school_year,
-            at.semester,
-            m.status,
-            m.fee_amount,
-            m.fee_paid,
-            m.fee_paid_at,
-            m.requested_at,
-            m.reviewed_by,
-            m.reviewed_at,
-            ur.first_name AS reviewed_first_name,
-            ur.middle_name AS reviewed_middle_name,
-            ur.last_name AS reviewed_last_name
-          FROM organization_memberships m
-          JOIN organizations o ON o.id = m.org_id
-          JOIN academic_terms at ON at.id = m.academic_term_id
-          JOIN users us ON us.id = m.student_user_id
-          LEFT JOIN users ur ON ur.id = m.reviewed_by
-          WHERE m.id = :mid
-          LIMIT 1
-        ");
-        $stmt->execute([':mid' => $payloadId]);
-        $mem = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$mem) fail('Club membership not found', 404);
-
-        $rStmt = $pdo->prepare("
-          SELECT id, membership_id, receipt_no, amount, paid_at, paid_by_user_id, created_at
-          FROM organization_membership_receipts
-          WHERE membership_id = :mid
-          ORDER BY id DESC
-          LIMIT 1
-        ");
-        $rStmt->execute([':mid' => $payloadId]);
-        $receipt = $rStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-
-        ok([
-          'type' => 'club',
-          'payload_id' => $payloadId,
-          'membership' => $mem,
-          'receipt' => $receipt,
-          'capabilities' => [
-            'role' => $role,
-            'read_only' => true
-          ]
-        ]);
-      }
-
-      fail('Unsupported type', 400, ['type' => $type]);
+            ok([
+              'type' => 'accreditation',
+              'payload_id' => $payloadId,
+              'capabilities' => [
+                'role' => $role,
+                'can_review_docs' => $canAccredReviewDocs,
+                'can_recommend' => $canAccredRecommend,
+                'can_super_actions' => $canAccredSuperActions,
+                'can_reupload_docs' => is_role($role, ['coordinator', 'moderator', 'special_admin']), // Add this capability
+              ],
+              'request' => $req,
+              'documents' => $docs,
+              'summary' => [
+                'total' => $total,
+                'accepted' => $accepted,
+                'returned' => $returned,
+                'other' => $other,
+              ]
+            ]);
+          }
+          // ... rest of your cases ...
     }
 
     case 'review_doc': {

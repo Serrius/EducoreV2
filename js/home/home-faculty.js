@@ -200,7 +200,7 @@
 
   function fillUI(root, data) {
     const user = data.user || {};
-    const org = data.organization || null;
+    const orgs = data.organizations || [];
     const kpis = data.kpis || {};
     const ch = data.charts || {};
 
@@ -210,21 +210,48 @@
     if (welcomeUsername) welcomeUsername.textContent = user.name || "Faculty Admin";
     if (welcomeToday) welcomeToday.textContent = formatTodayLong(new Date());
 
-    // Handled org UI
-    const handledOrgName = qs("#handledOrgName", root);
-    const handledOrgScope = qs("#handledOrgScope", root);
+    // Academic Year card
+    const term = data.term || {};
+    const elAcadYear = qs("#displayAcademicYear", root);
+    const elSemester = qs("#displaySemesterLabel", root);
+    if (elAcadYear) elAcadYear.textContent = term.school_year || "—";
+    if (elSemester) elSemester.textContent = term.semester ? term.semester + " Semester" : "—";
 
-    if (!org) {
-      if (handledOrgName) handledOrgName.textContent = "No organization assigned";
-      if (handledOrgScope) handledOrgScope.textContent = "—";
-    } else {
-      if (handledOrgName) handledOrgName.textContent = org.org_name || "—";
-      if (handledOrgScope) {
-        const parts = [];
-        if (org.org_type) parts.push(org.org_type);
-        if (org.scope) parts.push(org.scope);
-        if (org.abbreviation) parts.push(`(${org.abbreviation})`);
-        handledOrgScope.textContent = parts.join(" • ") || "—";
+    // Organizations grid
+    const orgsList = qs("#handledOrgsList", root);
+    const orgCountBadge = qs("#orgCountBadge", root);
+
+    if (orgCountBadge) orgCountBadge.textContent = orgs.length;
+
+    if (orgsList) {
+      if (!orgs.length) {
+        orgsList.innerHTML = `
+          <div class="handled-orgs-empty">
+            <i class="bi bi-building-slash"></i>
+            <p>No organizations assigned.</p>
+          </div>`;
+      } else {
+        orgsList.innerHTML = orgs.map(org => {
+          const typeClass = (org.org_type || "").toLowerCase() === "club" ? "type-club" : "type-organization";
+          const scopeClass = (org.scope || "").toLowerCase() === "exclusive" ? "scope-exclusive" : "scope-general";
+          const isActive = (org.status || "").toLowerCase() === "active";
+          const statusClass = isActive ? "status-active" : "status-inactive";
+          const statusLabel = isActive ? "Active" : (org.status || "Inactive");
+
+          return `
+            <div class="handled-org-item">
+              <span class="handled-org-type ${typeClass}">${esc(org.org_type || "Organization")}</span>
+              <div class="handled-org-name">
+                ${esc(org.org_name || "—")}
+                ${org.abbreviation ? `<span class="handled-org-abbr">${esc(org.abbreviation)}</span>` : ""}
+              </div>
+              ${org.scope ? `<span class="handled-org-scope ${scopeClass}">${esc(org.scope)}</span>` : ""}
+              <div class="handled-org-status">
+                <span class="status-badge ${statusClass}"></span>
+                <span class="small">${esc(statusLabel)}</span>
+              </div>
+            </div>`;
+        }).join("");
       }
     }
 

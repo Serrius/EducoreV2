@@ -73,15 +73,18 @@
       </tr>`;
   }
 
-  async function fetchReturned(A) {
+  async function fetchReturned(A, overridePage) {
     const { store } = A;
     const p = store.returned;
+
+    // Use overridePage if supplied so pagination clicks are never stale
+    const requestPage = (overridePage != null) ? Number(overridePage) : p.page;
 
     const data = await A.postJSON({
       action: "list_requests",
       mode: "returned",
       q: store.search || "",
-      page: p.page,
+      page: requestPage,
       per_page: p.perPage,
     });
 
@@ -118,7 +121,7 @@
 
     A.renderPagination(pag, pagMeta, p.page, p.perPage, p.total, (newPage) => {
       A.store.returned.page = newPage;
-      fetchReturned(A).catch((e) => A.safeShowError(e.message));
+      fetchReturned(A, newPage).catch((e) => A.safeShowError(e.message));
     });
 
     // Initialize tooltips for the edit/view buttons
@@ -353,21 +356,26 @@
   function init(root) {
     const A = mustBase();
     const r = root || document;
-    if (r.__adReturnedInited) return;
-    r.__adReturnedInited = true;
 
+    // Always re-bind DOM listeners (bind helpers guard per-element)
     bindReturned(A, r);
 
-    fetchReturned(A).catch((e) => A.safeShowError(e.message));
+    // Always fetch fresh data on init / re-navigation
+    fetchReturned(A, 1).catch((e) => A.safeShowError(e.message));
 
-    A.bus.on("search:changed", () => {
-      A.store.returned.page = 1;
-      fetchReturned(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load
+    if (!window.__adReturnedBusListening) {
+      window.__adReturnedBusListening = true;
 
-    A.bus.on("refresh:all", () => {
-      fetchReturned(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("search:changed", () => {
+        A.store.returned.page = 1;
+        fetchReturned(A, 1).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on("refresh:all", () => {
+        fetchReturned(A, A.store.returned.page).catch((e) => A.safeShowError(e.message));
+      });
+    }
   }
 
   try {

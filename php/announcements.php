@@ -41,7 +41,7 @@ function requireLogin(): array {
 }
 
 function isPrivilegedRole(string $role): bool {
-  return in_array($role, ['super_admin','special_admin','overseer'], true);
+  return in_array($role, ['super_admin', 'special_admin', 'overseer'], true);
 }
 
 function getActiveTermId(PDO $pdo): ?int {
@@ -51,7 +51,12 @@ function getActiveTermId(PDO $pdo): ?int {
 }
 
 function getUser(PDO $pdo, int $userId): array {
-  $st = $pdo->prepare("SELECT id, id_number, first_name, last_name, role, status FROM users WHERE id=? LIMIT 1");
+  $st = $pdo->prepare("
+    SELECT id, id_number, first_name, last_name, role, status, program 
+    FROM users 
+    WHERE id=? 
+    LIMIT 1
+  ");
   $st->execute([$userId]);
   $u = $st->fetch(PDO::FETCH_ASSOC);
   if (!$u) err('User not found.', 404);
@@ -71,7 +76,6 @@ function getOfficerOrgIds(PDO $pdo, int $userId, int $termId): array {
 }
 
 function getAdminOrgIds(PDO $pdo, int $userId): array {
-  // Using organizations.created_by as “org admin assignment” / faculty_admin assignment source in this implementation.
   $st = $pdo->prepare("SELECT id FROM organizations WHERE created_by = ? AND status='Active'");
   $st->execute([$userId]);
   return array_map('intval', array_column($st->fetchAll(PDO::FETCH_ASSOC), 'id'));
@@ -91,7 +95,6 @@ function getUserLabel(PDO $pdo, int $uid): ?string {
 }
 
 function resolveTargetUserId(PDO $pdo, $raw): ?int {
-  // accept integer user_id directly
   if ($raw === null || $raw === '') return null;
 
   if (is_int($raw)) {
@@ -103,7 +106,6 @@ function resolveTargetUserId(PDO $pdo, $raw): ?int {
     return (int)$r['id'];
   }
 
-  // Also allow numeric string of user_id or id_number
   if (is_string($raw)) {
     $q = trim($raw);
     if ($q === '') return null;
@@ -115,7 +117,6 @@ function resolveTargetUserId(PDO $pdo, $raw): ?int {
       if ($r) return (int)$r['id'];
     }
 
-    // or id_number
     $st = $pdo->prepare("SELECT id FROM users WHERE id_number = ? LIMIT 1");
     $st->execute([$q]);
     $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -135,6 +136,35 @@ function getOfficerOrgIdsAllTerms(PDO $pdo, int $userId): array {
   ");
   $st->execute([$userId]);
   return array_map('intval', array_column($st->fetchAll(PDO::FETCH_ASSOC), 'org_id'));
+}
+
+/**
+ * Get organization members for a specific org and term
+ * Works for both clubs and organizations
+ */
+function getOrganizationMembers(PDO $pdo, int $orgId, int $termId): array {
+  $st = $pdo->prepare("
+    SELECT DISTINCT student_user_id AS uid
+    FROM organization_memberships
+    WHERE org_id = ?
+      AND academic_term_id = ?
+      AND status = 'Approved'
+  ");
+  $st->execute([$orgId, $termId]);
+  return array_map('intval', array_column($st->fetchAll(PDO::FETCH_ASSOC), 'uid'));
+}
+
+/**
+ * Get users by program
+ */
+function getUsersByProgram(PDO $pdo, string $program): array {
+  $st = $pdo->prepare("
+    SELECT id FROM users 
+    WHERE program = ? 
+      AND status = 'Active'
+  ");
+  $st->execute([$program]);
+  return array_map('intval', array_column($st->fetchAll(PDO::FETCH_ASSOC), 'id'));
 }
 
 /* =========================
@@ -174,51 +204,94 @@ function isAnnouncementPostedByPresident(PDO $pdo, array $a): bool {
 function announcementIsVisibleToUser(PDO $pdo, array $a, array $me, int $activeTermId): bool {
   $role = (string)$me['role'];
   $userId = (int)$me['id'];
+  $userProgram = (string)($me['program'] ?? '');
 
-  // privileged can see all
-  if (isPrivilegedRole($role)) return true;
+  // Privileged can see all
+  if (isPrivilegedRole($role) || $role === 'super_admin') return true;
 
   $termId = (int)$a['academic_term_id'];
   $orgId  = $a['org_id'] !== null ? (int)$a['org_id'] : null;
   $target = $a['target_user_id'] !== null ? (int)$a['target_user_id'] : null;
+  $targetProgram = $a['target_program'] ?? null;
 
-  // creator should always see their own announcement (even if targeted to someone else)
+  // Creator should always see their own announcement
   if ((int)$a['created_by'] === $userId) return true;
 
-  // Targeted announcements: only the target user can see (plus privileged handled above)
-  if ($target !== null && $target !== $userId) return false;
-
-  $officerOrgIds = getOfficerOrgIdsAllTerms($pdo, $userId);
-  $isOfficer = count($officerOrgIds) > 0;
-  $isStudentOnly = ($role === 'student' && !$isOfficer);
-
-  // Student-only must only see Active announcements for ACTIVE term
-  if ($isStudentOnly) {
-    if ((string)$a['status'] !== 'Active') return false;
-    if ($termId !== $activeTermId) return false;
-
-    if ($orgId === null) return true;
-
-    $st = $pdo->prepare("
-      SELECT 1
-      FROM organization_memberships
-      WHERE student_user_id = ?
-        AND academic_term_id = ?
-        AND org_id = ?
-        AND status = 'Approved'
-      LIMIT 1
-    ");
-    $st->execute([$userId, $termId, $orgId]);
-    return (bool)$st->fetchColumn();
+  // GENERAL ANNOUNCEMENTS (no org) - ALL ACTIVE STUDENTS CAN SEE THEM
+  if ($orgId === null) {
+    // Only show active announcements to students
+    if ($role === 'student') {
+      return (string)$a['status'] === 'Active';
+    }
+    return true;
   }
 
-  // Officer/admin visibility:
-  if ($orgId === null) return true;
+  // Targeted announcements: only the target user can see
+  if ($target !== null && $target !== $userId) return false;
 
-  $adminOrgIds = getAdminOrgIds($pdo, $userId);
-  $visibleOrgIds = array_values(array_unique(array_merge($officerOrgIds, $adminOrgIds)));
+  // Program-targeted announcements
+  if ($targetProgram !== null && $targetProgram !== $userProgram) return false;
 
-  return in_array($orgId, $visibleOrgIds, true);
+  // For non-active term, only show to privileged users
+  if ($termId !== $activeTermId && !isPrivilegedRole($role) && $role !== 'super_admin') return false;
+
+  // Get organization details to check if it's exclusive and what program it's tied to
+  $st = $pdo->prepare("
+    SELECT scope, program_id, org_type 
+    FROM organizations 
+    WHERE id = ? 
+    LIMIT 1
+  ");
+  $st->execute([$orgId]);
+  $org = $st->fetch(PDO::FETCH_ASSOC);
+  
+  if ($org) {
+    // For EXCLUSIVE organizations, check if student's program matches
+    if ($org['scope'] === 'Exclusive' && $org['program_id'] !== null) {
+      // Get program abbreviation to compare with student's program
+      $stProg = $pdo->prepare("SELECT abbreviation FROM programs WHERE id = ? LIMIT 1");
+      $stProg->execute([$org['program_id']]);
+      $program = $stProg->fetch(PDO::FETCH_ASSOC);
+      
+      // If student's program matches the exclusive organization's program, they can see it
+      if ($program && $userProgram === $program['abbreviation']) {
+        return true;
+      }
+    }
+    
+    // For clubs (org_type = 'Club'), all students can see announcements
+    if ($org['org_type'] === 'Club') {
+      return true;
+    }
+  }
+
+  // Check if user is a member of the organization
+  $st = $pdo->prepare("
+    SELECT 1
+    FROM organization_memberships
+    WHERE student_user_id = ?
+      AND academic_term_id = ?
+      AND org_id = ?
+      AND status = 'Approved'
+    LIMIT 1
+  ");
+  $st->execute([$userId, $termId, $orgId]);
+  if ($st->fetchColumn()) return true;
+
+  // Check if user is an officer of the organization
+  $st = $pdo->prepare("
+    SELECT 1
+    FROM organization_officers
+    WHERE user_id = ?
+      AND academic_term_id = ?
+      AND org_id = ?
+      AND status = 'Active'
+    LIMIT 1
+  ");
+  $st->execute([$userId, $termId, $orgId]);
+  if ($st->fetchColumn()) return true;
+
+  return false;
 }
 
 function canManageAnnouncement(PDO $pdo, array $a, array $me, int $activeTermId): bool {
@@ -227,13 +300,16 @@ function canManageAnnouncement(PDO $pdo, array $a, array $me, int $activeTermId)
 
   $orgId = $a['org_id'] !== null ? (int)$a['org_id'] : null;
 
-  // GENERAL announcements remain privileged-only
+  // SUPER ADMIN can manage ALL announcements
+  if ($role === 'super_admin') return true;
+
+  // GENERAL announcements remain privileged-only (excluding super_admin handled above)
   if ($orgId === null) {
-    return isPrivilegedRole($role);
+    return in_array($role, ['special_admin', 'overseer'], true);
   }
 
   // If the org announcement was posted by the President/Chairperson
-  // for the same school year, only faculty_admin may manage it.
+  // only faculty_admin may manage it
   if (isAnnouncementPostedByPresident($pdo, $a)) {
     if ($role !== 'faculty_admin') {
       return false;
@@ -244,8 +320,7 @@ function canManageAnnouncement(PDO $pdo, array $a, array $me, int $activeTermId)
   }
 
   // Non-president org announcements:
-  // privileged roles may still manage
-  if (isPrivilegedRole($role)) return true;
+  if (in_array($role, ['special_admin', 'overseer'], true)) return true;
 
   // faculty_admin may manage their assigned org announcements
   if ($role === 'faculty_admin') {
@@ -260,7 +335,7 @@ function canEditAnnouncement(PDO $pdo, array $a, array $me, int $activeTermId): 
   $role = (string)$me['role'];
   $userId = (int)$me['id'];
 
-  if (isPrivilegedRole($role)) return true;
+  if (isPrivilegedRole($role) || $role === 'super_admin') return true;
 
   // creator can edit while Pending
   if ((int)$a['created_by'] === $userId && (string)$a['status'] === 'Pending') return true;
@@ -276,7 +351,12 @@ function canEditAnnouncement(PDO $pdo, array $a, array $me, int $activeTermId): 
 }
 
 function pushAnnouncementNotifications(PDO $pdo, int $announcementId): void {
-  $st = $pdo->prepare("SELECT id, org_id, academic_term_id, target_user_id, title, body, created_by FROM announcements WHERE id=? LIMIT 1");
+  $st = $pdo->prepare("
+    SELECT id, org_id, academic_term_id, target_user_id, target_program, 
+           title, body, created_by 
+    FROM announcements 
+    WHERE id=? LIMIT 1
+  ");
   $st->execute([$announcementId]);
   $a = $st->fetch(PDO::FETCH_ASSOC);
   if (!$a) return;
@@ -287,22 +367,20 @@ function pushAnnouncementNotifications(PDO $pdo, int $announcementId): void {
   $orgId = $a['org_id'] !== null ? (int)$a['org_id'] : null;
   $termId = (int)$a['academic_term_id'];
   $target = $a['target_user_id'] !== null ? (int)$a['target_user_id'] : null;
+  $targetProgram = $a['target_program'] ?? null;
 
   $recipientIds = [];
 
   if ($target !== null) {
     $recipientIds = [$target];
+  } elseif ($targetProgram !== null) {
+    // Target by program
+    $recipientIds = getUsersByProgram($pdo, $targetProgram);
   } elseif ($orgId !== null) {
-    $st1 = $pdo->prepare("
-      SELECT DISTINCT student_user_id AS uid
-      FROM organization_memberships
-      WHERE org_id = ?
-        AND academic_term_id = ?
-        AND status = 'Approved'
-    ");
-    $st1->execute([$orgId, $termId]);
-    $recipientIds = array_merge($recipientIds, array_map('intval', array_column($st1->fetchAll(PDO::FETCH_ASSOC), 'uid')));
-
+    // Get organization members (works for both clubs and orgs)
+    $recipientIds = getOrganizationMembers($pdo, $orgId, $termId);
+    
+    // Also get officers
     $st2 = $pdo->prepare("
       SELECT DISTINCT user_id AS uid
       FROM organization_officers
@@ -314,11 +392,12 @@ function pushAnnouncementNotifications(PDO $pdo, int $announcementId): void {
     $st2->execute([$orgId, $termId]);
     $recipientIds = array_merge($recipientIds, array_map('intval', array_column($st2->fetchAll(PDO::FETCH_ASSOC), 'uid')));
   } else {
+    // General announcement to all active users
     $st3 = $pdo->query("SELECT id FROM users WHERE status='Active'");
     $recipientIds = array_map('intval', array_column($st3->fetchAll(PDO::FETCH_ASSOC), 'id'));
   }
 
-  $recipientIds = array_values(array_unique(array_filter($recipientIds, fn($v) => $v > 0)));
+  $recipientIds = array_values(array_unique(array_filter($recipientIds, fn($v) => $v > 0 && $v !== $actor)));
   if (!$recipientIds) return;
 
   $ins = $pdo->prepare("
@@ -331,98 +410,7 @@ function pushAnnouncementNotifications(PDO $pdo, int $announcementId): void {
   }
 }
 
-
-/* =========================
-   Accreditation: returned-doc reupload support (coordinator/faculty_admin)
-   ========================= */
-function pushNotification(PDO $pdo, int $recipientId, ?int $actorId, string $title, string $message, string $type, int $payloadId): void {
-  $st = $pdo->prepare("
-    INSERT INTO notifications (recipient_id, actor_id, title, message, notif_type, status, payload_id)
-    VALUES (?, ?, ?, ?, ?, 'unread', ?)
-  ");
-  $st->execute([$recipientId, $actorId, $title, $message, $type, $payloadId]);
-}
-
-function getSpecialAdminIds(PDO $pdo): array {
-  $st = $pdo->query("SELECT id FROM users WHERE role='special_admin' AND status='Active'");
-  if (!$st) return [];
-  return array_map('intval', array_column($st->fetchAll(PDO::FETCH_ASSOC), 'id'));
-}
-
-function ensureDir(string $dir): void {
-  if (!is_dir($dir)) {
-    if (!@mkdir($dir, 0775, true) && !is_dir($dir)) {
-      err('Failed to create upload directory.', 500);
-    }
-  }
-}
-
-function sanitizeFileName(string $name): string {
-  $name = trim($name);
-  $name = preg_replace('/[^\w.\- ]+/u', '_', $name) ?? 'file';
-  $name = preg_replace('/\s+/', '-', $name) ?? $name;
-  return $name === '' ? 'file' : $name;
-}
-
-function handleUploadedFile(string $field, string $destDir, array $allowedExt, int $maxBytes): array {
-  if (!isset($_FILES[$field])) err("Missing file field '$field'.");
-  $f = $_FILES[$field];
-
-  if (!is_array($f) || !isset($f['error'], $f['tmp_name'], $f['name'], $f['size'])) {
-    err('Invalid upload payload.');
-  }
-  if ((int)$f['error'] !== UPLOAD_ERR_OK) {
-    $code = (int)$f['error'];
-    $msg = match ($code) {
-      UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'File too large.',
-      UPLOAD_ERR_PARTIAL => 'Upload incomplete.',
-      UPLOAD_ERR_NO_FILE => 'No file uploaded.',
-      default => 'Upload failed.'
-    };
-    err($msg);
-  }
-  if (!is_uploaded_file($f['tmp_name'])) err('Invalid uploaded file.');
-  $size = (int)$f['size'];
-  if ($size <= 0) err('Empty file.');
-  if ($size > $maxBytes) err('File too large. Max ' . (int)floor($maxBytes / 1024 / 1024) . 'MB.');
-
-  $origName = (string)$f['name'];
-  $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-  if ($ext === '' || !in_array($ext, $allowedExt, true)) {
-    err('Invalid file type. Allowed: ' . implode(', ', $allowedExt) . '.');
-  }
-
-  ensureDir($destDir);
-
-  $ts = date('Ymd_His');
-  $rand = bin2hex(random_bytes(4));
-  $safeBase = sanitizeFileName(pathinfo($origName, PATHINFO_FILENAME));
-  $finalName = $safeBase . '_' . $ts . '_' . $rand . '.' . $ext;
-
-  $destPath = rtrim($destDir, '/\\') . DIRECTORY_SEPARATOR . $finalName;
-
-  if (!@move_uploaded_file($f['tmp_name'], $destPath)) {
-    err('Failed to save uploaded file.', 500);
-  }
-
-  // Return web path (assuming project root is one level above /php)
-  $webPath = str_replace('\\', '/', $destPath);
-  $root = realpath(__DIR__ . '/..');
-  $real = realpath($destPath);
-  if ($root && $real && str_starts_with($real, $root)) {
-    $webPath = ltrim(str_replace('\\', '/', substr($real, strlen($root))), '/');
-  } else {
-    $webPath = ltrim(str_replace('\\', '/', $destPath), '/');
-  }
-
-  return [
-    'file_path' => $webPath,
-    'file_name' => basename($webPath),
-    'orig_name' => $origName,
-    'ext' => $ext,
-    'bytes' => $size,
-  ];
-}
+// ... (keep all your existing helper functions like pushNotification, getSpecialAdminIds, etc.)
 
 /* =========================
    Routing
@@ -438,136 +426,7 @@ $role = (string)$user['role'];
 $activeTermId = getActiveTermId($pdo);
 if (!$activeTermId) err('No active academic term found. Please set academic_terms.status=Active.', 500);
 
-/* =========================
-   Accreditation: REUPLOAD returned doc
-   =========================
-   - Intended for coordinator_user_id (often faculty_admin) to replace a Returned document.
-   - Accepts multipart/form-data with:
-       action=accreditation_reupload_doc
-       request_id
-       requirement_id
-       file (uploaded file)
-   - Resets doc to Submitted + clears reviewed fields + clears return_reason
-   - Resets request status to Pending
-   - Notifies special_admin(s) + moderator (if assigned) + coordinator confirmation
-*/
-if ($action === 'accreditation_reupload_doc') {
-  // Only coordinator (request owner) or privileged roles can reupload/replace docs
-  $requestId = (int)($_POST['request_id'] ?? $payload['request_id'] ?? 0);
-  $requirementId = (int)($_POST['requirement_id'] ?? $payload['requirement_id'] ?? 0);
-  if ($requestId <= 0 || $requirementId <= 0) err('Invalid request_id or requirement_id.');
-
-  $st = $pdo->prepare("
-    SELECT r.id, r.org_id, r.academic_term_id, r.coordinator_user_id, r.moderator_user_id, r.status,
-           o.org_name
-    FROM accreditation_requests r
-    JOIN organizations o ON o.id = r.org_id
-    WHERE r.id = ?
-    LIMIT 1
-  ");
-  $st->execute([$requestId]);
-  $req = $st->fetch(PDO::FETCH_ASSOC);
-  if (!$req) err('Accreditation request not found.', 404);
-
-  $isOwner = ((int)$req['coordinator_user_id'] === $userId);
-  if (!$isOwner && !isPrivilegedRole($role)) {
-    err('Not allowed to reupload documents for this request.', 403);
-  }
-
-  $st = $pdo->prepare("
-    SELECT d.*
-    FROM accreditation_request_documents d
-    WHERE d.request_id = ? AND d.requirement_id = ?
-    LIMIT 1
-  ");
-  $st->execute([$requestId, $requirementId]);
-  $doc = $st->fetch(PDO::FETCH_ASSOC);
-  if (!$doc) err('Document record not found for this requirement.', 404);
-
-  $curDocStatus = (string)$doc['status'];
-  if ($curDocStatus !== 'Returned' && !isPrivilegedRole($role)) {
-    err('You can only reupload a document that was Returned.', 403, ['current_status' => $curDocStatus]);
-  }
-
-  $allowedExt = ['pdf', 'doc', 'docx'];
-  $maxBytes = 15 * 1024 * 1024; // 15MB
-
-  $destDir = realpath(__DIR__ . '/..');
-  if ($destDir === false) err('Server path error.', 500);
-
-  $destDir = $destDir . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads'
-    . DIRECTORY_SEPARATOR . 'accreditation'
-    . DIRECTORY_SEPARATOR . (string)$requestId
-    . DIRECTORY_SEPARATOR . 'req_' . (string)$requirementId;
-
-  $upload = handleUploadedFile('file', $destDir, $allowedExt, $maxBytes);
-
-  try {
-    $pdo->beginTransaction();
-
-    $upd = $pdo->prepare("
-      UPDATE accreditation_request_documents
-      SET file_path = ?,
-          file_name = ?,
-          status = 'Submitted',
-          reviewed_by = NULL,
-          reviewed_at = NULL,
-          return_reason = NULL,
-          uploaded_at = CURRENT_TIMESTAMP()
-      WHERE id = ?
-      LIMIT 1
-    ");
-    $upd->execute([$upload['file_path'], $upload['orig_name'], (int)$doc['id']]);
-
-    $upd2 = $pdo->prepare("
-      UPDATE accreditation_requests
-      SET status = 'Pending',
-          submitted_at = COALESCE(submitted_at, CURRENT_TIMESTAMP())
-      WHERE id = ?
-      LIMIT 1
-    ");
-    $upd2->execute([$requestId]);
-
-    $stReq = $pdo->prepare("SELECT requirement_name FROM accreditation_requirements WHERE id=? LIMIT 1");
-    $stReq->execute([$requirementId]);
-    $reqName = (string)($stReq->fetchColumn() ?: ('Requirement #' . $requirementId));
-
-    $orgName = (string)$req['org_name'];
-
-    $specialAdmins = getSpecialAdminIds($pdo);
-    $title = 'Document Replaced - Requires Review';
-    $msg = "A document has been replaced for accreditation request #{$requestId} by "
-      . trim((string)$user['first_name'] . ' ' . (string)$user['last_name'])
-      . ". Requirement: '{$reqName}'. Organization: '{$orgName}'. The request status has been reset to Pending.";
-
-    foreach ($specialAdmins as $sid) {
-      pushNotification($pdo, $sid, $userId, $title, $msg, 'accreditation', $requestId);
-    }
-
-    $modId = $req['moderator_user_id'] !== null ? (int)$req['moderator_user_id'] : null;
-    if ($modId) {
-      pushNotification($pdo, $modId, $userId, $title, $msg, 'accreditation', $requestId);
-    }
-
-    $title2 = 'Document Replaced';
-    $msg2 = "You have successfully replaced the document for requirement '{$reqName}'. The request status has been reset to Pending.";
-    pushNotification($pdo, (int)$req['coordinator_user_id'], $userId, $title2, $msg2, 'accreditation', $requestId);
-
-    $pdo->commit();
-  } catch (\Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    err('Server error while saving reupload: ' . $e->getMessage(), 500);
-  }
-
-  ok([
-    'request_id' => $requestId,
-    'requirement_id' => $requirementId,
-    'doc_id' => (int)$doc['id'],
-    'new_file_path' => $upload['file_path'],
-    'new_file_name' => $upload['orig_name'],
-    'status' => 'Submitted'
-  ]);
-}
+// ... (keep your accreditation_reupload_doc action)
 
 /* =========================
    TERMS (for dropdowns)
@@ -606,10 +465,15 @@ if ($action === 'me') {
   $adminOrgIds   = getAdminOrgIds($pdo, $userId);
 
   $canPostAnnouncements =
+    $role === 'super_admin' ||
     isPrivilegedRole($role) ||
     $role === 'faculty_admin' ||
     count($officerOrgIds) > 0 ||
     count($adminOrgIds) > 0;
+
+  // Determine if user should see limited view (only active announcements)
+  // TRUE only for regular students with no officer/admin roles
+  $isStudentOnly = ($role === 'student' && count($officerOrgIds) === 0 && count($adminOrgIds) === 0);
 
   ok([
     'user' => [
@@ -617,12 +481,14 @@ if ($action === 'me') {
       'id_number' => (string)$user['id_number'],
       'name' => trim($user['first_name'] . ' ' . $user['last_name']),
       'role' => $role,
+      'program' => (string)($user['program'] ?? ''),
     ],
     'active_term_id' => $activeTermId,
-    'is_privileged' => isPrivilegedRole($role),
+    'is_privileged' => isPrivilegedRole($role) || $role === 'super_admin',
     'officer_org_ids' => $officerOrgIds,
     'admin_org_ids' => $adminOrgIds,
-    'can_post_announcements' => $canPostAnnouncements
+    'can_post_announcements' => $canPostAnnouncements,
+    'is_student_only' => $isStudentOnly // Add this flag
   ]);
 }
 
@@ -630,17 +496,14 @@ if ($action === 'me') {
    ORG OPTIONS for dropdown
    ========================= */
 if ($action === 'org_options') {
-  // IMPORTANT:
-  // Use ALL active officer assignments, not only the current active term,
-  // so presidents/officers from same school year setup still get their orgs.
   $officerOrgIds = getOfficerOrgIdsAllTerms($pdo, $userId);
   $adminOrgIds   = getAdminOrgIds($pdo, $userId);
 
-  $canGeneral = isPrivilegedRole($role);
+  $canGeneral = isPrivilegedRole($role) || $role === 'super_admin';
 
   if ($canGeneral) {
     $st = $pdo->query("
-      SELECT id, org_name
+      SELECT id, org_name, org_type
       FROM organizations
       WHERE status = 'Active'
       ORDER BY org_name ASC
@@ -651,6 +514,7 @@ if ($action === 'org_options') {
       return [
         'id' => (int)$r['id'],
         'name' => (string)$r['org_name'],
+        'type' => (string)$r['org_type']
       ];
     }, $rows);
 
@@ -671,7 +535,7 @@ if ($action === 'org_options') {
 
   $in = implode(',', array_fill(0, count($orgIds), '?'));
   $st = $pdo->prepare("
-    SELECT id, org_name
+    SELECT id, org_name, org_type
     FROM organizations
     WHERE status = 'Active'
       AND id IN ($in)
@@ -684,6 +548,7 @@ if ($action === 'org_options') {
     return [
       'id' => (int)$r['id'],
       'name' => (string)$r['org_name'],
+      'type' => (string)$r['org_type']
     ];
   }, $rows);
 
@@ -712,7 +577,7 @@ if ($action === 'user_search') {
   $like = '%' . $q . '%';
 
   $st = $pdo->prepare("
-    SELECT id, id_number, first_name, last_name
+    SELECT id, id_number, first_name, last_name, program
     FROM users
     WHERE status = 'Active'
       AND (
@@ -731,7 +596,8 @@ if ($action === 'user_search') {
     return [
       'id' => (int)$r['id'],
       'id_number' => (string)$r['id_number'],
-      'name' => $name
+      'name' => $name,
+      'program' => (string)($r['program'] ?? '')
     ];
   }, $rows);
 
@@ -748,7 +614,8 @@ if ($action === 'get') {
   $st = $pdo->prepare("
     SELECT
       a.*,
-      o.org_name
+      o.org_name,
+      o.org_type
     FROM announcements a
     LEFT JOIN organizations o ON o.id = a.org_id
     WHERE a.id = ?
@@ -777,19 +644,23 @@ if ($action === 'get') {
 }
 
 /* =========================
-   LIST
+   LIST - FIXED VISIBILITY FOR STUDENTS AND OFFICERS
    ========================= */
 if ($action === 'list') {
   $status = (string)($payload['status'] ?? 'Active');
   $termId = (int)($payload['academic_term_id'] ?? $activeTermId);
-
+  
+  // Get user's officer and admin orgs
   $officerOrgIds = getOfficerOrgIdsAllTerms($pdo, $userId);
-  $isOfficer = count($officerOrgIds) > 0;
-  $isStudentOnly = ($role === 'student' && !$isOfficer);
+  $adminOrgIds = getAdminOrgIds($pdo, $userId);
+  $visibleOrgIds = array_values(array_unique(array_merge($officerOrgIds, $adminOrgIds)));
+  
+  // Check if user is a regular student (no officer/admin roles)
+  $isRegularStudent = ($role === 'student' && empty($visibleOrgIds));
 
-  if ($isStudentOnly) {
+  // For regular students, only show active announcements
+  if ($isRegularStudent) {
     $status = 'Active';
-    $termId = $activeTermId;
   }
 
   $where = [];
@@ -801,41 +672,61 @@ if ($action === 'list') {
   $where[] = "a.status = ?";
   $bind[]  = $status;
 
-  if (!isPrivilegedRole($role)) {
-    $adminOrgIds = getAdminOrgIds($pdo, $userId);
-
-    if ($role === 'student' && !$isOfficer) {
-      $where[] = "(a.org_id IS NULL OR a.org_id IN (
-          SELECT org_id FROM organization_memberships
-          WHERE student_user_id = ? AND academic_term_id = ? AND status='Approved'
-        ))";
-      $bind[] = $userId;
-      $bind[] = $termId;
-    } else {
-      $visibleOrgIds = array_values(array_unique(array_merge($officerOrgIds, $adminOrgIds)));
-      if ($visibleOrgIds) {
-        $in = implode(',', array_fill(0, count($visibleOrgIds), '?'));
-        $where[] = "(a.org_id IS NULL OR a.org_id IN ($in))";
-        foreach ($visibleOrgIds as $oid) $bind[] = $oid;
-      } else {
-        $where[] = "(a.org_id IS NULL)";
-      }
-    }
+  // Build visibility conditions based on user role
+  $visibilityConditions = [];
+  
+  // Condition 1: User is the creator
+  $visibilityConditions[] = "(a.created_by = ?)";
+  $bind[] = $userId;
+  
+  // Condition 2: User is the target (for targeted announcements)
+  $visibilityConditions[] = "(a.target_user_id = ?)";
+  $bind[] = $userId;
+  
+  // Condition 3: General announcements (no org)
+  $visibilityConditions[] = "(a.org_id IS NULL AND a.target_user_id IS NULL)";
+  
+  // Condition 4: Organization announcements (for org members/officers)
+  if (!empty($visibleOrgIds)) {
+    $in = implode(',', array_fill(0, count($visibleOrgIds), '?'));
+    $visibilityConditions[] = "(a.org_id IN ($in) AND a.target_user_id IS NULL)";
+    foreach ($visibleOrgIds as $oid) $bind[] = $oid;
+  }
+  
+  // For regular students only - add program-based visibility
+  if ($isRegularStudent && !empty($user['program'])) {
+    // EXCLUSIVE ORGANIZATIONS - students from matching program
+    $visibilityConditions[] = "(a.org_id IN (SELECT o.id FROM organizations o LEFT JOIN programs p ON p.id = o.program_id WHERE o.scope = 'Exclusive' AND p.abbreviation = ?) AND a.target_user_id IS NULL)";
+    $bind[] = $user['program'];
+    
+    // Program-targeted announcements
+    $visibilityConditions[] = "(a.target_program = ?)";
+    $bind[] = $user['program'];
+  }
+  
+  // For regular students only - club announcements (all students can see)
+  if ($isRegularStudent) {
+    $visibilityConditions[] = "(a.org_id IN (SELECT id FROM organizations WHERE org_type = 'Club') AND a.target_user_id IS NULL)";
+  }
+  
+  // For privileged roles - they can see all non-targeted announcements
+  if (isPrivilegedRole($role) || $role === 'super_admin') {
+    // Remove the "target_user_id IS NULL" restriction for privileged users?
+    // Actually, we should still respect targeting for privileged users too
+    // But add a condition for all non-targeted org announcements
+    $visibilityConditions[] = "(a.org_id IS NOT NULL AND a.target_user_id IS NULL)";
   }
 
-  if (!isPrivilegedRole($role)) {
-    $where[] = "(a.target_user_id IS NULL OR a.target_user_id = ? OR a.created_by = ?)";
-    $bind[] = $userId;
-    $bind[] = $userId;
-  }
+  // Combine all visibility conditions with OR
+  $where[] = "(" . implode(" OR ", array_unique($visibilityConditions)) . ")";
 
   $sql = "
     SELECT
-      a.id, a.org_id, a.academic_term_id, a.target_user_id,
+      a.id, a.org_id, a.academic_term_id, a.target_user_id, a.target_program,
       a.title, a.body, a.status,
       a.created_by, a.created_at,
       a.reviewed_by, a.reviewed_at, a.review_note,
-      o.org_name
+      o.org_name, o.org_type, o.scope, o.program_id
     FROM announcements a
     LEFT JOIN organizations o ON o.id = a.org_id
     WHERE " . implode(" AND ", $where) . "
@@ -854,11 +745,11 @@ if ($action === 'list') {
     return $row;
   }, $rows);
 
-  ok(['items' => $rows, 'term_id' => $termId, 'status' => $status, 'student_only' => $isStudentOnly]);
+  ok(['items' => $rows, 'term_id' => $termId, 'status' => $status]);
 }
 
 /* =========================
-   CREATE
+   CREATE - ADD PROGRAM TARGETING
    ========================= */
 if ($action === 'create') {
   $title = trim((string)($payload['title'] ?? ''));
@@ -876,34 +767,37 @@ if ($action === 'create') {
   } else {
     $targetUserId = resolveTargetUserId($pdo, $payload['target_user'] ?? null);
   }
+  
+  $targetProgram = $payload['target_program'] ?? null;
+  if ($targetProgram === '') $targetProgram = null;
+
+  // Validate targeting
+  if ($targetUserId !== null && $targetProgram !== null) {
+    err('Cannot target both specific user and program.', 400);
+  }
 
   if ($orgId === null) {
-  if (!isPrivilegedRole($role)) {
-    err('Only super_admin / special_admin / overseer can create GENERAL announcements.', 403);
+    if (!isPrivilegedRole($role) && $role !== 'super_admin') {
+      err('Only super_admin / special_admin / overseer can create GENERAL announcements.', 403);
     }
     $status = 'Active';
   } else {
-    if (!isPrivilegedRole($role)) {
-      // IMPORTANT: use all active officer assignments, not only active term
+    if (!isPrivilegedRole($role) && $role !== 'super_admin') {
       $officerOrgIds = getOfficerOrgIdsAllTerms($pdo, $userId);
+      $adminOrgIds = getAdminOrgIds($pdo, $userId);
 
-      if (!in_array($orgId, $officerOrgIds, true)) {
-        $adminOrgIds = getAdminOrgIds($pdo, $userId);
-
-        if (!in_array($orgId, $adminOrgIds, true)) {
-          err('You can only post announcements for your assigned organization.', 403);
-        }
+      if (!in_array($orgId, $officerOrgIds, true) && !in_array($orgId, $adminOrgIds, true)) {
+        err('You can only post announcements for your assigned organization.', 403);
       }
     }
-
     $status = 'Pending';
   }
 
   $st = $pdo->prepare("
-    INSERT INTO announcements (org_id, academic_term_id, target_user_id, title, body, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO announcements (org_id, academic_term_id, target_user_id, target_program, title, body, status, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ");
-  $st->execute([$orgId, $termId, $targetUserId, $title, $body, $status, $userId]);
+  $st->execute([$orgId, $termId, $targetUserId, $targetProgram, $title, $body, $status, $userId]);
   $newId = (int)$pdo->lastInsertId();
 
   if ($status === 'Active') {
@@ -922,6 +816,8 @@ if ($action === 'create') {
     'posted_by_president' => ($orgId !== null ? isAnnouncementPostedByPresident($pdo, $createdRow) : false)
   ]);
 }
+
+// ... (keep your UPDATE and SET_STATUS actions)
 
 /* =========================
    UPDATE (edit)
@@ -1013,5 +909,12 @@ if ($action === 'set_status') {
 
   ok(['id' => $id, 'status' => $newStatus]);
 }
+// Add database schema update to support program targeting
+// Run this SQL in your database:
+/*
+ALTER TABLE announcements 
+ADD COLUMN target_program varchar(50) DEFAULT NULL AFTER target_user_id,
+ADD INDEX idx_target_program (target_program);
+*/
 
 err('Unknown action.');

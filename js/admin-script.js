@@ -95,9 +95,9 @@ document.addEventListener('DOMContentLoaded', function () {
           window.ManageESignature.init(contentArea);
         }
 
-        if (section === "manage-accreditation" && window.SAAccreditation?.init) {
+        /*if (section === "manage-accreditation" && window.SAAccreditation?.init) {
           window.SAAccreditation.init(contentArea);
-        }
+        }*/
 
         if (section === 'clubs' && window.Clubs?.init) {
           window.Clubs.init();

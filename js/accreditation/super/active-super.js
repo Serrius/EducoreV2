@@ -66,15 +66,21 @@
         <td class="sa-wrap">${term}</td>
         <td>${badge(status)}</td>
         <td class="text-end">
-          <a class="btn btn-outline-primary btn-sm"
-             href="${hrefEscaped}"
-             target="_blank"
-             rel="noopener"
-             data-action="print"
-             data-url="${dataUrlRaw}"
-             ${certResolved ? "" : "disabled"}>
-            <i class="bi bi-printer"></i> Print
-          </a>
+          <div class="d-flex gap-1 justify-content-end">
+            <button class="btn btn-outline-secondary btn-sm" type="button"
+                    data-action="view" title="View details">
+              <i class="bi bi-eye"></i>
+            </button>
+            <a class="btn btn-outline-primary btn-sm"
+               href="${hrefEscaped}"
+               target="_blank"
+               rel="noopener"
+               data-action="print"
+               data-url="${dataUrlRaw}"
+               ${certResolved ? "" : "disabled"}>
+              <i class="bi bi-printer"></i> Print
+            </a>
+          </div>
         </td>
       </tr>
     `;
@@ -138,6 +144,64 @@
     });
   }
 
+  // -------------------------
+  // View modal for active requests
+  // -------------------------
+  async function openViewModalActive(A, requestId) {
+    const modalEl = A.rqs("#suViewActiveModal");
+    if (!modalEl || !window.bootstrap) return;
+
+    const setTxt = (sel, v) => { const el = A.rqs(sel); if (el) el.textContent = v; };
+
+    setTxt("#suViewActiveSub", "Loading…");
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+    try {
+      const data = await A.postJSON({ action: "get_request", request_id: requestId });
+      const r = data?.item || {};
+
+      setTxt("#suViewActiveSub",  `${r.org_name || "Organization"} • Request #${r.id || requestId}`);
+      setTxt("#suViewActiveOrgName",    r.org_name    || "—");
+      setTxt("#suViewActiveOrgAbbr",    r.org_abbr    || r.abbreviation || "—");
+      setTxt("#suViewActiveScope",      r.scope       || "—");
+      setTxt("#suViewActiveProgram",    r.program     || "—");
+      setTxt("#suViewActiveTerm",       r.term_label  || "—");
+      setTxt("#suViewActiveCoordinator",r.coordinator_name || "—");
+      setTxt("#suViewActiveModerator",  r.moderator_name   || "—");
+      setTxt("#suViewActiveStatus",     r.status      || "—");
+
+      // Logo
+      const img = A.rqs("#suViewActiveLogoImg");
+      const fb  = A.rqs("#suViewActiveLogoFallback");
+      if (img && fb) {
+        if (r.logo_url) {
+          img.src = A.resolvePublicUrl ? A.resolvePublicUrl(r.logo_url) : r.logo_url;
+          img.style.display = "";
+          fb.style.display  = "none";
+        } else {
+          img.style.display = "none";
+          fb.style.display  = "";
+        }
+      }
+
+      // Certificate link
+      const certBtn = A.rqs("#suViewActiveCertBtn");
+      if (certBtn) {
+        const certUrl = A.resolvePublicUrl ? A.resolvePublicUrl(r.certificate_url || "") : (r.certificate_url || "");
+        if (certUrl) {
+          certBtn.href = certUrl;
+          certBtn.classList.remove("disabled");
+          certBtn.removeAttribute("disabled");
+        } else {
+          certBtn.href = "#";
+          certBtn.classList.add("disabled");
+        }
+      }
+    } catch (e) {
+      A.safeShowError(e.message || "Failed to load request.");
+    }
+  }
+
   function bindUI(A) {
     const yearSel = A.rqs("#suActiveYearFilter");
     if (yearSel && !yearSel.__bound) {
@@ -149,23 +213,25 @@
       });
     }
 
-    // ✅ Print button: open EXACTLY what the browser would open for the href
     const tbody = A.rqs("#suActiveTbody");
-    if (tbody && !tbody.__suPrintBound) {
-      tbody.__suPrintBound = true;
+    if (tbody && !tbody.__suActiveBound) {
+      tbody.__suActiveBound = true;
       tbody.addEventListener("click", (e) => {
-        const a = e.target?.closest?.('a[data-action="print"]');
-        if (!a) return;
-
-        // Prefer raw dataset url (not HTML-escaped), fallback to a.href
-        const raw = String(a.dataset?.url || "").trim();
-        const url = raw || String(a.href || "").trim();
-
-        if (!url || url === "#" || url.startsWith("#")) {
-          e.preventDefault();
+        // View button
+        const viewBtn = e.target?.closest?.('[data-action="view"]');
+        if (viewBtn) {
+          const tr = viewBtn.closest("tr[data-id]");
+          const id = Number(tr?.dataset?.id || 0);
+          if (id) openViewModalActive(A, id);
           return;
         }
 
+        // Print button: open exactly what the browser would open for the href
+        const a = e.target?.closest?.('a[data-action="print"]');
+        if (!a) return;
+        const raw = String(a.dataset?.url || "").trim();
+        const url = raw || String(a.href || "").trim();
+        if (!url || url === "#" || url.startsWith("#")) { e.preventDefault(); return; }
         e.preventDefault();
         window.open(url, "_blank", "noopener");
       });
@@ -173,11 +239,23 @@
   }
 
   window.SUAccreditationActive = {
-    init() {
+    init(root) {
       const A = mustBase();
+      // Always re-bind (helpers guard per-element) and always fetch fresh data
       bindUI(A);
-      return fetchActive(A);
+      const p = fetchActive(A).catch((e) => A.safeShowError(e.message));
+
+      if (!window.__suActiveBusListening) {
+        window.__suActiveBusListening = true;
+        // refreshAll is wired up by base after both modules init
+      }
+
+      return p;
     },
     fetchActive,
+    openViewModalActive: function(requestId) {
+      const A = mustBase();
+      openViewModalActive(A, requestId);
+    },
   };
 })();

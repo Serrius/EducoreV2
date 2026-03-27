@@ -908,7 +908,7 @@ if ($action === 'assign_moderator') {
   $stmt->close();
 
   if (!$u) fail('Moderator user not found.', 404);
-  if (($u['role'] ?? '') !== 'moderator') fail('Selected user is not a moderator.');
+  if (!in_array(($u['role'] ?? ''), ['moderator', 'org_president'], true)) fail('Selected user is not a moderator or org_president.');
   if (($u['status'] ?? '') !== 'Active') fail('Selected moderator is not Active.');
 
   $stmt = $db->prepare('UPDATE accreditation_requests SET moderator_user_id=? WHERE id=? LIMIT 1');
@@ -956,6 +956,120 @@ if ($action === 'list_moderators') {
                      ORDER BY last_name ASC, first_name ASC");
   if ($res) $items = $res->fetch_all(MYSQLI_ASSOC);
   ok(['items' => $items]);
+}
+
+// -------------------------
+// List org_president users (for edit assignment modal moderator dropdown)
+// -------------------------
+if ($action === 'list_org_presidents') {
+  $items = [];
+  $res = $db->query("SELECT id, CONCAT(first_name,' ',last_name) AS name, id_number
+                     FROM users
+                     WHERE role='org_president' AND status='Active'
+                     ORDER BY last_name ASC, first_name ASC");
+  if ($res) $items = $res->fetch_all(MYSQLI_ASSOC);
+  ok(['items' => $items]);
+}
+
+// -------------------------
+// List faculty_admin users (for edit assignment modal coordinator dropdown)
+// -------------------------
+if ($action === 'list_coordinators') {
+  $items = [];
+  $res = $db->query("SELECT id, CONCAT(first_name,' ',last_name) AS name, id_number
+                     FROM users
+                     WHERE role='faculty_admin' AND status='Active'
+                     ORDER BY last_name ASC, first_name ASC");
+  if ($res) $items = $res->fetch_all(MYSQLI_ASSOC);
+  ok(['items' => $items]);
+}
+
+// -------------------------
+// Update moderator and/or coordinator for a request
+// -------------------------
+if ($action === 'update_assignment') {
+  $requestId    = (int)inp('request_id', 0);
+  $moderatorId  = inp('moderator_id', null);
+  $coordinatorId = inp('coordinator_id', null);
+
+  if ($requestId <= 0) fail('Invalid request_id.');
+  if (empty($moderatorId) && empty($coordinatorId)) fail('Please provide at least moderator_id or coordinator_id.');
+
+  // Validate moderator if provided
+  if (!empty($moderatorId)) {
+    $moderatorId = (int)$moderatorId;
+    $stmt = $db->prepare('SELECT id, role, status FROM users WHERE id=? LIMIT 1');
+    $stmt->bind_param('i', $moderatorId);
+    $stmt->execute();
+    $mu = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$mu) fail('Moderator user not found.', 404);
+    if ($mu['role'] !== 'org_president') fail('Selected moderator must be an org_president.');
+    if ($mu['status'] !== 'Active') fail('Selected moderator is not Active.');
+  } else {
+    $moderatorId = null;
+  }
+
+  // Validate coordinator if provided
+  if (!empty($coordinatorId)) {
+    $coordinatorId = (int)$coordinatorId;
+    $stmt = $db->prepare('SELECT id, role, status FROM users WHERE id=? LIMIT 1');
+    $stmt->bind_param('i', $coordinatorId);
+    $stmt->execute();
+    $cu = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$cu) fail('Coordinator user not found.', 404);
+    if ($cu['role'] !== 'faculty_admin') fail('Selected coordinator must be a faculty_admin.');
+    if ($cu['status'] !== 'Active') fail('Selected coordinator is not Active.');
+  } else {
+    $coordinatorId = null;
+  }
+
+  // Build dynamic UPDATE
+  $sets = [];
+  $params = [];
+  $types = '';
+  if ($moderatorId !== null) {
+    $sets[] = 'moderator_user_id = ?';
+    $params[] = $moderatorId;
+    $types .= 'i';
+  }
+  if ($coordinatorId !== null) {
+    $sets[] = 'coordinator_user_id = ?';
+    $params[] = $coordinatorId;
+    $types .= 'i';
+  }
+  $params[] = $requestId;
+  $types .= 'i';
+
+  $sql = 'UPDATE accreditation_requests SET ' . implode(', ', $sets) . ' WHERE id = ? LIMIT 1';
+  $stmt = $db->prepare($sql);
+  if (!$stmt) fail('DB error preparing update.', 500);
+  $stmt->bind_param($types, ...$params);
+  if (!$stmt->execute()) {
+    $e = $stmt->error; $stmt->close();
+    fail('Failed to update assignment: ' . $e, 500);
+  }
+  $stmt->close();
+
+  // Notify affected parties
+  $ctx = get_request_context($db, $requestId);
+  $orgName = $ctx['org_name'] ?? 'Organization';
+
+  if ($moderatorId !== null) {
+    add_notification($db, $moderatorId, $special_uid,
+      'Organization Assigned',
+      "You have been assigned as the moderator for '{$orgName}'.",
+      'accreditation', $requestId);
+  }
+  if ($coordinatorId !== null) {
+    add_notification($db, $coordinatorId, $special_uid,
+      'Coordination Assignment',
+      "You have been assigned as coordinator for accreditation request for '{$orgName}'.",
+      'accreditation', $requestId);
+  }
+
+  ok(['message' => 'Assignment updated successfully.']);
 }
 
 /* =============================

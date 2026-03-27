@@ -726,6 +726,11 @@
         const txt = manageAs ? `Manage (${manageAs})` : "Manage Club";
         btnManage.innerHTML = `<i class="bi bi-gear me-2"></i>${escapeHtml(txt)}`;
       }
+
+      // Officers don't see the student status panel
+      const statusWrap = qs("#clubMyStatusWrap");
+      if (statusWrap) statusWrap.classList.add("d-none");
+
       return;
     }
 
@@ -753,6 +758,72 @@
         btnJoin.style.display = "";
       }
     }
+
+    // Show the My Membership Status panel for regular students only
+    renderClubMyStatus(membership);
+  }
+
+  function renderClubMyStatus(membership) {
+    const wrap = qs("#clubMyStatusWrap");
+    const stText = qs("#clubMyStatusText");
+    const stBadge = qs("#clubMyStatusBadge");
+    const stMeta = qs("#clubMyStatusMeta");
+    const btnPrint = qs("#btnClubPrintMyReceipt");
+    const accBody = qs("#clubMyStatusAccBody");
+    const accBtn = qs("#clubMyStatusAccHead .accordion-button");
+
+    // Only show for non-officers (canManage hides this section entirely via early return above)
+    if (!wrap) return;
+    wrap.classList.remove("d-none");
+
+    const st = String(membership?.status || "—");
+
+    if (stText) stText.textContent = st;
+
+    if (stBadge) {
+      stBadge.classList.remove("d-none", "text-bg-success", "text-bg-warning", "text-bg-danger", "text-bg-secondary");
+      stBadge.textContent = st;
+      if (st === "Approved") stBadge.classList.add("text-bg-success");
+      else if (st === "Pending") stBadge.classList.add("text-bg-warning");
+      else stBadge.classList.add("text-bg-secondary");
+      stBadge.classList.remove("d-none");
+    }
+
+    if (stMeta) {
+      if (!membership) {
+        stMeta.textContent = "You have not joined this club yet.";
+      } else if (st === "Approved" && membership.receipt_paid_at) {
+        stMeta.textContent = `Paid on ${membership.receipt_paid_at}${membership.receipt_no ? " • Receipt: " + membership.receipt_no : ""}`;
+      } else if (st === "Pending") {
+        stMeta.textContent = "Your request is pending. An officer will record your payment and activate you.";
+      } else {
+        stMeta.textContent = "—";
+      }
+    }
+
+    if (btnPrint) {
+      const url = membership?.print_receipt_url ? String(membership.print_receipt_url) : "";
+      if (st === "Approved" && url) {
+        btnPrint.dataset.url = url;
+        btnPrint.classList.remove("d-none");
+      } else {
+        btnPrint.dataset.url = "";
+        btnPrint.classList.add("d-none");
+      }
+    }
+
+    // Auto-expand when Approved so the print button is immediately visible
+    if (accBody && accBtn) {
+      if (st === "Approved") {
+        accBody.classList.add("show");
+        accBtn.classList.remove("collapsed");
+        accBtn.setAttribute("aria-expanded", "true");
+      } else {
+        accBody.classList.remove("show");
+        accBtn.classList.add("collapsed");
+        accBtn.setAttribute("aria-expanded", "false");
+      }
+    }
   }
 
   // -------------------------
@@ -764,40 +835,137 @@
   }
 
   function renderClubMembersModal() {
-    const tbody = qs("#clubMembersTbody");
-    if (!tbody) return;
+  const tbody = qs("#clubMembersTbody");
+  if (!tbody) return;
 
-    const q = (state.clubMembers.search || "").trim().toLowerCase();
-    const rows = (state.clubMembers.rows || []).filter((r) => {
-      if (!q) return true;
-      const name = memberFullName(r).toLowerCase();
-      const idn = String(r.id_number || "").toLowerCase();
-      const prog = String(r.program || "").toLowerCase();
-      const role = String(r.role_label || "").toLowerCase();
-      return name.includes(q) || idn.includes(q) || prog.includes(q) || role.includes(q);
-    });
+  const q = (state.clubMembers.search || "").trim().toLowerCase();
+  let rows = (state.clubMembers.rows || []).filter((r) => {
+    if (!q) return true;
+    const name = memberFullName(r).toLowerCase();
+    const idn = String(r.id_number || "").toLowerCase();
+    const prog = String(r.program || "").toLowerCase();
+    const role = String(r.role_label || "").toLowerCase();
+    return name.includes(q) || idn.includes(q) || prog.includes(q) || role.includes(q);
+  });
 
-    if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">No members.</td></tr>`;
-    } else {
-      tbody.innerHTML = rows.map((r) => {
-        const roleLabel = escapeHtml(r.role_label || "Member");
-        const name = escapeHtml(memberFullName(r) || "—");
-        const idn = escapeHtml(String(r.id_number || "—"));
-        const prog = escapeHtml(String(r.program || "—"));
-        return `
-          <tr>
-            <td class="text-muted">${idn}</td>
-            <td>${name}</td>
-            <td>${prog}</td>
-            <td><span class="badge text-bg-light border">${roleLabel}</span></td>
-          </tr>
-        `;
-      }).join("");
+  // Define hierarchical priority for officer positions
+  const officerPriority = {
+    // Top leadership
+    'president': 100,
+    'chairperson': 100,
+    'president / chairperson': 100,
+    
+    // Vice Presidents
+    'vice president': 90,
+    'vp': 90,
+    
+    // Secretaries
+    'secretary': 80,
+    
+    // Treasurers
+    'treasurer': 70,
+    
+    // Auditors
+    'auditor': 60,
+    
+    // Other officer positions
+    'pio': 50,
+    'public information officer': 50,
+    'business manager': 40,
+    'officer': 30,
+    
+    // Default for any other officer role not explicitly listed
+    'other officer': 25
+  };
+
+  // Function to normalize role text for comparison
+  function normalizeRole(roleText) {
+    if (!roleText) return '';
+    return roleText.toLowerCase().trim();
+  }
+
+  // Function to get priority score for a role
+  function getRolePriority(roleText) {
+    const normalized = normalizeRole(roleText);
+    
+    // Check if it's a member
+    if (normalized === 'member' || normalized === '') return 0;
+    
+    // Check exact matches first
+    for (const [key, value] of Object.entries(officerPriority)) {
+      if (normalized.includes(key)) {
+        return value;
+      }
     }
+    
+    // If it contains any officer-related keywords but wasn't matched above
+    const officerKeywords = ['officer', 'head', 'lead', 'coordinator'];
+    for (const keyword of officerKeywords) {
+      if (normalized.includes(keyword)) {
+        return 20; // Default officer priority
+      }
+    }
+    
+    // If it's not a member and not matched above, treat as other officer
+    return 25;
+  }
 
-    const meta = qs("#clubMembersMeta");
-    if (meta) meta.textContent = `${rows.length} member${rows.length === 1 ? "" : "s"}`;
+  // Sort rows with hierarchical priority
+  rows.sort((a, b) => {
+    const aRole = a.role_label || '';
+    const bRole = b.role_label || '';
+    
+    const aPriority = getRolePriority(aRole);
+    const bPriority = getRolePriority(bRole);
+    
+    // First, sort by priority (higher priority first)
+    if (aPriority !== bPriority) {
+      return bPriority - aPriority;
+    }
+    
+    // If same priority, sort by name alphabetically
+    const aName = memberFullName(a).toLowerCase();
+    const bName = memberFullName(b).toLowerCase();
+    return aName.localeCompare(bName);
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">No members.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((r) => {
+      const roleLabel = escapeHtml(r.role_label || "Member");
+      const name = escapeHtml(memberFullName(r) || "—");
+      const idn = escapeHtml(String(r.id_number || "—"));
+      const prog = escapeHtml(String(r.program || "—"));
+      
+      // Check if this is an officer (priority > 0)
+      const isOfficer = getRolePriority(r.role_label) > 0;
+      
+      // Different background colors based on role
+      let rowClass = '';
+      if (isOfficer) {
+        const priority = getRolePriority(r.role_label);
+        if (priority >= 100) rowClass = 'table-primary'; // President - Blue
+        else if (priority >= 90) rowClass = 'table-info'; // Vice President - Light Blue
+        else if (priority >= 80) rowClass = 'table-success'; // Secretary - Green
+        else if (priority >= 70) rowClass = 'table-warning'; // Treasurer - Yellow
+        else if (priority >= 60) rowClass = 'table-danger'; // Auditor - Red
+        else rowClass = 'table-light'; // Other officers - Light Gray
+      }
+      
+      return `
+        <tr class="${rowClass}">
+          <td class="text-muted">${idn}</td>
+          <td>${name}</td>
+          <td>${prog}</td>
+          <td><span class="badge ${isOfficer ? 'text-bg-primary' : 'text-bg-light border'}">${roleLabel}</span></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  const meta = qs("#clubMembersMeta");
+  if (meta) meta.textContent = `${rows.length} member${rows.length === 1 ? "" : "s"}`;
   }
 
   async function loadClubMembers(orgId) {
@@ -1130,6 +1298,16 @@
     if (back && !back.__bound) {
       back.__bound = true;
       back.addEventListener("click", () => showSection("list"));
+    }
+
+    const btnMyReceipt = qs("#btnClubPrintMyReceipt");
+    if (btnMyReceipt && !btnMyReceipt.__bound) {
+      btnMyReceipt.__bound = true;
+      btnMyReceipt.addEventListener("click", () => {
+        const url = String(btnMyReceipt.dataset.url || "");
+        if (!url) return safeShowError("No receipt available.");
+        openNewTab(url);
+      });
     }
 
     const join = qs("#btnClubJoin");

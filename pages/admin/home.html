@@ -8,17 +8,161 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
-    .handled-org-card {
-      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+    /* Organizations You Handle Card */
+    .handled-orgs-card {
+      background: linear-gradient(145deg, #1a2639, #0d1b2a);
       color: #fff;
-      border-left: 10px solid #211E56;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      border: none;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+
+    .handled-orgs-header {
+      background: rgba(255,255,255,0.1);
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .handled-orgs-header i {
+      font-size: 1.5rem;
+      color: #ffd700;
+    }
+
+    .handled-orgs-header h5 {
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .handled-orgs-header .badge-count {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border-radius: 20px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      margin-left: auto;
+    }
+
+    .handled-orgs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      padding: 1.25rem;
+    }
+
+    .handled-org-item {
+      background: rgba(255,255,255,0.08);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(5px);
+    }
+
+    .handled-org-item:hover {
+      background: rgba(255,255,255,0.15);
+      transform: translateY(-3px);
+      border-color: rgba(255,215,0,0.3);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+    }
+
+    .handled-org-type {
+      display: inline-block;
+      padding: 0.2rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.75rem;
+    }
+
+    .type-organization {
+      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+      color: white;
+    }
+
+    .type-club {
+      background: linear-gradient(135deg, #198754, #32c875);
+      color: white;
     }
 
     .handled-org-name {
-      font-size: 1.3rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      line-height: 1.15;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .handled-org-abbr {
+      background: rgba(255,255,255,0.15);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    .handled-org-scope {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    .scope-general {
+      background: rgba(108, 117, 125, 0.3);
+      color: #e9ecef;
+    }
+
+    .scope-exclusive {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+    }
+
+    .handled-org-status {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .status-badge {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-active {
+      background-color: #28a745;
+      box-shadow: 0 0 8px #28a745;
+    }
+
+    .status-inactive {
+      background-color: #dc3545;
+    }
+
+    .handled-orgs-empty {
+      padding: 2rem;
+      text-align: center;
+      opacity: 0.5;
+      font-size: 0.9rem;
+    }
+
+    .handled-orgs-empty i {
+      font-size: 2rem;
+      display: block;
+      margin-bottom: 0.5rem;
     }
 
     .dashboard-kpi-card {
@@ -90,6 +234,13 @@
       font-weight: 600;
     }
 
+    /* Academic Year Card */
+    .academicYear {
+      background-color: #211E56;
+      border-left: 10px solid #F5AA1C;
+      color: #fff;
+    }
+
     #homePage h1 {
       letter-spacing: 0.08em;
       font-size: 1.6rem;
@@ -118,12 +269,37 @@
         </div>
       </div>
 
-      <!-- Handled Organization Info -->
-      <div class="card handled-org-card shadow-sm">
-        <div class="card-body">
-          <div class="small text-uppercase">You are handling</div>
-          <div class="handled-org-name" id="handledOrgName">—</div>
-          <div class="small mt-1" id="handledOrgScope">—</div>
+      <!-- Current Academic Year -->
+      <div id="currentAcademicYearDisplay" class="mb-3">
+        <div class="card academicYear shadow-sm border-0">
+          <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="mb-1 text-uppercase fw-bold" style="color: #F5AA1C;">Current Academic Year</h6>
+              <h3 class="mb-2" id="displayAcademicYear">0000 - 0000</h3>
+              <div class="small text-white-50 mt-1">
+                <span id="displaySemesterLabel">—</span>
+              </div>
+            </div>
+            <div>
+              <img src="assets/images/academic-year.png" alt="Academic Year"
+                   style="height: 80px; object-fit: contain; margin-right: 30px;">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Organizations You Handle - multi-org grid -->
+      <div class="handled-orgs-card shadow-sm">
+        <div class="handled-orgs-header">
+          <i class="bi bi-building-fill-gear"></i>
+          <h5>Organizations You Handle</h5>
+          <span class="badge-count" id="orgCountBadge">0</span>
+        </div>
+        <div id="handledOrgsList" class="handled-orgs-grid">
+          <div class="handled-orgs-empty">
+            <i class="bi bi-building-slash"></i>
+            <p>Loading organizations...</p>
+          </div>
         </div>
       </div>
     </div>

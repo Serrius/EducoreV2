@@ -423,40 +423,38 @@
 
   function init(root) {
     const A = mustBase();
-
-    // Avoid re-binding when SPA reinjects same root
     const r = root || document;
-    if (r.__saActiveInited) return;
-    r.__saActiveInited = true;
 
+    // Always re-bind DOM listeners (bind helpers guard per-element)
     bindActive(A, r);
 
-    // Initial fetch
+    // Always fetch fresh data on init / re-navigation
     fetchActive(A).catch((e) => A.safeShowError(e.message));
 
-    // React to global search box
-    A.bus.on("search:changed", () => {
-      A.store.active.page = 1;
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load
+    if (!window.__saActiveBusListening) {
+      window.__saActiveBusListening = true;
 
-    // React to global refresh
-    A.bus.on("refresh:all", () => {
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("search:changed", () => {
+        A.store.active.page = 1;
+        fetchActive(A).catch((e) => A.safeShowError(e.message));
+      });
 
-    // React to year/semester filter changes (base emits this)
-    A.bus.on("filters:changed", (p) => {
-      if (!p || p.scope !== "active") return;
-      A.store.active.page = 1;
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("refresh:all", () => {
+        fetchActive(A).catch((e) => A.safeShowError(e.message));
+      });
 
-    // If terms reload (rare), refetch to stay consistent
-    A.bus.on("terms:loaded", () => {
-      A.store.active.page = 1;
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("filters:changed", (p) => {
+        if (!p || p.scope !== "active") return;
+        A.store.active.page = 1;
+        fetchActive(A).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on("terms:loaded", () => {
+        A.store.active.page = 1;
+        fetchActive(A).catch((e) => A.safeShowError(e.message));
+      });
+    }
   }
 
   // Support both ways:

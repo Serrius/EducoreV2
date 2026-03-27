@@ -204,7 +204,7 @@ function get_user_program(PDO $pdo, int $uid): string {
   $st = $pdo->prepare("SELECT program FROM users WHERE id = :id LIMIT 1");
   $st->execute([':id' => $uid]);
   $r = $st->fetch(PDO::FETCH_ASSOC);
-  return isset($r['program']) ? (string)$r['program'] : '';
+  return isset($r['program']) ? trim((string)$r['program']) : '';
 }
 
 /**
@@ -602,52 +602,100 @@ $action = (string)($in['action'] ?? '');
 
 try {
   if ($action === 'get_organizations') {
-    $term = get_active_term($pdo);
-    if (!$term) fail('No active academic term found.', 400);
+  $term = get_active_term($pdo);
+  if (!$term) fail('No active academic term found.', 400);
 
-    $role = current_role();
-    $uid = current_user_id();
-    $termId = (int)$term['id'];
+  $role = current_role();
+  $uid = current_user_id();
+  $termId = (int)$term['id'];
+  
+  // Get user's program for matching
+  $userProgram = get_user_program($pdo, $uid);
+  error_log("User $uid role: $role, program: $userProgram"); // Debug log
 
-    $st = $pdo->query("
-      SELECT o.id, o.org_name, o.abbreviation, o.scope, o.program_id, o.fee_required, o.created_by
-      FROM organizations o
-      WHERE o.org_type='Organization' AND o.status='Active'
-      ORDER BY o.org_name ASC
-    ");
+  $st = $pdo->query("
+    SELECT o.id, o.org_name, o.abbreviation, o.scope, o.program_id, o.fee_required, o.created_by,
+           p.abbreviation AS program_abbr, p.program_name AS program_name
+    FROM organizations o
+    LEFT JOIN programs p ON p.id = o.program_id
+    WHERE o.org_type='Organization' AND o.status='Active'
+    ORDER BY o.org_name ASC
+  ");
 
-    $orgs = [];
-    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-      $orgId = (int)$r['id'];
-      $activated = is_org_activated($pdo, $orgId, $termId); // ✅ year-based
+  $orgs = [];
+  while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+    $orgId = (int)$r['id'];
+    $activated = is_org_activated($pdo, $orgId, $termId);
+    
+    // Add program info to the org array
+    $r['program_abbr'] = (string)($r['program_abbr'] ?? '');
+    $r['program_name'] = (string)($r['program_name'] ?? '');
+    
+    error_log("Checking org: {$r['org_name']}, scope: {$r['scope']}, program_abbr: {$r['program_abbr']}"); // Debug log
 
-      // ✅ Student-like roles: only see activated OR officer-bypass (officer is year-based now)
-      if (is_student_like_role($role)) {
-        $isOfficer = ($uid > 0) ? is_officer_for_org($pdo, $orgId, $termId, $uid) : false;
-        if (!$activated && !$isOfficer) continue;
+    // ✅ FIX: org_president should behave like a student
+    if (is_student_like_role($role) || $role === 'org_president') {
+      $isOfficer = ($uid > 0) ? is_officer_for_org($pdo, $orgId, $termId, $uid) : false;
+      
+      // Check if student is eligible based on program for Exclusive orgs
+      $isEligible = true;
+      if (($r['scope'] ?? 'General') === 'Exclusive') {
+        $abbr = trim((string)($r['program_abbr'] ?? ''));
+        $pname = trim((string)($r['program_name'] ?? ''));
+        
+        // Normalize for comparison
+        $userProgNorm = strtoupper(trim($userProgram));
+        $abbrNorm = strtoupper($abbr);
+        $pnameNorm = strtoupper($pname);
+        
+        $isEligible = ($userProgNorm !== '' && ($userProgNorm === $abbrNorm || $userProgNorm === $pnameNorm));
+        
+        error_log("Eligibility check - User program: '$userProgram' ($userProgNorm), Org abbr: '$abbr' ($abbrNorm), Org name: '$pname' ($pnameNorm), Eligible: " . ($isEligible ? 'YES' : 'NO'));
       }
-
-      // admin/faculty_admin: can see handled orgs even if not activated;
-      // but for orgs they don't handle, only show if activated.
-      if ($role === 'admin' || $role === 'faculty_admin') {
-        $orgRaw = org_with_program_raw($pdo, $orgId);
-        $isHandling = $orgRaw ? handles_org($pdo, $orgRaw, $uid, $role) : false;
-        if (!$isHandling && !$activated) continue;
+      
+      // Show org if:
+      // - It's activated AND student is eligible, OR
+      // - Student is an officer (regardless of activation/eligibility)
+      if (!$activated && !$isOfficer) {
+        error_log("Skipping - Not activated and not officer");
+        continue;
       }
-
-      // bypass roles see all
-      $orgs[] = [
-        'id' => $orgId,
-        'org_name' => (string)$r['org_name'],
-        'abbreviation' => (string)$r['abbreviation'],
-        'scope' => (string)$r['scope'],
-        'program_id' => $r['program_id'] !== null ? (int)$r['program_id'] : null,
-        'fee_required' => (float)$r['fee_required'],
-        'is_activated' => $activated,
-      ];
+      if ($activated && !$isEligible && !$isOfficer) {
+        error_log("Skipping - Activated but not eligible and not officer");
+        continue;
+      }
+      
+      error_log("Including org: {$r['org_name']}");
     }
 
-    ok(['term' => $term, 'organizations' => $orgs]);
+    // admin/faculty_admin: can see handled orgs even if not activated;
+    // but for orgs they don't handle, only show if activated.
+    else if ($role === 'admin' || $role === 'faculty_admin') {
+      $orgRaw = $r; // We already have the data
+      $isHandling = handles_org($pdo, $orgRaw, $uid, $role);
+      if (!$isHandling && !$activated) continue;
+    }
+
+    // bypass roles see all
+    else if (!is_bypass_activation_role($role)) {
+      // For any other roles, only show activated orgs
+      if (!$activated) continue;
+    }
+
+    $orgs[] = [
+      'id' => $orgId,
+      'org_name' => (string)$r['org_name'],
+      'abbreviation' => (string)$r['abbreviation'],
+      'scope' => (string)$r['scope'],
+      'program_id' => $r['program_id'] !== null ? (int)$r['program_id'] : null,
+      'program_abbr' => (string)$r['program_abbr'],
+      'program_name' => (string)$r['program_name'],
+      'fee_required' => (float)$r['fee_required'],
+      'is_activated' => $activated,
+    ];
+  }
+
+  ok(['term' => $term, 'organizations' => $orgs]);
   }
 
   if ($action === 'get_org_details') {

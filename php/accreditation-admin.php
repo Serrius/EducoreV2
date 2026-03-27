@@ -1,4 +1,5 @@
 <?php
+
 // Increase file upload limits
 ini_set('max_file_uploads', 50);
 ini_set('upload_max_filesize', '10M');
@@ -19,15 +20,10 @@ ini_set('post_max_size', '20M');
  * - replace_document (multipart)
  * - update_organization (JSON)
  * - search_students (JSON)
+ * - search_coordinators (NEW) - For searching faculty_admin users
  * - add_officer (JSON)
- * - check_accreditation_status (NEW)
- * - start_renewal (NEW)
- *
- * NOTE:
- * - This file intentionally outputs JSON ONLY (no HTML).
- * - It is designed to be robust to different db include styles:
- *   - If php/db.php exists and provides $pdo (PDO), it will use it.
- *   - Otherwise it will attempt to create a PDO connection using XAMPP defaults.
+ * - check_accreditation_status
+ * - start_renewal
  */
 
 // -----------------------------
@@ -46,7 +42,7 @@ function fail($msg, $status = 400, $extra = []) {
 }
 
 // -----------------------------
-// Session / auth (adjust to your system if needed)
+// Session / auth
 // -----------------------------
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -72,7 +68,6 @@ function require_login() {
 // -----------------------------
 $pdo = null;
 
-// If you already have a db bootstrap file, keep it here:
 $tryDb = __DIR__ . "/db.php";
 if (file_exists($tryDb)) {
   require_once $tryDb;
@@ -137,7 +132,7 @@ function now_dt() {
   return date("Y-m-d H:i:s");
 }
 
-// URL/path: keep RELATIVE (no leading slash) to avoid your "/assets/..." issue
+// URL/path: keep RELATIVE (no leading slash)
 function to_public_path($relative) {
   $relative = ltrim((string)$relative, "/");
   return $relative;
@@ -153,10 +148,10 @@ function get_user($pdo, $uid) {
 }
 
 function require_admin_role($user) {
-  // Adjust this list if your "admin" role name differs.
-  $allowed = ["faculty_admin"];
+  // For org_president, they can also access this endpoint
+  $allowed = ["faculty_admin", "org_president"];
   if (!$user || !in_array((string)$user["role"], $allowed, true)) {
-    fail("Forbidden: admin role required.", 403);
+    fail("Forbidden: admin or president role required.", 403);
   }
   if (strcasecmp((string)$user["status"], "Active") !== 0) {
     fail("Forbidden: account not active.", 403);
@@ -177,10 +172,6 @@ function term_label($t) {
   return $label ?: ("Term #" . ($t["id"] ?? ""));
 }
 
-/**
- * IMPORTANT: users.program stores ABBREVIATION (e.g. "BSIT"), not programs.id
- * So for student search filters we must filter using abbreviation.
- */
 function program_abbr_by_id($pdo, $programId) {
   $programId = (int)$programId;
   if ($programId <= 0) return null;
@@ -192,8 +183,6 @@ function program_abbr_by_id($pdo, $programId) {
 }
 
 function map_scope_for_db($uiScope, $orgType) {
-  // organizations.scope enum is (General, Exclusive).
-  // Clubs are always stored as scope='General' in DB.
   $uiScope = (string)$uiScope;
   $orgType = (string)$orgType;
 
@@ -207,7 +196,6 @@ function scope_label_for_ui($orgType, $orgScope) {
   return (string)$orgScope;
 }
 
-// requirement filter mapping using accreditation_requirements.applies_to enum('General','Exclusive','Club','All')
 function requirement_applies_filter($uiScope, $orgType) {
   $uiScope = (string)$uiScope;
   $orgType = (string)$orgType;
@@ -219,13 +207,11 @@ function requirement_applies_filter($uiScope, $orgType) {
   return ["General", "All"];
 }
 
-// Check if organization can be edited (based on request status)
 function can_edit_organization($requestStatus) {
   $editableStatuses = ['Active', 'Returned', 'Recommended', 'Pending', 'Draft'];
   return in_array((string)$requestStatus, $editableStatuses, true);
 }
 
-// Helper function to get active Special Admin (handles missing last_login_at)
 function get_active_special_admin($pdo) {
   try {
     $st = $pdo->prepare("SELECT id FROM users WHERE role = 'special_admin' AND status = 'Active' ORDER BY last_login_at DESC LIMIT 1");
@@ -233,7 +219,7 @@ function get_active_special_admin($pdo) {
     $admin = $st->fetch();
     if ($admin) return (int)$admin["id"];
   } catch (Throwable $e) {
-    // ignore and fallback
+    // ignore
   }
   $st = $pdo->prepare("SELECT id FROM users WHERE role = 'special_admin' AND status = 'Active' ORDER BY id DESC LIMIT 1");
   $st->execute();
@@ -241,7 +227,6 @@ function get_active_special_admin($pdo) {
   return $admin ? (int)$admin["id"] : null;
 }
 
-// Helper function to add notification
 function add_notification($pdo, $recipient_id, $actor_id, $title, $message, $notif_type = 'accreditation', $payload_id = null) {
   $st = $pdo->prepare("
     INSERT INTO notifications (recipient_id, actor_id, title, message, notif_type, status, payload_id, created_at)
@@ -252,7 +237,7 @@ function add_notification($pdo, $recipient_id, $actor_id, $title, $message, $not
 }
 
 // -----------------------------
-// Renewal-specific helpers (SCHOOL_YEAR based)
+// Renewal helpers (SCHOOL_YEAR based)
 // -----------------------------
 function active_term_info($pdo) {
   $t = active_term($pdo);
@@ -265,91 +250,8 @@ function active_term_info($pdo) {
   ];
 }
 
-function get_request_in_school_year($pdo, $uid, $schoolYear) {
-  $st = $pdo->prepare("
-    SELECT ar.id, ar.status, ar.org_id, ar.is_renewal, ar.previous_request_id
-    FROM accreditation_requests ar
-    JOIN academic_terms t ON t.id = ar.academic_term_id
-    WHERE ar.coordinator_user_id = ?
-      AND t.school_year = ?
-    ORDER BY ar.id DESC
-    LIMIT 1
-  ");
-  $st->execute([(int)$uid, (string)$schoolYear]);
-  return $st->fetch() ?: null;
-}
-
-function check_pending_renewals_school_year($pdo, $uid, $schoolYear) {
-  $st = $pdo->prepare("
-    SELECT COUNT(*) as count
-    FROM accreditation_requests ar
-    JOIN academic_terms t ON t.id = ar.academic_term_id
-    WHERE ar.coordinator_user_id = ?
-      AND t.school_year = ?
-      AND ar.status IN ('Draft', 'Pending')
-      AND ar.is_renewal = 1
-  ");
-  $st->execute([(int)$uid, (string)$schoolYear]);
-  return ((int)$st->fetchColumn()) > 0;
-}
-
-function get_accreditation_in_school_year($pdo, $uid, $schoolYear, $excludeTermId = 0) {
-  $excludeTermId = (int)$excludeTermId;
-
-  $sql = "
-    SELECT ar.id, ar.status, ar.org_id, ar.submitted_at,
-           o.org_name, o.org_type, o.abbreviation,
-           at.id AS academic_term_id, at.school_year, at.semester
-    FROM accreditation_requests ar
-    JOIN organizations o ON o.id = ar.org_id
-    JOIN academic_terms at ON at.id = ar.academic_term_id
-    WHERE ar.coordinator_user_id = ?
-      AND at.school_year = ?
-      AND ar.status IN ('Active', 'Approved')
-  ";
-  $params = [(int)$uid, (string)$schoolYear];
-
-  if ($excludeTermId > 0) {
-    $sql .= " AND ar.academic_term_id <> ? ";
-    $params[] = $excludeTermId;
-  }
-
-  $sql .= " ORDER BY ar.id DESC LIMIT 1 ";
-
-  $st = $pdo->prepare($sql);
-  $st->execute($params);
-  return $st->fetch() ?: null;
-}
-
-function get_latest_accredited_request_any_year($pdo, $uid, $excludeTermId = 0) {
-  $excludeTermId = (int)$excludeTermId;
-
-  $sql = "
-    SELECT ar.id, ar.status, ar.org_id, ar.submitted_at,
-           o.org_name, o.org_type, o.abbreviation,
-           at.id AS academic_term_id, at.school_year, at.semester
-    FROM accreditation_requests ar
-    JOIN organizations o ON o.id = ar.org_id
-    JOIN academic_terms at ON at.id = ar.academic_term_id
-    WHERE ar.coordinator_user_id = ?
-      AND ar.status IN ('Active', 'Approved')
-  ";
-  $params = [(int)$uid];
-
-  if ($excludeTermId > 0) {
-    $sql .= " AND ar.academic_term_id <> ? ";
-    $params[] = $excludeTermId;
-  }
-
-  $sql .= " ORDER BY at.school_year DESC, at.id DESC, ar.id DESC LIMIT 1 ";
-
-  $st = $pdo->prepare($sql);
-  $st->execute($params);
-  return $st->fetch() ?: null;
-}
-
 // -----------------------------
-// Read action (JSON or multipart)
+// Read action
 // -----------------------------
 $payload = [];
 $action = "";
@@ -408,7 +310,125 @@ try {
     }
 
     // -----------------------------------------
-    // 3) One-org rule check (SCHOOL_YEAR based)
+    // NEW: Search for faculty_admin (Coordinators)
+    // -----------------------------------------
+    case "search_coordinators": {
+      $q     = trim((string)($payload["q"]    ?? ""));
+      $role  = trim((string)($payload["role"] ?? "faculty_admin")); // "faculty_admin" or "org_president"
+      $limit = max(1, min(50, (int)($payload["limit"] ?? 25)));
+
+      // Whitelist allowed roles
+      if (!in_array($role, ["faculty_admin", "org_president"], true)) $role = "faculty_admin";
+
+      if (mb_strlen($q) < 2) out(["ok" => true, "items" => []]);
+
+      $like = "%" . $q . "%";
+
+      if ($role === "org_president") {
+        // Also return course_year for president auto-fill in officer row
+        $sql = "
+          SELECT
+            u.id,
+            u.id_number,
+            CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+            u.email,
+            CONCAT(COALESCE(u.program,''), ' ', COALESCE(u.year_level,'')) AS course_year
+          FROM users u
+          WHERE u.role = 'org_president'
+            AND u.status = 'Active'
+            AND (
+              u.id_number LIKE ?
+              OR u.first_name LIKE ?
+              OR u.last_name LIKE ?
+              OR u.email LIKE ?
+            )
+          ORDER BY u.last_name ASC, u.first_name ASC
+          LIMIT $limit
+        ";
+      } else {
+        $sql = "
+          SELECT
+            u.id,
+            u.id_number,
+            CONCAT(u.first_name, ' ', u.last_name) AS full_name,
+            u.email
+          FROM users u
+          WHERE u.role = 'faculty_admin'
+            AND u.status = 'Active'
+            AND (
+              u.id_number LIKE ?
+              OR u.first_name LIKE ?
+              OR u.last_name LIKE ?
+              OR u.email LIKE ?
+            )
+          ORDER BY u.last_name ASC, u.first_name ASC
+          LIMIT $limit
+        ";
+      }
+
+      $params = [$like, $like, $like, $like];
+      $st = $pdo->prepare($sql);
+      $st->execute($params);
+      $items = $st->fetchAll();
+
+      // Trim whitespace from course_year if present
+      foreach ($items as &$it) {
+        if (isset($it["course_year"])) $it["course_year"] = trim($it["course_year"]);
+      }
+      unset($it);
+
+      out(["ok" => true, "items" => $items]);
+    }
+
+    // -----------------------------------------
+    // NEW: Get current user info
+    // -----------------------------------------
+    case "get_current_user": {
+        $user = get_user($pdo, $uid);
+        if (!$user) {
+            fail("User not found.", 404);
+        }
+        
+        // Get additional user info like program and year_level if student
+        $extraInfo = [];
+        if ($user["role"] === "org_president") {
+            $st = $pdo->prepare("SELECT program, year_level FROM users WHERE id = ?");
+            $st->execute([$uid]);
+            $studentInfo = $st->fetch();
+            if ($studentInfo) {
+                $extraInfo = $studentInfo;
+                
+                // Format course_year for auto-fill
+                $yearText = "";
+                if (!empty($studentInfo['year_level'])) {
+                    $year = $studentInfo['year_level'];
+                    if ($year === "1") $yearText = "1st Year";
+                    else if ($year === "2") $yearText = "2nd Year";
+                    else if ($year === "3") $yearText = "3rd Year";
+                    else if ($year === "4") $yearText = "4th Year";
+                    else if ($year === "5") $yearText = "5th Year";
+                    else $yearText = $year;
+                }
+                
+                $extraInfo['course_year'] = trim(($studentInfo['program'] ?? '') . ' ' . $yearText);
+            }
+        }
+        
+        out([
+            "ok" => true,
+            "user" => array_merge([
+                "id" => (int)$user["id"],
+                "id_number" => $user["id_number"],
+                "first_name" => $user["first_name"],
+                "last_name" => $user["last_name"],
+                "role" => $user["role"],
+                "status" => $user["status"],
+            ], $extraInfo)
+        ]);
+    }
+
+    // -----------------------------------------
+    // 3) One-org rule check - REMOVED RESTRICTION FOR PRESIDENTS
     // -----------------------------------------
     case "admin_can_submit":
     case "can_submit":
@@ -420,6 +440,20 @@ try {
       $schoolYear = (string)($currentTerm["school_year"] ?? "");
       if ($schoolYear === "") fail("Active term missing school_year.", 500);
 
+      // For org_president, they can always submit (no restriction)
+      if ($user["role"] === "org_president") {
+        out([
+          "ok" => true,
+          "can_submit" => true,
+          "my_request_id" => null,
+          "request" => null,
+          "has_current_school_year_request" => false,
+          "has_pending_renewal" => false,
+          "school_year" => $schoolYear
+        ]);
+      }
+
+      // For faculty_admin, check if they already have a request
       $existing = get_request_in_school_year($pdo, $uid, $schoolYear);
       if ($existing) {
         out([
@@ -451,336 +485,155 @@ try {
       ]);
     }
 
-    // -----------------------------------------
-    // NEW: Check accreditation status for renewal (SCHOOL_YEAR-BASED)
-    // -----------------------------------------
-    case "check_accreditation_status": {
-      $info = active_term_info($pdo);
-      if (!$info) fail("No active academic term found.");
-
-      $termId = (int)$info["id"];
-      $schoolYear = (string)$info["school_year"];
-
-      // 1) If user already has a request in CURRENT school year, no renewal prompt.
-      $currentRequest = get_request_in_school_year($pdo, $uid, $schoolYear);
-      if ($currentRequest) {
-        out([
-          "ok" => true,
-          "has_current_term_request" => true,
-          "current_request" => $currentRequest,
-          "active_term" => $info["raw"],
-          "needs_renewal" => false,
-          "reason" => "Has request for active school year."
-        ]);
-      }
-
-      // 2) If user has an accredited request (Active/Approved) within SAME school_year, do NOT prompt renewal.
-      if ($schoolYear !== "") {
-        $sameYearAcc = get_accreditation_in_school_year($pdo, $uid, $schoolYear, $termId);
-        if ($sameYearAcc) {
-          out([
-            "ok" => true,
-            "has_current_term_request" => false,
-            "active_term" => $info["raw"],
-            "needs_renewal" => false,
-            "has_accreditation_same_school_year" => true,
-            "accredited_request_same_school_year" => $sameYearAcc,
-            "reason" => "Already accredited within the active school year (no renewal needed just because semester/term changed)."
-          ]);
-        }
-      }
-
-      // 3) Otherwise: look for latest accredited request in any previous school year → renewal needed.
-      $previousRequest = get_latest_accredited_request_any_year($pdo, $uid, $termId);
-      if ($previousRequest) {
-        out([
-          "ok" => true,
-          "has_current_term_request" => false,
-          "previous_request" => $previousRequest,
-          "active_term" => $info["raw"],
-          "needs_renewal" => true
-        ]);
-      }
-
-      // 4) No previous accreditation at all
-      out([
-        "ok" => true,
-        "has_current_term_request" => false,
-        "needs_renewal" => false,
-        "active_term" => $info["raw"]
-      ]);
-    }
-
-    // -----------------------------------------
-    // NEW: Start renewal process
-    // -----------------------------------------
-    case "start_renewal": {
-      $previousRequestId = (int)($payload["previous_request_id"] ?? 0);
-      $newTermId = (int)($payload["new_term_id"] ?? 0);
-
-      if ($previousRequestId <= 0 || $newTermId <= 0) fail("Invalid request or term.");
-
-      // Verify user owns the previous request
+    // Helper function for checking request in school year
+    function get_request_in_school_year($pdo, $uid, $schoolYear) {
       $st = $pdo->prepare("
-        SELECT ar.*, o.*
+        SELECT ar.id, ar.status, ar.org_id, ar.is_renewal, ar.previous_request_id
         FROM accreditation_requests ar
-        JOIN organizations o ON o.id = ar.org_id
-        WHERE ar.id = ? AND ar.coordinator_user_id = ?
-        LIMIT 1
-      ");
-      $st->execute([$previousRequestId, $uid]);
-      $previous = $st->fetch();
-
-      if (!$previous) fail("Previous accreditation not found.", 404);
-
-      // Prevent renewal within the same school year
-      $st = $pdo->prepare("
-        SELECT t.school_year
-        FROM accreditation_requests ar
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        WHERE ar.id = ?
-        LIMIT 1
-      ");
-      $st->execute([$previousRequestId]);
-      $prevSY = (string)($st->fetchColumn() ?? "");
-
-      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ? LIMIT 1");
-      $st->execute([$newTermId]);
-      $newSY = (string)($st->fetchColumn() ?? "");
-
-      if ($prevSY !== "" && $newSY !== "" && $prevSY === $newSY) {
-        fail("Renewal is only allowed when the school year changes. You already have accreditation for {$prevSY}.", 400);
-      }
-
-      // Check if renewal already exists for new school year
-      $st = $pdo->prepare("
-        SELECT ar.id
-        FROM accreditation_requests ar
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        WHERE ar.coordinator_user_id = ?
-          AND t.school_year = (SELECT school_year FROM academic_terms WHERE id = ?)
-          AND ar.previous_request_id = ?
-        LIMIT 1
-      ");
-      $st->execute([$uid, $newTermId, $previousRequestId]);
-      if ($st->fetch()) fail("Renewal already in progress for this term.", 400);
-
-      // Check if user already has a request for this school year
-      $st = $pdo->prepare("
-        SELECT ar.id
-        FROM accreditation_requests ar
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        WHERE ar.coordinator_user_id = ?
-          AND t.school_year = (SELECT school_year FROM academic_terms WHERE id = ?)
-        LIMIT 1
-      ");
-      $st->execute([$uid, $newTermId]);
-      if ($st->fetch()) fail("You already have an accreditation request for this term.", 400);
-
-      $pdo->beginTransaction();
-      try {
-        $orgId = (int)$previous["org_id"];
-        $previousTermId = (int)$previous["academic_term_id"];
-
-        // 1. Create new accreditation request as renewal (Draft)
-        $reqSql = "
-          INSERT INTO accreditation_requests
-            (org_id, academic_term_id, coordinator_user_id,
-             previous_request_id, is_renewal, status, submitted_at, updated_at)
-          VALUES (?, ?, ?, ?, 1, 'Draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ";
-        $st = $pdo->prepare($reqSql);
-        $st->execute([$orgId, $newTermId, $uid, $previousRequestId]);
-        $newRequestId = (int)$pdo->lastInsertId();
-
-        // 2. Copy officers from previous term
-        $offSql = "
-          INSERT INTO organization_officers
-            (org_id, academic_term_id, user_id, position,
-             full_name, course_year, status, created_at)
-          SELECT org_id, ?, user_id, position,
-                 full_name, course_year, 'Active', CURRENT_TIMESTAMP
-          FROM organization_officers
-          WHERE org_id = ?
-            AND academic_term_id = ?
-            AND status = 'Active'
-        ";
-        $st = $pdo->prepare($offSql);
-        $st->execute([$newTermId, $orgId, $previousTermId]);
-
-        // 3. Get requirements for new term
-        $requirementsSql = "
-          SELECT r.id, r.requirement_name, r.applies_to,
-                 art.file_path, art.file_name
-          FROM accreditation_requirements r
-          LEFT JOIN accreditation_requirement_templates art
-              ON art.requirement_id = r.id AND art.is_active = 1
-          WHERE r.status = 'Active'
-          ORDER BY r.sort_order ASC, r.id ASC
-        ";
-        $requirements = $pdo->query($requirementsSql)->fetchAll();
-
-        foreach ($requirements as $req) {
-          $rid = (int)$req["id"];
-
-          $st = $pdo->prepare("
-            SELECT id, file_path, file_name, status
-            FROM accreditation_request_documents
-            WHERE request_id = ? AND requirement_id = ?
-            LIMIT 1
-          ");
-          $st->execute([$previousRequestId, $rid]);
-          $previousDoc = $st->fetch();
-
-          if ($previousDoc && !empty($previousDoc["file_path"])) {
-            $docSql = "
-              INSERT INTO accreditation_request_documents
-                (request_id, requirement_id, file_path, file_name,
-                status, copied_from_doc_id, uploaded_at)
-              VALUES (?, ?, ?, ?, 'Draft', ?, CURRENT_TIMESTAMP)
-            ";
-            $st = $pdo->prepare($docSql);
-            $st->execute([
-              $newRequestId,
-              $rid,
-              (string)$previousDoc["file_path"],
-              (string)$previousDoc["file_name"],
-              (int)$previousDoc["id"]
-            ]);
-          } else {
-            $docSql = "
-              INSERT INTO accreditation_request_documents
-                (request_id, requirement_id, file_path, file_name,
-                status, copied_from_doc_id, uploaded_at)
-              VALUES (?, ?, 'pending', 'Not Submitted Yet', 'Pending', NULL, CURRENT_TIMESTAMP)
-            ";
-            $st = $pdo->prepare($docSql);
-            $st->execute([$newRequestId, $rid]);
-          }
-        }
-
-        $pdo->commit();
-
-        out([
-          "ok" => true,
-          "message" => "Renewal started. Please review and update requirements for the new term.",
-          "new_request_id" => $newRequestId,
-          "organization_id" => $orgId,
-          "term_id" => $newTermId,
-          "is_renewal" => true
-        ]);
-      } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-      }
-    }
-
-    // -----------------------------------------
-    // 4) List requests (Admin tabs) - filter by CURRENT SCHOOL YEAR
-    // -----------------------------------------
-    case "list_requests": {
-      $mode = (string)($payload["mode"] ?? "pending");
-      $q = trim((string)($payload["q"] ?? ""));
-      $page = max(1, (int)($payload["page"] ?? 1));
-      $per = max(1, min(50, (int)($payload["per_page"] ?? 10)));
-      $offset = ($page - 1) * $per;
-
-      $currentTerm = active_term($pdo);
-      if (!$currentTerm) {
-        out(["ok" => true, "items" => [], "page" => $page, "per_page" => $per, "total" => 0]);
-      }
-
-      $currentTermId = (int)$currentTerm["id"];
-      $currentSchoolYear = (string)($currentTerm["school_year"] ?? "");
-      if ($currentSchoolYear === "") {
-        out(["ok" => true, "items" => [], "page" => $page, "per_page" => $per, "total" => 0]);
-      }
-
-      $statuses = [];
-      if ($mode === "active") $statuses = ["Active"];
-      elseif ($mode === "returned") $statuses = ["Returned"];
-      else $statuses = ["Pending", "Draft", "Recommended", "Approved"];
-
-      $like = "%" . $q . "%";
-      $in = implode(",", array_fill(0, count($statuses), "?"));
-
-      $sqlCount = "
-        SELECT COUNT(*) AS c
-        FROM accreditation_requests ar
-        JOIN organizations o ON o.id = ar.org_id
         JOIN academic_terms t ON t.id = ar.academic_term_id
         WHERE ar.coordinator_user_id = ?
           AND t.school_year = ?
-          AND ar.status IN ($in)
-          AND (
-            o.org_name LIKE ?
-            OR o.abbreviation LIKE ?
-            OR t.school_year LIKE ?
-            OR t.semester LIKE ?
-          )
-      ";
-      $params = array_merge([$uid, $currentSchoolYear], $statuses, [$like, $like, $like, $like]);
-      $st = $pdo->prepare($sqlCount);
-      $st->execute($params);
-      $total = (int)($st->fetch()["c"] ?? 0);
-
-      $sql = "
-        SELECT
-          ar.id,
-          ar.status,
-          ar.academic_term_id,
-          ar.is_renewal,
-          ar.previous_request_id,
-          o.id AS org_id,
-          o.org_name,
-          o.abbreviation AS org_abbr,
-          o.org_type,
-          o.scope AS org_scope,
-          o.program_id,
-          p.abbreviation AS program,
-          p.program_name AS program_name,
-          CONCAT(t.school_year, ' • ', t.semester) AS term_label
-        FROM accreditation_requests ar
-        JOIN organizations o ON o.id = ar.org_id
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        LEFT JOIN programs p ON p.id = o.program_id
-        WHERE ar.coordinator_user_id = ?
-          AND t.school_year = ?
-          AND ar.status IN ($in)
-          AND (
-            o.org_name LIKE ?
-            OR o.abbreviation LIKE ?
-            OR t.school_year LIKE ?
-            OR t.semester LIKE ?
-          )
         ORDER BY ar.id DESC
-        LIMIT $per OFFSET $offset
-      ";
-      $st = $pdo->prepare($sql);
-      $st->execute($params);
-      $items = $st->fetchAll();
-
-      foreach ($items as &$it) {
-        $it["scope"] = scope_label_for_ui($it["org_type"], $it["org_scope"]);
-        $it["type"] = $it["org_type"];
-        $it["can_edit"] = can_edit_organization($it["status"]);
-        $it["is_renewal"] = (bool)($it["is_renewal"] ?? false);
-      }
-
-      out([
-        "ok" => true,
-        "items" => $items,
-        "page" => $page,
-        "per_page" => $per,
-        "total" => $total,
-        "current_term_id" => $currentTermId,
-        "current_school_year" => $currentSchoolYear,
-        "current_term_label" => term_label($currentTerm),
-      ]);
+        LIMIT 1
+      ");
+      $st->execute([(int)$uid, (string)$schoolYear]);
+      return $st->fetch() ?: null;
     }
 
+    function check_pending_renewals_school_year($pdo, $uid, $schoolYear) {
+      $st = $pdo->prepare("
+        SELECT COUNT(*) as count
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND t.school_year = ?
+          AND ar.status IN ('Draft', 'Pending')
+          AND ar.is_renewal = 1
+      ");
+      $st->execute([(int)$uid, (string)$schoolYear]);
+      return ((int)$st->fetchColumn()) > 0;
+    }
+
+  // -----------------------------------------
+  // 4) List requests (Admin tabs) - filter by CURRENT SCHOOL YEAR and moderator_user_id
+  // -----------------------------------------
+  case "list_requests": {
+    $mode = (string)($payload["mode"] ?? "pending");
+    $q = trim((string)($payload["q"] ?? ""));
+    $page = max(1, (int)($payload["page"] ?? 1));
+    $per = max(1, min(50, (int)($payload["per_page"] ?? 10)));
+    $offset = ($page - 1) * $per;
+
+    $currentTerm = active_term($pdo);
+    if (!$currentTerm) {
+      out(["ok" => true, "items" => [], "page" => $page, "per_page" => $per, "total" => 0]);
+    }
+
+    $currentTermId = (int)$currentTerm["id"];
+    $currentSchoolYear = (string)($currentTerm["school_year"] ?? "");
+    if ($currentSchoolYear === "") {
+      out(["ok" => true, "items" => [], "page" => $page, "per_page" => $per, "total" => 0]);
+    }
+
+    $statuses = [];
+    if ($mode === "active") $statuses = ["Active"];
+    elseif ($mode === "returned") $statuses = ["Returned"];
+    else $statuses = ["Pending", "Draft", "Recommended", "Approved"];
+
+    $like = "%" . $q . "%";
+    $in = implode(",", array_fill(0, count($statuses), "?"));
+
+    // Count query - filter by moderator_user_id = current user (the person who submitted)
+    $sqlCount = "
+      SELECT COUNT(*) AS c
+      FROM accreditation_requests ar
+      JOIN organizations o ON o.id = ar.org_id
+      JOIN academic_terms t ON t.id = ar.academic_term_id
+      WHERE ar.moderator_user_id = ?
+        AND t.school_year = ?
+        AND ar.status IN ($in)
+        AND (
+          o.org_name LIKE ?
+          OR o.abbreviation LIKE ?
+          OR t.school_year LIKE ?
+          OR t.semester LIKE ?
+        )
+    ";
+    $params = array_merge([$uid, $currentSchoolYear], $statuses, [$like, $like, $like, $like]);
+    $st = $pdo->prepare($sqlCount);
+    $st->execute($params);
+    $total = (int)($st->fetch()["c"] ?? 0);
+
+    // Main query - include coordinator and moderator info
+    $sql = "
+      SELECT
+        ar.id,
+        ar.status,
+        ar.academic_term_id,
+        ar.is_renewal,
+        ar.previous_request_id,
+        ar.coordinator_user_id,
+        ar.moderator_user_id,
+        CONCAT(coord.first_name, ' ', coord.last_name) AS coordinator_name,
+        CONCAT(moderator.first_name, ' ', moderator.last_name) AS moderator_name,
+        o.id AS org_id,
+        o.org_name,
+        o.abbreviation AS org_abbr,
+        o.org_type,
+        o.scope AS org_scope,
+        o.program_id,
+        p.abbreviation AS program,
+        p.program_name AS program_name,
+        CONCAT(t.school_year, ' • ', t.semester) AS term_label
+      FROM accreditation_requests ar
+      JOIN organizations o ON o.id = ar.org_id
+      JOIN academic_terms t ON t.id = ar.academic_term_id
+      LEFT JOIN programs p ON p.id = o.program_id
+      LEFT JOIN users coord ON coord.id = ar.coordinator_user_id      -- faculty_admin
+      LEFT JOIN users moderator ON moderator.id = ar.moderator_user_id  -- org_president (submitter)
+      WHERE ar.moderator_user_id = ?
+        AND t.school_year = ?
+        AND ar.status IN ($in)
+        AND (
+          o.org_name LIKE ?
+          OR o.abbreviation LIKE ?
+          OR t.school_year LIKE ?
+          OR t.semester LIKE ?
+        )
+      ORDER BY ar.id DESC
+      LIMIT $per OFFSET $offset
+    ";
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $items = $st->fetchAll();
+
+    foreach ($items as &$it) {
+      $it["scope"] = scope_label_for_ui($it["org_type"], $it["org_scope"]);
+      $it["type"] = $it["org_type"];
+      $it["can_edit"] = can_edit_organization($it["status"]);
+      $it["is_renewal"] = (bool)($it["is_renewal"] ?? false);
+      
+      // Add coordinator info for display (faculty_admin)
+      $it["coordinator_name"] = $it["coordinator_name"] ?? "Not assigned";
+      
+      // The moderator is the submitter (you)
+      $it["submitted_by"] = $it["moderator_name"] ?? "Unknown";
+    }
+
+    out([
+      "ok" => true,
+      "items" => $items,
+      "page" => $page,
+      "per_page" => $per,
+      "total" => $total,
+      "current_term_id" => $currentTermId,
+      "current_school_year" => $currentSchoolYear,
+      "current_term_label" => term_label($currentTerm),
+    ]);
+  }
+
     // -----------------------------------------
-    // 5) Requirements for upload table (with active template)
+    // 5) Requirements for upload table
     // -----------------------------------------
     case "list_requirements_for_upload":
     case "list_requirements": {
@@ -907,29 +760,46 @@ try {
     $schoolYear = (string)($term["school_year"] ?? "");
     if ($schoolYear === "") fail("Active term missing school_year.", 500);
 
-    if (!$isRenewal) {
-      $st = $pdo->prepare("
-        SELECT ar.id
-        FROM accreditation_requests ar
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        WHERE ar.coordinator_user_id = ?
-          AND t.school_year = ?
-        LIMIT 1
-      ");
-      $st->execute([$uid, $schoolYear]);
-      if ($st->fetch()) fail("You already submitted an accreditation request for this term.", 403);
-    } else {
-      $st = $pdo->prepare("
-        SELECT ar.id
-        FROM accreditation_requests ar
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        WHERE ar.coordinator_user_id = ?
-          AND t.school_year = ?
-          AND ar.previous_request_id = ?
-        LIMIT 1
-      ");
-      $st->execute([$uid, $schoolYear, $previousRequestId]);
-      if ($st->fetch()) fail("Renewal already submitted for this term.", 403);
+    // Get coordinator (faculty_admin) - this is REQUIRED
+    $coordinatorUserId = (int)($_POST["coordinator_user_id"] ?? 0);
+    if ($coordinatorUserId <= 0) {
+      fail("Please select a coordinator (faculty_admin).");
+    }
+
+    // Verify coordinator exists and is faculty_admin
+    $st = $pdo->prepare("SELECT id, role, status FROM users WHERE id = ?");
+    $st->execute([$coordinatorUserId]);
+    $coordinator = $st->fetch();
+    if (!$coordinator || $coordinator['role'] !== 'faculty_admin' || $coordinator['status'] !== 'Active') {
+      fail("Selected coordinator is not a valid faculty_admin.");
+    }
+
+    // No restriction for org_president, but check for faculty_admin if needed
+    if ($user["role"] !== "org_president") {
+      if (!$isRenewal) {
+        $st = $pdo->prepare("
+          SELECT ar.id
+          FROM accreditation_requests ar
+          JOIN academic_terms t ON t.id = ar.academic_term_id
+          WHERE ar.moderator_user_id = ?
+            AND t.school_year = ?
+          LIMIT 1
+        ");
+        $st->execute([$uid, $schoolYear]);
+        if ($st->fetch()) fail("You already submitted an accreditation request for this term.", 403);
+      } else {
+        $st = $pdo->prepare("
+          SELECT ar.id
+          FROM accreditation_requests ar
+          JOIN academic_terms t ON t.id = ar.academic_term_id
+          WHERE ar.moderator_user_id = ?
+            AND t.school_year = ?
+            AND ar.previous_request_id = ?
+          LIMIT 1
+        ");
+        $st->execute([$uid, $schoolYear, $previousRequestId]);
+        if ($st->fetch()) fail("Renewal already submitted for this term.", 403);
+      }
     }
 
     $orgName = trim((string)($_POST["org_name"] ?? ""));
@@ -999,7 +869,7 @@ try {
           SELECT o.*
           FROM accreditation_requests ar
           JOIN organizations o ON o.id = ar.org_id
-          WHERE ar.id = ? AND ar.coordinator_user_id = ?
+          WHERE ar.id = ? AND ar.moderator_user_id = ?
           LIMIT 1
         ");
         $st->execute([$previousRequestId, $uid]);
@@ -1095,163 +965,146 @@ try {
         $orgId = (int)$pdo->lastInsertId();
       }
 
+      // Create accreditation request - using $uid as moderator_user_id (the submitter/org_president)
       $reqSql = "
         INSERT INTO accreditation_requests
           (org_id, academic_term_id, coordinator_user_id, moderator_user_id,
           previous_request_id, is_renewal, status, submitted_at, updated_at)
         VALUES
-          (?, ?, ?, NULL, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          (?, ?, ?, ?, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ";
       $st = $pdo->prepare($reqSql);
       $st->execute([
         $orgId,
         $termId,
-        $uid,
+        $coordinatorUserId,      // ← faculty_admin (coordinator_user_id)
+        $uid,                    // ← org_president (moderator_user_id) - THIS IS THE SUBMITTER
         ($isRenewal && $previousRequestId > 0) ? $previousRequestId : null,
         $isRenewal ? 1 : 0
       ]);
       $requestId = (int)$pdo->lastInsertId();
 
-      // ================= OFFICER VALIDATION AND INSERTION =================
-      // Get school year for validation
-      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
-      $st->execute([$termId]);
-      $schoolYear = $st->fetchColumn();
-
-      // Hardcoded positions in order
+      // ================= OFFICER INSERTION =================
+      // Hardcoded positions + dynamic officers
       $hardcodedPositions = [
-          'President / Chairperson',
-          'Vice President',
-          'Secretary',
-          'Treasurer',
-          'Auditor'
+        'President / Chairperson',
+        'Vice President',
+        'Secretary',
+        'Treasurer',
+        'Auditor'
       ];
 
-      // First, collect all officer student IDs to check for duplicates
-      $officerStudentIds = [];
+      // Collect all officer data
       $officerData = [];
 
+      // Process hardcoded positions (0-4)
       for ($i = 0; $i < 5; $i++) {
-          $studentId = (int)($_POST["officers"][$i]["student_id"] ?? 0);
-          
-          if ($studentId <= 0) {
+        $studentId = (int)($_POST["officers"][$i]["student_id"] ?? 0);
+        
+        if ($studentId <= 0) {
+          // For President position, it's required and auto-filled
+          if ($i === 0 && $studentId <= 0) {
+            // Auto-fill with current user if they are org_president
+            if ($user["role"] === "org_president") {
+              $studentId = $uid;
+            } else {
               throw new Exception("Please select a student for {$hardcodedPositions[$i]} position.");
-          }
-          
-          // Check for duplicates within the same organization submission
-          if (in_array($studentId, $officerStudentIds)) {
-              throw new Exception("Duplicate officer detected. A student cannot hold multiple officer positions in the same organization.");
-          }
-          
-          $officerStudentIds[] = $studentId;
-          $officerData[$i] = [
-              'student_id' => $studentId,
-              'position' => $hardcodedPositions[$i],
-              'full_name' => trim((string)($_POST["officers"][$i]["full_name"] ?? "")),
-              'course_year' => trim((string)($_POST["officers"][$i]["course_year"] ?? "")),
-              'status' => trim((string)($_POST["officers"][$i]["status"] ?? "Active"))
-          ];
-      }
-
-      // Now check if any of these students are already officers in OTHER organizations for the SAME school year
-      $placeholders = implode(',', array_fill(0, count($officerStudentIds), '?'));
-      $params = array_merge([$schoolYear, $orgId], $officerStudentIds);
-
-      $checkOtherOrgSql = "
-          SELECT 
-              oo.user_id,
-              o.org_name,
-              oo.position,
-              CONCAT(u.first_name, ' ', u.last_name) as student_name
-          FROM organization_officers oo
-          JOIN organizations o ON o.id = oo.org_id
-          JOIN academic_terms t ON t.id = oo.academic_term_id
-          JOIN users u ON u.id = oo.user_id
-          WHERE t.school_year = ?
-              AND oo.org_id != ?
-              AND oo.user_id IN ($placeholders)
-          LIMIT 1
-      ";
-
-      $st = $pdo->prepare($checkOtherOrgSql);
-      $st->execute($params);
-      $existingOfficerOtherOrg = $st->fetch();
-
-      if ($existingOfficerOtherOrg) {
-          // Get the student's name for the error message
-          $studentName = $existingOfficerOtherOrg['student_name'];
-          $otherOrg = $existingOfficerOtherOrg['org_name'];
-          $otherPosition = $existingOfficerOtherOrg['position'];
-          
-          throw new Exception(
-              "Student {$studentName} is already an officer in '{$otherOrg}' " .
-              "as {$otherPosition} for school year {$schoolYear}. " .
-              "A student can only be an officer in ONE organization per academic year."
-          );
-      }
-
-      // If all validation passes, proceed with inserting/updating officers
-      for ($i = 0; $i < 5; $i++) {
-          $data = $officerData[$i];
-          $position = $data['position'];
-          $studentId = $data['student_id'];
-          $fullName = $data['full_name'];
-          $courseYear = $data['course_year'];
-          $status = $data['status'];
-
-          // Verify the student exists and is active
-          $st = $pdo->prepare("SELECT id, role, status FROM users WHERE id = ?");
-          $st->execute([$studentId]);
-          $student = $st->fetch();
-          
-          if (!$student || $student['role'] !== 'student' || $student['status'] !== 'Active') {
-              throw new Exception("Invalid or inactive student selected for {$position} position.");
-          }
-
-          // Check if officer already exists for this organization and term
-          $checkOffSt = $pdo->prepare("
-              SELECT id FROM organization_officers
-              WHERE org_id = ? AND academic_term_id = ? AND position = ?
-              LIMIT 1
-          ");
-          $checkOffSt->execute([$orgId, $termId, $position]);
-          $existingOfficer = $checkOffSt->fetch();
-
-          if ($existingOfficer) {
-              // Update existing officer
-              $offSql = "
-                  UPDATE organization_officers
-                  SET user_id = ?, full_name = ?, course_year = ?, status = ?
-                  WHERE org_id = ? AND academic_term_id = ? AND position = ?
-              ";
-              $st = $pdo->prepare($offSql);
-              $st->execute([
-                  $studentId,
-                  $fullName,
-                  $courseYear,
-                  $status,
-                  $orgId,
-                  $termId,
-                  $position
-              ]);
+            }
           } else {
-              // Insert new officer
-              $offSql = "
-                  INSERT INTO organization_officers
-                  (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ";
-              $st = $pdo->prepare($offSql);
-              $st->execute([
-                  $orgId,
-                  $termId,
-                  $studentId,
-                  $position,
-                  $fullName,
-                  $courseYear,
-                  $status
-              ]);
+            throw new Exception("Please select a student for {$hardcodedPositions[$i]} position.");
           }
+        }
+        
+        $officerData[] = [
+          'student_id' => $studentId,
+          'position' => $hardcodedPositions[$i],
+          'full_name' => trim((string)($_POST["officers"][$i]["full_name"] ?? "")),
+          'course_year' => trim((string)($_POST["officers"][$i]["course_year"] ?? "")),
+          'status' => trim((string)($_POST["officers"][$i]["status"] ?? "Active"))
+        ];
+      }
+
+      // Process dynamic officers (if any)
+      $dynamicIndex = 5;
+      while (isset($_POST["officers"][$dynamicIndex])) {
+        $studentId = (int)($_POST["officers"][$dynamicIndex]["student_id"] ?? 0);
+        $position = trim((string)($_POST["officers"][$dynamicIndex]["position"] ?? ""));
+        
+        if ($studentId > 0 && $position !== "") {
+          $officerData[] = [
+            'student_id' => $studentId,
+            'position' => $position,
+            'full_name' => trim((string)($_POST["officers"][$dynamicIndex]["full_name"] ?? "")),
+            'course_year' => trim((string)($_POST["officers"][$dynamicIndex]["course_year"] ?? "")),
+            'status' => trim((string)($_POST["officers"][$dynamicIndex]["status"] ?? "Active"))
+          ];
+        }
+        $dynamicIndex++;
+      }
+
+      // REMOVED: Cross-organization validation - officers can be in multiple orgs
+
+      // Insert/update officers
+      foreach ($officerData as $data) {
+        $studentId = $data['student_id'];
+        $position = $data['position'];
+        $fullName = $data['full_name'];
+        $courseYear = $data['course_year'];
+        $status = $data['status'];
+
+        // Verify the student exists and is active
+        $st = $pdo->prepare("SELECT id, role, status FROM users WHERE id = ?");
+        $st->execute([$studentId]);
+        $student = $st->fetch();
+        
+        if (!$student || $student['status'] !== 'Active') {
+          throw new Exception("Invalid or inactive student selected for {$position} position.");
+        }
+
+        // Check if officer already exists for this organization and term
+        $checkOffSt = $pdo->prepare("
+          SELECT id FROM organization_officers
+          WHERE org_id = ? AND academic_term_id = ? AND position = ?
+          LIMIT 1
+        ");
+        $checkOffSt->execute([$orgId, $termId, $position]);
+        $existingOfficer = $checkOffSt->fetch();
+
+        if ($existingOfficer) {
+          // Update existing officer
+          $offSql = "
+            UPDATE organization_officers
+            SET user_id = ?, full_name = ?, course_year = ?, status = ?
+            WHERE org_id = ? AND academic_term_id = ? AND position = ?
+          ";
+          $st = $pdo->prepare($offSql);
+          $st->execute([
+            $studentId,
+            $fullName,
+            $courseYear,
+            $status,
+            $orgId,
+            $termId,
+            $position
+          ]);
+        } else {
+          // Insert new officer
+          $offSql = "
+            INSERT INTO organization_officers
+            (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          ";
+          $st = $pdo->prepare($offSql);
+          $st->execute([
+            $orgId,
+            $termId,
+            $studentId,
+            $position,
+            $fullName,
+            $courseYear,
+            $status
+          ]);
+        }
       }
 
       // ================= DOCUMENT UPLOADS =================
@@ -1338,6 +1191,20 @@ try {
         );
       }
 
+      // Notify the coordinator (faculty_admin)
+      add_notification(
+        $pdo,
+        $coordinatorUserId,
+        $uid,
+        $isRenewal ? "Renewal Accreditation Request Submitted" : "Accreditation Request Submitted",
+        $isRenewal
+          ? "A renewal accreditation request for '{$orgName}' has been submitted and assigned to you as coordinator."
+          : "A new accreditation request for '{$orgName}' has been submitted and assigned to you as coordinator.",
+        'accreditation',
+        $requestId
+      );
+
+      // Notify the submitter (org_president)
       add_notification(
         $pdo,
         $uid,
@@ -1358,7 +1225,8 @@ try {
         "request_id" => $requestId,
         "org_id" => $orgId,
         "term_id" => $termId,
-        "is_renewal" => $isRenewal
+        "is_renewal" => $isRenewal,
+        "coordinator_id" => $coordinatorUserId
       ]);
     } catch (Throwable $e) {
       $pdo->rollBack();
@@ -1366,160 +1234,194 @@ try {
     }
   }
 
-    // -----------------------------------------
-    // 7) Get request details + documents paging
-    // -----------------------------------------
-    case "get_request": {
-      $requestId = (int)($payload["request_id"] ?? 0);
-      if ($requestId <= 0) fail("Invalid request id.");
+  // -----------------------------------------
+  // 7) Get request details + documents paging
+  // -----------------------------------------
+  case "get_request": {
+    $requestId = (int)($payload["request_id"] ?? 0);
+    if ($requestId <= 0) fail("Invalid request id.");
 
-      $docsPage = max(1, (int)($payload["docs_page"] ?? 1));
-      $docsPer = max(1, min(50, (int)($payload["docs_per_page"] ?? 8)));
-      $docsOff = ($docsPage - 1) * $docsPer;
+    $docsPage = max(1, (int)($payload["docs_page"] ?? 1));
+    $docsPer = max(1, min(50, (int)($payload["docs_per_page"] ?? 8)));
+    $docsOff = ($docsPage - 1) * $docsPer;
 
-      $sql = "
-        SELECT
-          ar.id, ar.status, ar.submitted_at, ar.updated_at, ar.is_renewal, ar.previous_request_id,
-          o.id AS org_id, o.org_name, o.abbreviation AS org_abbr, o.org_type, o.scope AS org_scope,
-          o.program_id, o.logo_path, o.mission, o.vision, o.objectives, o.advocacy,
-          o.description,  -- ← ADD THIS LINE
-          o.membership_fee, o.fee_required,
-          p.abbreviation AS program,
-          t.id AS term_id, CONCAT(t.school_year, ' • ', t.semester) AS term_label
-        FROM accreditation_requests ar
-        JOIN organizations o ON o.id = ar.org_id
-        JOIN academic_terms t ON t.id = ar.academic_term_id
-        LEFT JOIN programs p ON p.id = o.program_id
-        WHERE ar.id = ?
-          AND ar.coordinator_user_id = ?
-        LIMIT 1
-      ";
-      $st = $pdo->prepare($sql);
-      $st->execute([$requestId, $uid]);
-      $req = $st->fetch();
-      if (!$req) fail("Request not found.", 404);
-
-      $req["scope"] = scope_label_for_ui($req["org_type"], $req["org_scope"]);
-      $req["logo_url"] = $req["logo_path"] ? to_public_path($req["logo_path"]) : null;
-      $req["can_edit"] = can_edit_organization($req["status"]);
-      $req["is_renewal"] = (bool)($req["is_renewal"] ?? false);
-
-      $st = $pdo->prepare("SELECT COUNT(*) AS c FROM accreditation_request_documents WHERE request_id = ?");
-      $st->execute([$requestId]);
-      $docsTotal = (int)($st->fetch()["c"] ?? 0);
-
-      $docsSql = "
-        SELECT
-          d.id,
-          d.requirement_id,
-          r.requirement_name,
-          d.file_path,
-          d.file_name,
-          d.status,
-          d.return_reason,
-          d.reviewed_at,
-          d.copied_from_doc_id
-        FROM accreditation_request_documents d
-        JOIN accreditation_requirements r ON r.id = d.requirement_id
-        WHERE d.request_id = ?
-        ORDER BY r.sort_order ASC, d.id ASC
-        LIMIT $docsPer OFFSET $docsOff
-      ";
-      $st = $pdo->prepare($docsSql);
-      $st->execute([$requestId]);
-      $docs = $st->fetchAll();
-
-      foreach ($docs as &$d) {
-        $d["file_url"] = $d["file_path"] ? to_public_path($d["file_path"]) : null;
-        $canReplace = (strcasecmp((string)$d["status"], "Returned") === 0) || (strcasecmp((string)$req["status"], "Returned") === 0);
-        $d["can_replace"] = $canReplace;
-        $d["is_copied"] = !empty($d["copied_from_doc_id"]);
-      }
-
-      $st = $pdo->prepare("SELECT requirement_id, status FROM accreditation_request_documents WHERE request_id = ?");
-      $st->execute([$requestId]);
-      $docsAll = $st->fetchAll();
-
-      $offSql = "
-        SELECT
-          oo.id, oo.position, oo.status,
-          oo.user_id,
-          TRIM(REPLACE(CONCAT(
-            COALESCE(u.first_name, ''), ' ',
-            COALESCE(u.middle_name, ''), ' ',
-            COALESCE(u.last_name, ''), ' ',
-            COALESCE(u.suffix, '')
-          ), '  ', ' ')) AS full_name,
-          COALESCE(
-            oo.course_year,
-            CONCAT(COALESCE(u.program, ''), ' ',
-              CASE
-                WHEN u.year_level = '1' THEN '1st Year'
-                WHEN u.year_level = '2' THEN '2nd Year'
-                WHEN u.year_level = '3' THEN '3rd Year'
-                WHEN u.year_level = '4' THEN '4th Year'
-                WHEN u.year_level = '5' THEN '5th Year'
-                ELSE COALESCE(u.year_level, '')
-              END
-            )
-          ) AS course_year
-        FROM organization_officers oo
-        LEFT JOIN users u ON u.id = oo.user_id
-        WHERE oo.org_id = ?
-          AND oo.academic_term_id = ?
-        ORDER BY oo.status DESC, oo.position ASC, oo.id ASC
-      ";
-      $st = $pdo->prepare($offSql);
-      $st->execute([(int)$req["org_id"], (int)$req["term_id"]]);
-      $officers = $st->fetchAll();
-
-      out([
-        "ok" => true,
-        "request" => [
-          "id" => (int)$req["id"],
-          "status" => $req["status"],
-          "org_id" => (int)$req["org_id"],
-          "org_name" => $req["org_name"],
-          "org_abbr" => $req["org_abbr"],
-          "org_type" => $req["org_type"],
-          "scope" => $req["scope"],
-          "program_id" => $req["program_id"] ? (int)$req["program_id"] : null,
-          "program" => $req["program"] ?: "—",
-
-          "term_id" => (int)$req["term_id"],
-          "term_label" => $req["term_label"],
-
-          "logo_url" => $req["logo_url"],
-          "is_renewal" => $req["is_renewal"],
-          "previous_request_id" => $req["previous_request_id"],
-
-          "membership_fee" => (float)$req["membership_fee"],
-          "fee_required" => (float)$req["fee_required"],
-
-          "description" => $req["description"],
-          "mission" => $req["mission"],
-          "vision" => $req["vision"],
-          "objectives" => $req["objectives"],
-          "advocacy" => $req["advocacy"],
-
-          "officers" => $officers,
-          "docs_all" => $docsAll,
-          "docs" => $docs,
-          "can_edit" => $req["can_edit"],
-        ],
-        "docs_paging" => [
-          "page" => $docsPage,
-          "per_page" => $docsPer,
-          "total" => $docsTotal,
-        ],
-        "docs_meta" => (($docsTotal > 0)
-          ? ("Showing " . ($docsOff + 1) . "–" . min($docsOff + $docsPer, $docsTotal) . " of " . $docsTotal)
-          : "No documents"),
-      ]);
+    $sql = "
+      SELECT
+        ar.id, ar.status, ar.submitted_at, ar.updated_at, ar.is_renewal, ar.previous_request_id,
+        ar.coordinator_user_id,
+        ar.moderator_user_id,
+        CONCAT(coord.first_name, ' ', coord.last_name) AS coordinator_name,
+        CONCAT(moderator.first_name, ' ', moderator.last_name) AS moderator_name,
+        o.id AS org_id, o.org_name, o.abbreviation AS org_abbr, o.org_type, o.scope AS org_scope,
+        o.program_id, o.logo_path, o.mission, o.vision, o.objectives, o.advocacy,
+        o.description,
+        o.membership_fee, o.fee_required,
+        p.abbreviation AS program,
+        t.id AS term_id, CONCAT(t.school_year, ' • ', t.semester) AS term_label
+      FROM accreditation_requests ar
+      JOIN organizations o ON o.id = ar.org_id
+      JOIN academic_terms t ON t.id = ar.academic_term_id
+      LEFT JOIN programs p ON p.id = o.program_id
+      LEFT JOIN users coord ON coord.id = ar.coordinator_user_id
+      LEFT JOIN users moderator ON moderator.id = ar.moderator_user_id
+      WHERE ar.id = ?
+        AND ar.moderator_user_id = ?
+      LIMIT 1
+    ";
+    $st = $pdo->prepare($sql);
+    $st->execute([$requestId, $uid]);
+    $req = $st->fetch();
+    if (!$req) {
+      error_log("Request not found - ID: $requestId, User: $uid");
+      fail("Request not found.", 404);
     }
 
+    $req["scope"] = scope_label_for_ui($req["org_type"], $req["org_scope"]);
+    $req["logo_url"] = $req["logo_path"] ? to_public_path($req["logo_path"]) : null;
+    $req["can_edit"] = can_edit_organization($req["status"]);
+    $req["is_renewal"] = (bool)($req["is_renewal"] ?? false);
+
+    // Count ONLY active requirements documents
+    $st = $pdo->prepare("
+      SELECT COUNT(*) AS c 
+      FROM accreditation_request_documents d
+      JOIN accreditation_requirements r ON r.id = d.requirement_id
+      WHERE d.request_id = ? 
+        AND r.status = 'Active'
+    ");
+    $st->execute([$requestId]);
+    $docsTotal = (int)($st->fetch()["c"] ?? 0);
+
+    // Get documents for ONLY active requirements
+    $docsSql = "
+      SELECT
+        d.id,
+        d.requirement_id,
+        r.requirement_name,
+        d.file_path,
+        d.file_name,
+        d.status,
+        d.return_reason,
+        d.reviewed_at,
+        d.copied_from_doc_id
+      FROM accreditation_request_documents d
+      JOIN accreditation_requirements r ON r.id = d.requirement_id
+      WHERE d.request_id = ?
+        AND r.status = 'Active'
+      ORDER BY r.sort_order ASC, d.id ASC
+      LIMIT $docsPer OFFSET $docsOff
+    ";
+    $st = $pdo->prepare($docsSql);
+    $st->execute([$requestId]);
+    $docs = $st->fetchAll();
+
+    foreach ($docs as &$d) {
+      $d["file_url"] = $d["file_path"] ? to_public_path($d["file_path"]) : null;
+      $canReplace = (strcasecmp((string)$d["status"], "Returned") === 0) || (strcasecmp((string)$req["status"], "Returned") === 0);
+      $d["can_replace"] = $canReplace;
+      $d["is_copied"] = !empty($d["copied_from_doc_id"]);
+    }
+
+    // Get ALL document statuses for the request (including archived, for reference)
+    $st = $pdo->prepare("
+      SELECT d.requirement_id, d.status, r.status as req_status
+      FROM accreditation_request_documents d
+      JOIN accreditation_requirements r ON r.id = d.requirement_id
+      WHERE d.request_id = ?
+    ");
+    $st->execute([$requestId]);
+    $docsAll = $st->fetchAll();
+
+    // Get officers
+    $offSql = "
+      SELECT
+        oo.id, oo.position, oo.status,
+        oo.user_id,
+        TRIM(REPLACE(CONCAT(
+          COALESCE(u.first_name, ''), ' ',
+          COALESCE(u.middle_name, ''), ' ',
+          COALESCE(u.last_name, ''), ' ',
+          COALESCE(u.suffix, '')
+        ), '  ', ' ')) AS full_name,
+        COALESCE(
+          oo.course_year,
+          CONCAT(COALESCE(u.program, ''), ' ',
+            CASE
+              WHEN u.year_level = '1' THEN '1st Year'
+              WHEN u.year_level = '2' THEN '2nd Year'
+              WHEN u.year_level = '3' THEN '3rd Year'
+              WHEN u.year_level = '4' THEN '4th Year'
+              WHEN u.year_level = '5' THEN '5th Year'
+              ELSE COALESCE(u.year_level, '')
+            END
+          )
+        ) AS course_year
+      FROM organization_officers oo
+      LEFT JOIN users u ON u.id = oo.user_id
+      WHERE oo.org_id = ?
+        AND oo.academic_term_id = ?
+      ORDER BY 
+        CASE 
+          WHEN oo.position = 'President / Chairperson' THEN 1
+          WHEN oo.position = 'Vice President' THEN 2
+          WHEN oo.position = 'Secretary' THEN 3
+          WHEN oo.position = 'Treasurer' THEN 4
+          WHEN oo.position = 'Auditor' THEN 5
+          ELSE 6
+        END,
+        oo.position ASC,
+        oo.id ASC
+    ";
+    $st = $pdo->prepare($offSql);
+    $st->execute([(int)$req["org_id"], (int)$req["term_id"]]);
+    $officers = $st->fetchAll();
+
+    out([
+      "ok" => true,
+      "request" => [
+        "id" => (int)$req["id"],
+        "status" => $req["status"],
+        "org_id" => (int)$req["org_id"],
+        "org_name" => $req["org_name"],
+        "org_abbr" => $req["org_abbr"],
+        "org_type" => $req["org_type"],
+        "scope" => $req["scope"],
+        "program_id" => $req["program_id"] ? (int)$req["program_id"] : null,
+        "program" => $req["program"] ?: "—",
+        "coordinator_user_id" => (int)$req["coordinator_user_id"],
+        "coordinator_name" => $req["coordinator_name"] ?: "—",
+        "moderator_user_id" => (int)$req["moderator_user_id"],
+        "moderator_name" => $req["moderator_name"] ?: "—",
+        "term_id" => (int)$req["term_id"],
+        "term_label" => $req["term_label"],
+        "logo_url" => $req["logo_url"],
+        "is_renewal" => $req["is_renewal"],
+        "previous_request_id" => $req["previous_request_id"],
+        "membership_fee" => (float)$req["membership_fee"],
+        "fee_required" => (float)$req["fee_required"],
+        "description" => $req["description"],
+        "mission" => $req["mission"],
+        "vision" => $req["vision"],
+        "objectives" => $req["objectives"],
+        "advocacy" => $req["advocacy"],
+        "officers" => $officers,
+        "docs_all" => $docsAll, // This still includes all for reference
+        "docs" => $docs, // This only includes active requirements
+        "can_edit" => $req["can_edit"],
+      ],
+      "docs_paging" => [
+        "page" => $docsPage,
+        "per_page" => $docsPer,
+        "total" => $docsTotal, // This now only counts active requirements
+      ],
+      "docs_meta" => (($docsTotal > 0)
+        ? ("Showing " . ($docsOff + 1) . "–" . min($docsOff + $docsPer, $docsTotal) . " of " . $docsTotal)
+        : "No documents"),
+    ]);
+  }
+
   // -----------------------------------------
-  // 7b) Update organization info (JSON) - SCHOOL YEAR BASED VALIDATION (FIXED)
+  // 7b) Update organization info
   // -----------------------------------------
   case "update_organization": {
     $orgId = (int)($payload["org_id"] ?? 0);
@@ -1527,72 +1429,72 @@ try {
 
     if ($orgId <= 0 && $requestId <= 0) fail("Invalid organization id or request id.");
 
-    if ($orgId <= 0 && $requestId > 0) {
-      $st = $pdo->prepare("SELECT org_id FROM accreditation_requests WHERE id = ? AND coordinator_user_id = ? LIMIT 1");
-      $st->execute([$requestId, $uid]);
-      $row = $st->fetch();
-      if (!$row) fail("Request not found or access denied.", 404);
-      $orgId = (int)$row["org_id"];
+    // Verify ownership: the current moderator (org_president) OR a faculty_admin may edit
+    $st = $pdo->prepare("
+      SELECT ar.*, o.*
+      FROM accreditation_requests ar
+      JOIN organizations o ON o.id = ar.org_id
+      WHERE ar.id = ?
+      LIMIT 1
+    ");
+    $st->execute([$requestId]);
+    $org = $st->fetch();
+
+    if (!$org) {
+      error_log("Update failed - Request not found. ID: $requestId, User: $uid");
+      fail("Request not found.", 404);
     }
 
-    if ($requestId > 0) {
-      $st = $pdo->prepare("
-        SELECT ar.*, o.*
-        FROM accreditation_requests ar
-        JOIN organizations o ON o.id = ar.org_id
-        WHERE ar.id = ?
-          AND ar.coordinator_user_id = ?
-        LIMIT 1
-      ");
-      $st->execute([$requestId, $uid]);
-      $org = $st->fetch();
-
-      if (!$org) fail("Request not found or access denied.", 404);
-      if (!can_edit_organization($org['status'])) fail("This request cannot be edited in its current status.", 403);
-
-      $currentTermId = (int)$org['academic_term_id'];
-      $currentStatus = (string)$org['status'];
-    } else {
-      $st = $pdo->prepare("
-        SELECT o.*
-        FROM organizations o
-        WHERE o.id = ?
-          AND (o.created_by = ? OR EXISTS (
-            SELECT 1 FROM accreditation_requests ar2
-            WHERE ar2.org_id = o.id AND ar2.coordinator_user_id = ?
-          ))
-        LIMIT 1
-      ");
-      $st->execute([$orgId, $uid, $uid]);
-      $org = $st->fetch();
-
-      if (!$org) fail("Organization not found or access denied.", 404);
-
-      $st = $pdo->prepare("
-        SELECT ar.*
-        FROM accreditation_requests ar
-        WHERE ar.org_id = ?
-          AND ar.coordinator_user_id = ?
-        ORDER BY ar.id DESC
-        LIMIT 1
-      ");
-      $st->execute([$orgId, $uid]);
-      $latestRequest = $st->fetch();
-
-      if (!$latestRequest || !can_edit_organization($latestRequest['status'])) {
-        fail("Organization cannot be edited in its current status.", 403);
-      }
-
-      $requestId = (int)$latestRequest['id'];
-      $currentTermId = (int)$latestRequest['academic_term_id'];
-      $currentStatus = (string)$latestRequest['status'];
+    // Access check: must be the current moderator (org_president) or faculty_admin
+    $isModerator = ((int)($org["moderator_user_id"] ?? 0)) === $uid;
+    $isFacultyAdmin = ($user["role"] === "faculty_admin");
+    if (!$isModerator && !$isFacultyAdmin) {
+      error_log("Update denied - not moderator or faculty_admin. ID: $requestId, User: $uid");
+      fail("Request not found or access denied.", 404);
     }
+    
+    if (!can_edit_organization($org['status'])) {
+      fail("This request cannot be edited in its current status.", 403);
+    }
+
+    $currentTermId = (int)$org['academic_term_id'];
+    $currentStatus = (string)$org['status'];
 
     $orgName = trim((string)($payload["org_name"] ?? ($org["org_name"] ?? "")));
     $abbr = trim((string)($payload["abbreviation"] ?? ($org["abbreviation"] ?? "")));
     $orgType = (string)($payload["org_type"] ?? ($org["org_type"] ?? "Organization"));
     $uiScope = (string)($payload["scope"] ?? scope_label_for_ui(($org["org_type"] ?? "Organization"), ($org["scope"] ?? "General")));
     $programId = (int)($payload["program_id"] ?? ($org["program_id"] ?? 0));
+
+    // Get coordinator (faculty_admin) - can be updated
+    $coordinatorUserId = (int)($payload["coordinator_user_id"] ?? ($org["coordinator_user_id"] ?? 0));
+    if ($coordinatorUserId <= 0) {
+      fail("Please select a coordinator (faculty_admin).");
+    }
+
+    // Verify coordinator exists and is faculty_admin
+    $st = $pdo->prepare("SELECT id, role, status FROM users WHERE id = ?");
+    $st->execute([$coordinatorUserId]);
+    $coordinator = $st->fetch();
+    if (!$coordinator || $coordinator['role'] !== 'faculty_admin' || $coordinator['status'] !== 'Active') {
+      fail("Selected coordinator is not a valid faculty_admin.");
+    }
+
+    // Get new moderator (org_president) — supports turnover
+    // Falls back to the original moderator if not provided
+    $newModeratorUserId = (int)($payload["moderator_user_id"] ?? ($org["moderator_user_id"] ?? 0));
+    if ($newModeratorUserId <= 0) {
+      fail("Please select the organization moderator (org_president).");
+    }
+
+    $st = $pdo->prepare("SELECT id, role, status, first_name, last_name FROM users WHERE id = ?");
+    $st->execute([$newModeratorUserId]);
+    $newModerator = $st->fetch();
+    if (!$newModerator || $newModerator['role'] !== 'org_president' || $newModerator['status'] !== 'Active') {
+      fail("Selected moderator is not a valid active org_president.");
+    }
+
+    $moderatorChanged = ((int)($org["moderator_user_id"] ?? 0)) !== $newModeratorUserId;
 
     if ($orgName === "" || $abbr === "") fail("Organization name and abbreviation are required.");
 
@@ -1638,6 +1540,7 @@ try {
 
     $pdo->beginTransaction();
     try {
+      // Update organization
       $st = $pdo->prepare("
         UPDATE organizations
         SET
@@ -1672,6 +1575,65 @@ try {
         $orgId
       ]);
 
+      // Update request coordinator and moderator (org_president) if changed
+      if ($requestId > 0) {
+        $st = $pdo->prepare("
+          UPDATE accreditation_requests
+          SET coordinator_user_id = ?,
+              moderator_user_id   = ?
+          WHERE id = ?
+        ");
+        $st->execute([$coordinatorUserId, $newModeratorUserId, $requestId]);
+      }
+
+      // If the moderator changed, update the President / Chairperson officer row
+      // so it always reflects the actual org_president who now manages the org.
+      if ($moderatorChanged && $requestId > 0) {
+        // Resolve full_name and course_year for the new moderator
+        $stM = $pdo->prepare("SELECT first_name, last_name, program, year_level FROM users WHERE id = ?");
+        $stM->execute([$newModeratorUserId]);
+        $modInfo = $stM->fetch();
+        $modFullName = trim(($modInfo['first_name'] ?? '') . ' ' . ($modInfo['last_name'] ?? ''));
+        $modYearText = '';
+        if (!empty($modInfo['year_level'])) {
+          $y = (string)$modInfo['year_level'];
+          $modYearText = match($y) { '1' => '1st Year', '2' => '2nd Year', '3' => '3rd Year', '4' => '4th Year', '5' => '5th Year', default => $y };
+        }
+        $modCourseYear = trim(($modInfo['program'] ?? '') . ' ' . $modYearText);
+
+        // Update President officer row for this org + term
+        $stUpd = $pdo->prepare("
+          UPDATE organization_officers
+          SET user_id = ?, full_name = ?, course_year = ?
+          WHERE org_id = ? AND academic_term_id = ? AND position = 'President / Chairperson'
+        ");
+        $stUpd->execute([$newModeratorUserId, $modFullName, $modCourseYear, $orgId, $currentTermId]);
+
+        // Notify the old moderator that they have been turned over
+        $oldModeratorId = (int)($org["moderator_user_id"] ?? 0);
+        if ($oldModeratorId > 0 && $oldModeratorId !== $newModeratorUserId) {
+          add_notification(
+            $pdo,
+            $oldModeratorId,
+            $uid,
+            "Organization Turned Over",
+            "You are no longer the managing president of '{$orgName}'. The organization has been transferred to {$newModerator['first_name']} {$newModerator['last_name']}.",
+            'accreditation',
+            $requestId
+          );
+          // Also notify the new moderator
+          add_notification(
+            $pdo,
+            $newModeratorUserId,
+            $uid,
+            "Organization Assigned",
+            "You have been assigned as the managing president of '{$orgName}'.",
+            'accreditation',
+            $requestId
+          );
+        }
+      }
+
       // Handle logo upload on update
       if (!empty($_FILES["org_logo"]) && is_uploaded_file($_FILES["org_logo"]["tmp_name"])) {
         $f = $_FILES["org_logo"];
@@ -1701,260 +1663,127 @@ try {
         $updateLogoSt->execute([$logoPath, $orgId]);
       }
 
-    // ============= OFFICER VALIDATION AND UPDATE (SCHOOL YEAR BASED - FIXED) =============
-    $hardcodedPositions = [
-        'President / Chairperson',
-        'Vice President',
-        'Secretary',
-        'Treasurer',
-        'Auditor'
-    ];
+      // ============= OFFICER UPDATE =============
+      $termId = $currentTermId;
+      
+      // Get the school year for this term
+      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
+      $st->execute([$termId]);
+      $schoolYear = $st->fetchColumn();
 
-    if (isset($payload["edit_officers"]) && is_array($payload["edit_officers"])) {
-        $termId = $currentTermId;
+      if ($termId > 0 && $schoolYear) {
+        // Fetch existing officers for this organization and term
+        $existingOfficersSt = $pdo->prepare("
+          SELECT id, position, user_id, full_name, course_year, status
+          FROM organization_officers
+          WHERE org_id = ? AND academic_term_id = ?
+        ");
+        $existingOfficersSt->execute([$orgId, $termId]);
+        $existingOfficers = $existingOfficersSt->fetchAll();
         
-        // Get the school year for this term
-        $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
-        $st->execute([$termId]);
-        $schoolYear = $st->fetchColumn();
-
-        if ($termId > 0 && $schoolYear) {
-            // Fetch existing officers for this organization and term
-            $existingOfficersSt = $pdo->prepare("
-                SELECT id, position, user_id, full_name, course_year, status
-                FROM organization_officers
-                WHERE org_id = ? AND academic_term_id = ?
-            ");
-            $existingOfficersSt->execute([$orgId, $termId]);
-            $existingOfficers = $existingOfficersSt->fetchAll();
-            
-            // Create maps for easy lookup
-            $existingOfficersById = [];
-            $existingOfficersByPosition = [];
-            foreach ($existingOfficers as $existing) {
-                $existingOfficersById[$existing["id"]] = $existing;
-                $existingOfficersByPosition[$existing["position"]] = $existing;
-            }
-
-            // Track validation errors and officers to update
-            $validationErrors = [];
-            $officersToUpdate = [];
-            $processedPositions = [];
-
-            foreach ($payload["edit_officers"] as $index => $officerData) {
-                if (!is_array($officerData)) continue;
-
-                $position = trim((string)($officerData["position"] ?? ""));
-                $studentId = (int)($officerData["student_id"] ?? 0);
-                $officerId = isset($officerData['id']) ? (int)$officerData['id'] : 0;
-                $status = trim((string)($officerData["status"] ?? "Active"));
-
-                // Skip empty positions
-                if ($position === "") continue;
-                
-                // Check if position is valid
-                if (!in_array($position, $hardcodedPositions, true)) {
-                    $validationErrors[] = "Invalid position '{$position}'.";
-                    continue;
-                }
-
-                // Skip if position already processed in this update
-                if (in_array($position, $processedPositions)) {
-                    $validationErrors[] = "Duplicate position '{$position}' in the same update.";
-                    continue;
-                }
-                $processedPositions[] = $position;
-
-                // If no student assigned, this is an error
-                if ($studentId <= 0) {
-                    $validationErrors[] = "{$position} has no student assigned.";
-                    continue;
-                }
-
-                // Check if this position is already taken in THIS organization for THIS TERM
-                if (isset($existingOfficersByPosition[$position])) {
-                    $existingOfficer = $existingOfficersByPosition[$position];
-                    
-                    // CASE 1: This is the EXACT SAME OFFICER (same ID or same user_id)
-                    // Let it pass without validation - this is the case where you're just resubmitting the same data
-                    if (($officerId > 0 && $existingOfficer['id'] == $officerId) || 
-                        ($existingOfficer['user_id'] == $studentId)) {
-                        
-                        // This is the same officer - no validation needed
-                        // Add to update list but mark as same officer
-                        $officersToUpdate[] = [
-                            'id' => $officerId > 0 ? $officerId : $existingOfficer['id'],
-                            'position' => $position,
-                            'user_id' => $studentId,
-                            'full_name' => $officerData["full_name"] ?? $existingOfficer['full_name'],
-                            'course_year' => $officerData["course_year"] ?? $existingOfficer['course_year'],
-                            'status' => $status,
-                            'is_same_officer' => true
-                        ];
-                        continue;
-                    }
-                    
-                    // CASE 2: Different officer trying to take the position - THIS IS AN ERROR
-                    // Get the name of the current holder
-                    $st = $pdo->prepare("SELECT CONCAT(first_name, ' ', last_name) as name FROM users WHERE id = ?");
-                    $st->execute([$existingOfficer['user_id']]);
-                    $holderName = $st->fetchColumn() ?: 'another officer';
-                    $validationErrors[] = "{$position}: Already held by {$holderName} in this term. You cannot assign a different student to this position while the current officer is still active.";
-                    continue;
-                }
-
-                // Validate that the student exists and is active
-                $st = $pdo->prepare("SELECT id, role, status, first_name, last_name FROM users WHERE id = ?");
-                $st->execute([$studentId]);
-                $student = $st->fetch();
-                
-                if (!$student) {
-                    $validationErrors[] = "{$position}: Student not found.";
-                    continue;
-                }
-                
-                if ($student['role'] !== 'student') {
-                    $validationErrors[] = "{$position}: Not a student.";
-                    continue;
-                }
-                
-                if ($student['status'] !== 'Active') {
-                    $validationErrors[] = "{$position}: Student not active.";
-                    continue;
-                }
-
-                // Check if student is already an officer in a DIFFERENT organization in THIS SCHOOL YEAR
-                $checkSql = "
-                    SELECT o.org_name, oo.position, t.semester
-                    FROM organization_officers oo
-                    JOIN organizations o ON o.id = oo.org_id
-                    JOIN academic_terms t ON t.id = oo.academic_term_id
-                    WHERE t.school_year = ? 
-                      AND oo.user_id = ?
-                      AND oo.org_id != ?
-                    LIMIT 1
-                ";
-                $st = $pdo->prepare($checkSql);
-                $st->execute([$schoolYear, $studentId, $orgId]);
-                $existingOfficerOtherOrg = $st->fetch();
-                
-                if ($existingOfficerOtherOrg) {
-                    $validationErrors[] = 
-                        "{$position}: Student already officer in {$existingOfficerOtherOrg['org_name']} " .
-                        "({$existingOfficerOtherOrg['semester']} sem).";
-                    continue;
-                }
-
-                // Get fresh student data for course_year and full_name if needed
-                $fullName = trim((string)($officerData["full_name"] ?? ""));
-                if (empty($fullName)) {
-                    $fullName = trim($student['first_name'] . ' ' . ($student['last_name'] ?? ''));
-                }
-
-                $courseYear = trim((string)($officerData["course_year"] ?? ""));
-                if (empty($courseYear)) {
-                    $st = $pdo->prepare("SELECT program, year_level FROM users WHERE id = ?");
-                    $st->execute([$studentId]);
-                    $sData = $st->fetch();
-                    
-                    $yearText = "";
-                    if (!empty($sData['year_level'])) {
-                        $year = $sData['year_level'];
-                        if ($year === "1") $yearText = "1st Year";
-                        else if ($year === "2") $yearText = "2nd Year";
-                        else if ($year === "3") $yearText = "3rd Year";
-                        else if ($year === "4") $yearText = "4th Year";
-                        else if ($year === "5") $yearText = "5th Year";
-                        else $yearText = $year;
-                    }
-                    $courseYear = trim(($sData['program'] ?? '') . ' ' . $yearText);
-                }
-
-                // Add to officers to update list (new officer)
-                $officersToUpdate[] = [
-                    'id' => 0,
-                    'position' => $position,
-                    'user_id' => $studentId,
-                    'full_name' => $fullName,
-                    'course_year' => $courseYear,
-                    'status' => $status,
-                    'is_same_officer' => false
-                ];
-            }
-
-            // If there are validation errors, fail
-            if (!empty($validationErrors)) {
-                throw new Exception("Officer validation failed:\n- " . implode("\n- ", $validationErrors));
-            }
-
-            // Process the officers to update
-            foreach ($officersToUpdate as $officer) {
-                $position = $officer['position'];
-                $studentId = $officer['user_id'];
-                $fullName = $officer['full_name'];
-                $courseYear = $officer['course_year'];
-                $status = $officer['status'];
-                $officerId = $officer['id'];
-
-                if ($officer['is_same_officer']) {
-                    // This is the same officer - we can skip the update if nothing changed
-                    // Or do a lightweight update if needed
-                    if ($officerId > 0) {
-                        // Optional: update only if something actually changed
-                        // For now, we'll skip updates for same officers to save queries
-                        // Uncomment below if you want to update anyway
-                        /*
-                        $updateSt = $pdo->prepare("
-                            UPDATE organization_officers
-                            SET full_name = ?, course_year = ?, status = ?
-                            WHERE id = ? AND org_id = ? AND academic_term_id = ?
-                        ");
-                        $updateSt->execute([
-                            $fullName,
-                            $courseYear,
-                            $status,
-                            $officerId,
-                            $orgId,
-                            $termId
-                        ]);
-                        */
-                    }
-                } else if ($officerId > 0) {
-                    // Update existing officer with new data
-                    $updateSt = $pdo->prepare("
-                        UPDATE organization_officers
-                        SET user_id = ?, full_name = ?, course_year = ?, status = ?
-                        WHERE id = ? AND org_id = ? AND academic_term_id = ?
-                    ");
-                    $updateSt->execute([
-                        $studentId,
-                        $fullName,
-                        $courseYear,
-                        $status,
-                        $officerId,
-                        $orgId,
-                        $termId
-                    ]);
-                } else {
-                    // Insert new officer
-                    $insertSt = $pdo->prepare("
-                        INSERT INTO organization_officers
-                            (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ");
-                    $insertSt->execute([
-                        $orgId,
-                        $termId,
-                        $studentId,
-                        $position,
-                        $fullName,
-                        $courseYear,
-                        $status
-                    ]);
-                }
-            }
+        // Create maps for easy lookup
+        $existingOfficersByPosition = [];
+        foreach ($existingOfficers as $existing) {
+          $existingOfficersByPosition[$existing["position"]] = $existing;
         }
-    }
+
+        // Process officer updates
+        if (isset($payload["edit_officers"]) && is_array($payload["edit_officers"])) {
+          foreach ($payload["edit_officers"] as $index => $officerData) {
+            if (!is_array($officerData)) continue;
+
+            $position = trim((string)($officerData["position"] ?? ""));
+            $studentId = (int)($officerData["student_id"] ?? 0);
+            $officerId = isset($officerData['id']) ? (int)$officerData['id'] : 0;
+            $status = trim((string)($officerData["status"] ?? "Active"));
+
+            // Skip empty positions
+            if ($position === "") continue;
+            
+            // For President position, DO NOT ALLOW CHANGE
+            if ($position === 'President / Chairperson') {
+              // Keep the existing president - no changes allowed
+              if (isset($existingOfficersByPosition[$position])) {
+                continue;
+              }
+            }
+
+            // If no student assigned, skip
+            if ($studentId <= 0) continue;
+
+            // Validate that the student exists and is active
+            $st = $pdo->prepare("SELECT id, role, status, first_name, last_name FROM users WHERE id = ?");
+            $st->execute([$studentId]);
+            $student = $st->fetch();
+            
+            if (!$student || $student['status'] !== 'Active') continue;
+
+            // Get student data
+            $fullName = trim((string)($officerData["full_name"] ?? ""));
+            if (empty($fullName)) {
+              $fullName = trim($student['first_name'] . ' ' . ($student['last_name'] ?? ''));
+            }
+
+            $courseYear = trim((string)($officerData["course_year"] ?? ""));
+            if (empty($courseYear)) {
+              $st = $pdo->prepare("SELECT program, year_level FROM users WHERE id = ?");
+              $st->execute([$studentId]);
+              $sData = $st->fetch();
+              
+              $yearText = "";
+              if (!empty($sData['year_level'])) {
+                $year = $sData['year_level'];
+                if ($year === "1") $yearText = "1st Year";
+                else if ($year === "2") $yearText = "2nd Year";
+                else if ($year === "3") $yearText = "3rd Year";
+                else if ($year === "4") $yearText = "4th Year";
+                else if ($year === "5") $yearText = "5th Year";
+                else $yearText = $year;
+              }
+              $courseYear = trim(($sData['program'] ?? '') . ' ' . $yearText);
+            }
+
+            // Check if position exists
+            if (isset($existingOfficersByPosition[$position])) {
+              $existing = $existingOfficersByPosition[$position];
+              
+              // Update existing officer
+              if ($position !== 'President / Chairperson') { // Skip president update
+                $updateSt = $pdo->prepare("
+                  UPDATE organization_officers
+                  SET user_id = ?, full_name = ?, course_year = ?, status = ?
+                  WHERE id = ? AND org_id = ? AND academic_term_id = ?
+                ");
+                $updateSt->execute([
+                  $studentId,
+                  $fullName,
+                  $courseYear,
+                  $status,
+                  $existing['id'],
+                  $orgId,
+                  $termId
+                ]);
+              }
+            } else {
+              // Insert new officer
+              $insertSt = $pdo->prepare("
+                INSERT INTO organization_officers
+                  (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ");
+              $insertSt->execute([
+                $orgId,
+                $termId,
+                $studentId,
+                $position,
+                $fullName,
+                $courseYear,
+                $status
+              ]);
+            }
+          }
+        }
+      }
 
       // Handle file uploads
       if (!empty($_FILES["files"]) && is_array($_FILES["files"]["name"])) {
@@ -2035,9 +1864,8 @@ try {
               submitted_at = IF(submitted_at IS NULL AND ? = 'Pending', CURRENT_TIMESTAMP, submitted_at),
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-            AND coordinator_user_id = ?
         ");
-        $st->execute([$newStatus, $newStatus, $requestId, $uid]);
+        $st->execute([$newStatus, $newStatus, $requestId]);
       }
 
       // Notifications
@@ -2054,6 +1882,20 @@ try {
         );
       }
 
+      // Notify the coordinator (faculty_admin)
+      if ($coordinatorUserId) {
+        add_notification(
+          $pdo,
+          $coordinatorUserId,
+          $uid,
+          "Organization Updated",
+          "Organization '{$orgName}' has been updated by the organization president.",
+          'reaccreditation',
+          $requestId
+        );
+      }
+
+      // Notify the submitter
       add_notification(
         $pdo,
         $uid,
@@ -2093,13 +1935,17 @@ try {
         LEFT JOIN users u ON u.id = oo.user_id
         WHERE oo.org_id = ?
           AND oo.academic_term_id = ?
-        ORDER BY FIELD(oo.position, 
-          'President / Chairperson',
-          'Vice President',
-          'Secretary',
-          'Treasurer',
-          'Auditor'
-        ), oo.id ASC
+        ORDER BY 
+          CASE 
+            WHEN oo.position = 'President / Chairperson' THEN 1
+            WHEN oo.position = 'Vice President' THEN 2
+            WHEN oo.position = 'Secretary' THEN 3
+            WHEN oo.position = 'Treasurer' THEN 4
+            WHEN oo.position = 'Auditor' THEN 5
+            ELSE 6
+          END,
+          oo.position ASC,
+          oo.id ASC
       ");
       $st->execute([$orgId, $currentTermId]);
       $officers = $st->fetchAll();
@@ -2128,374 +1974,579 @@ try {
           "objectives" => $updatedOrg["objectives"],
           "advocacy" => $updatedOrg["advocacy"],
           "logo_url" => $updatedOrg["logo_url"],
-          "officers" => $officers
+          "officers" => $officers,
+          "coordinator_user_id" => $coordinatorUserId
         ]
       ]);
     } catch (Throwable $e) {
       $pdo->rollBack();
+      error_log("Update failed: " . $e->getMessage());
       fail("Update failed: " . $e->getMessage(), 500);
     }
   }
 
-  // -----------------------------------------
-  // 7c) Search active students (JSON) - WITH SCHOOL YEAR OFFICER CHECK
-  // -----------------------------------------
-  case "search_students": {
-    $q = trim((string)($payload["q"] ?? ""));
-    $programId = (int)($payload["program_id"] ?? 0);
-    $limit = max(1, min(50, (int)($payload["limit"] ?? 25)));
-    $orgId = (int)($payload["org_id"] ?? 0);
-    $termId = (int)($payload["term_id"] ?? 0);
-    $excludeCurrentOfficers = (bool)($payload["exclude_current"] ?? true);
-
-    if (mb_strlen($q) < 2) out(["ok" => true, "items" => []]);
-
-    $like = "%" . $q . "%";
-
-    $filterAbbr = null;
-    if ($programId > 0) {
-      $filterAbbr = program_abbr_by_id($pdo, $programId);
-      if (!$filterAbbr) out(["ok" => true, "items" => []]);
-    }
-
-    // Get school year if term_id is provided
-    $schoolYear = null;
-    if ($termId > 0) {
-      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
-      $st->execute([$termId]);
-      $schoolYear = $st->fetchColumn();
-    }
-
-    $sql = "
-      SELECT
-        u.id,
-        u.id_number,
-        TRIM(REPLACE(CONCAT(
-          COALESCE(u.first_name, ''), ' ',
-          COALESCE(u.middle_name, ''), ' ',
-          COALESCE(u.last_name, ''), ' ',
-          COALESCE(u.suffix, '')
-        ), '  ', ' ')) AS full_name,
-        u.year_level,
-        u.program AS program
-      FROM users u
-      WHERE u.role = 'student'
-        AND u.status = 'Active'
-        AND (
-          u.id_number LIKE ?
-          OR u.first_name LIKE ?
-          OR u.middle_name LIKE ?
-          OR u.last_name LIKE ?
-          OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?
-        )
-    ";
-    $params = [$like, $like, $like, $like, $like];
-
-    // Exclude students who are already officers in ANY organization for this SCHOOL YEAR
-    if ($excludeCurrentOfficers && $schoolYear) {
-      $sql .= " AND u.id NOT IN (
-        SELECT DISTINCT oo.user_id 
-        FROM organization_officers oo
-        JOIN academic_terms t ON t.id = oo.academic_term_id
-        WHERE t.school_year = ? AND oo.user_id IS NOT NULL
-      )";
-      $params[] = $schoolYear;
-    }
-
-    if ($filterAbbr) {
-      $sql .= " AND u.program = ? ";
-      $params[] = $filterAbbr;
-    }
-
-    $sql .= " ORDER BY u.last_name ASC, u.first_name ASC LIMIT $limit ";
-
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
-    $items = $st->fetchAll();
-
-    foreach ($items as &$it) {
-      $year = (string)($it["year_level"] ?? "");
-      $yearText = $year;
-      if ($year === "1") $yearText = "1st Year";
-      else if ($year === "2") $yearText = "2nd Year";
-      else if ($year === "3") $yearText = "3rd Year";
-      else if ($year === "4") $yearText = "4th Year";
-      else if ($year === "5") $yearText = "5th Year";
-
-      $abbr = trim((string)($it["program"] ?? ""));
-      $it["course_year"] = $abbr && $yearText ? ($abbr . " " . $yearText) : ($abbr ?: $yearText);
-      
-      // Add a note if this student was an officer in previous years
-      if ($schoolYear) {
-        $st = $pdo->prepare("
-          SELECT COUNT(*) FROM organization_officers oo
-          JOIN academic_terms t ON t.id = oo.academic_term_id
-          WHERE t.school_year < ? AND oo.user_id = ?
-        ");
-        $st->execute([$schoolYear, $it['id']]);
-        $prevYears = $st->fetchColumn();
-        $it["previous_officer"] = ($prevYears > 0);
-      } else {
-        $it["previous_officer"] = false;
-      }
-    }
-
-    out([
-      "ok" => true, 
-      "items" => $items,
-      "school_year" => $schoolYear
-    ]);
-  }
-
-  // -----------------------------------------
-  // 7d) Add officer (JSON) - SCHOOL YEAR BASED VALIDATION (FIXED)
-  // -----------------------------------------
-  case "add_officer": {
-    $orgId = (int)($payload["org_id"] ?? 0);
-    $termId = (int)($payload["academic_term_id"] ?? 0);
-    $userId = (int)($payload["user_id"] ?? 0);
-    $position = trim((string)($payload["position"] ?? ""));
-
-    if ($orgId <= 0 || $termId <= 0) fail("Invalid org/term id.");
-    if ($userId <= 0) fail("Invalid student.");
-    if ($position === "") fail("Position is required.");
-
-    // Define allowed positions
-    $allowedPositions = [
-      'President / Chairperson',
-      'Vice President',
-      'Secretary',
-      'Treasurer',
-      'Auditor'
-    ];
-    
-    if (!in_array($position, $allowedPositions, true)) {
-      fail("Invalid position. Must be one of: " . implode(", ", $allowedPositions), 400);
-    }
-
-    // Check if student exists and is active
-    $st = $pdo->prepare("SELECT id, role, status, first_name, last_name FROM users WHERE id = ? LIMIT 1");
-    $st->execute([$userId]);
-    $u = $st->fetch();
-    if (!$u) fail("Selected user not found.", 404);
-    if ($u["role"] !== "student") fail("Selected user is not a student.", 400);
-    if ($u["status"] !== "Active") fail("Selected student is not active.", 400);
-
-    // Get the school year for this term
-    $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ?");
-    $st->execute([$termId]);
-    $schoolYear = $st->fetchColumn();
-    if (!$schoolYear) fail("Invalid academic term.", 400);
-
-    // FIXED: Check if student is already an officer in a DIFFERENT organization in THIS SCHOOL YEAR
-    $st = $pdo->prepare("
-      SELECT 
-        oo.id, 
-        oo.position, 
-        o.org_name, 
-        t.semester,
-        CONCAT(u.first_name, ' ', u.last_name) as current_officer_name
-      FROM organization_officers oo
-      JOIN organizations o ON o.id = oo.org_id
-      JOIN academic_terms t ON t.id = oo.academic_term_id
-      LEFT JOIN users u ON u.id = oo.user_id
-      WHERE t.school_year = ? 
-        AND oo.user_id = ?
-        AND oo.org_id != ?  -- Only block if it's a DIFFERENT organization
-      LIMIT 1
-    ");
-    $st->execute([$schoolYear, $userId, $orgId]);
-    $existingOfficer = $st->fetch();
-    
-    if ($existingOfficer) {
-      fail(
-        "Student " . htmlspecialchars($u['first_name'] . ' ' . $u['last_name']) . 
-        " is already an officer in a DIFFERENT organization '" . $existingOfficer['org_name'] . 
-        "' as " . $existingOfficer["position"] . " for " . $existingOfficer['semester'] . " semester " . $schoolYear . ". " .
-        "A student can only be an officer in ONE organization per academic year.", 
-        400
-      );
-    }
-
-    // Check if position is already taken in THIS organization for THIS TERM
-    $st = $pdo->prepare("
-      SELECT oo.id, CONCAT(u.first_name, ' ', u.last_name) as officer_name
-      FROM organization_officers oo
-      LEFT JOIN users u ON u.id = oo.user_id
-      WHERE oo.org_id = ? AND oo.academic_term_id = ? AND oo.position = ?
-      LIMIT 1
-    ");
-    $st->execute([$orgId, $termId, $position]);
-    $positionTaken = $st->fetch();
-    
-    if ($positionTaken) {
-      fail(
-        "Position '" . $position . "' is already held by " . 
-        htmlspecialchars($positionTaken['officer_name']) . " in this organization for this term.", 
-        400
-      );
-    }
-
-    // Get student's course and year for course_year field
-    $st = $pdo->prepare("SELECT program, year_level FROM users WHERE id = ?");
-    $st->execute([$userId]);
-    $studentData = $st->fetch();
-    
-    $yearText = "";
-    if (!empty($studentData['year_level'])) {
-      $year = $studentData['year_level'];
-      if ($year === "1") $yearText = "1st Year";
-      else if ($year === "2") $yearText = "2nd Year";
-      else if ($year === "3") $yearText = "3rd Year";
-      else if ($year === "4") $yearText = "4th Year";
-      else if ($year === "5") $yearText = "5th Year";
-      else $yearText = $year;
-    }
-    
-    $courseYear = trim(($studentData['program'] ?? '') . ' ' . $yearText);
-    if (empty(trim($courseYear))) {
-      $courseYear = null;
-    }
-
-    // Insert the new officer
-    $st = $pdo->prepare("
-      INSERT INTO organization_officers 
-        (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'Active', CURRENT_TIMESTAMP)
-    ");
-    
-    $fullName = trim($u['first_name'] . ' ' . ($u['middle_name'] ?? '') . ' ' . $u['last_name']);
-    $fullName = preg_replace('/\s+/', ' ', $fullName);
-    
-    $st->execute([
-      $orgId, 
-      $termId, 
-      $userId, 
-      $position, 
-      $fullName, 
-      $courseYear
-    ]);
-    
-    $officerId = (int)$pdo->lastInsertId();
-
-    // Fetch the newly created officer to return
-    $st = $pdo->prepare("
-      SELECT 
-        oo.id,
-        oo.position,
-        oo.status,
-        oo.user_id,
-        oo.full_name,
-        oo.course_year,
-        u.id_number,
-        u.program,
-        u.year_level
-      FROM organization_officers oo
-      LEFT JOIN users u ON u.id = oo.user_id
-      WHERE oo.id = ?
-    ");
-    $st->execute([$officerId]);
-    $newOfficer = $st->fetch();
-
-    out([
-      "ok" => true, 
-      "message" => "Officer added successfully.",
-      "officer_id" => $officerId,
-      "officer" => $newOfficer
-    ]);
-  }
-
     // -----------------------------------------
-    // 8) Replace a returned document (multipart)
+    // 7c) Search active students (JSON) - REMOVED CROSS-ORG RESTRICTION
     // -----------------------------------------
-    case "replace_document": {
-      $docId = (int)($_POST["doc_id"] ?? 0);
-      if ($docId <= 0) fail("Invalid document id.");
+    case "search_students": {
+      $q = trim((string)($payload["q"] ?? ""));
+      $programId = (int)($payload["program_id"] ?? 0);
+      $limit = max(1, min(50, (int)($payload["limit"] ?? 25)));
 
-      if (empty($_FILES["file"]) || !is_uploaded_file($_FILES["file"]["tmp_name"])) {
-        fail("No file uploaded.");
+      if (mb_strlen($q) < 2) out(["ok" => true, "items" => []]);
+
+      $like = "%" . $q . "%";
+
+      $filterAbbr = null;
+      if ($programId > 0) {
+        $filterAbbr = program_abbr_by_id($pdo, $programId);
+        if (!$filterAbbr) out(["ok" => true, "items" => []]);
       }
 
       $sql = "
-        SELECT d.id, d.request_id, d.requirement_id, d.status AS doc_status,
-               ar.status AS req_status, ar.coordinator_user_id
-        FROM accreditation_request_documents d
-        JOIN accreditation_requests ar ON ar.id = d.request_id
-        WHERE d.id = ?
-        LIMIT 1
+        SELECT
+          u.id,
+          u.id_number,
+          TRIM(REPLACE(CONCAT(
+            COALESCE(u.first_name, ''), ' ',
+            COALESCE(u.middle_name, ''), ' ',
+            COALESCE(u.last_name, ''), ' ',
+            COALESCE(u.suffix, '')
+          ), '  ', ' ')) AS full_name,
+          u.year_level,
+          u.program AS program
+        FROM users u
+        WHERE u.role = 'student'
+          AND u.status = 'Active'
+          AND (
+            u.id_number LIKE ?
+            OR u.first_name LIKE ?
+            OR u.middle_name LIKE ?
+            OR u.last_name LIKE ?
+            OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?
+          )
       ";
+      $params = [$like, $like, $like, $like, $like];
+
+      if ($filterAbbr) {
+        $sql .= " AND u.program = ? ";
+        $params[] = $filterAbbr;
+      }
+
+      $sql .= " ORDER BY u.last_name ASC, u.first_name ASC LIMIT $limit ";
+
       $st = $pdo->prepare($sql);
-      $st->execute([$docId]);
-      $row = $st->fetch();
-      if (!$row) fail("Document not found.", 404);
-      if ((int)$row["coordinator_user_id"] !== $uid) fail("Forbidden.", 403);
+      $st->execute($params);
+      $items = $st->fetchAll();
 
-      $docReturned = strcasecmp((string)$row["doc_status"], "Returned") === 0;
-      $reqReturned = strcasecmp((string)$row["req_status"], "Returned") === 0;
-      if (!$docReturned && !$reqReturned) {
-        fail("This document is not marked as Returned.", 403);
+      foreach ($items as &$it) {
+        $year = (string)($it["year_level"] ?? "");
+        $yearText = $year;
+        if ($year === "1") $yearText = "1st Year";
+        else if ($year === "2") $yearText = "2nd Year";
+        else if ($year === "3") $yearText = "3rd Year";
+        else if ($year === "4") $yearText = "4th Year";
+        else if ($year === "5") $yearText = "5th Year";
+
+        $abbr = trim((string)($it["program"] ?? ""));
+        $it["course_year"] = $abbr && $yearText ? ($abbr . " " . $yearText) : ($abbr ?: $yearText);
       }
 
-      $f = $_FILES["file"];
-      if ($f["error"] !== UPLOAD_ERR_OK) fail("Upload failed.");
+      out(["ok" => true, "items" => $items]);
+    }
 
-      $orig = (string)($f["name"] ?? "file");
-      $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
-      $allowed = ["pdf", "docx", "png", "jpg", "jpeg", "webp"];
-      if (!in_array($ext, $allowed, true)) fail("Invalid file type.");
+    // -----------------------------------------
+    // 7d) Add officer (JSON) - REMOVED CROSS-ORG RESTRICTION
+    // -----------------------------------------
+    case "add_officer": {
+      $orgId = (int)($payload["org_id"] ?? 0);
+      $termId = (int)($payload["academic_term_id"] ?? 0);
+      $userId = (int)($payload["user_id"] ?? 0);
+      $position = trim((string)($payload["position"] ?? ""));
 
-      $requestId = (int)$row["request_id"];
-      $rid = (int)$row["requirement_id"];
+      if ($orgId <= 0 || $termId <= 0) fail("Invalid org/term id.");
+      if ($userId <= 0) fail("Invalid student.");
+      if ($position === "") fail("Position is required.");
 
-      $baseDirRel = "assets/uploads/accreditation/{$requestId}/req_{$rid}";
-      $baseDirFs = __DIR__ . "/../" . $baseDirRel;
-      if (!ensure_dir($baseDirFs)) fail("Cannot create upload directory.", 500);
+      // Check if student exists and is active
+      $st = $pdo->prepare("SELECT id, role, status, first_name, last_name FROM users WHERE id = ? LIMIT 1");
+      $st->execute([$userId]);
+      $u = $st->fetch();
+      if (!$u) fail("Selected user not found.", 404);
+      if ($u["role"] !== "student") fail("Selected user is not a student.", 400);
+      if ($u["status"] !== "Active") fail("Selected student is not active.", 400);
 
-      $safe = safe_filename(pathinfo($orig, PATHINFO_FILENAME));
-      $fname = "replace_req{$rid}_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "_" . $safe . "." . $ext;
-      $destFs = $baseDirFs . "/" . $fname;
+      // REMOVED: Cross-organization validation
+      // Officers can now be in multiple organizations
 
-      if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) fail("Failed to save file.", 500);
-
-      $publicPath = to_public_path($baseDirRel . "/" . $fname);
-
-      $upd = "
-        UPDATE accreditation_request_documents
-        SET file_path = ?, file_name = ?, status = 'Submitted',
-            reviewed_by = NULL, reviewed_at = NULL, return_reason = NULL,
-            uploaded_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      ";
-      $st = $pdo->prepare($upd);
-      $st->execute([$publicPath, $orig, $docId]);
-
-      $pdo->prepare("UPDATE accreditation_requests SET updated_at = CURRENT_TIMESTAMP, status='Pending' WHERE id = ?")
-        ->execute([$requestId]);
-
-      $specialAdminId = get_active_special_admin($pdo);
-      if ($specialAdminId) {
-        add_notification(
-          $pdo,
-          $specialAdminId,
-          $uid,
-          "Document Replaced - Requires Review",
-          "A document has been replaced for accreditation request #{$requestId} by {$user['first_name']} {$user['last_name']}. The request status has been reset to Pending.",
-          'accreditation',
-          $requestId
-        );
+      // Get student's course and year for course_year field
+      $st = $pdo->prepare("SELECT program, year_level FROM users WHERE id = ?");
+      $st->execute([$userId]);
+      $studentData = $st->fetch();
+      
+      $yearText = "";
+      if (!empty($studentData['year_level'])) {
+        $year = $studentData['year_level'];
+        if ($year === "1") $yearText = "1st Year";
+        else if ($year === "2") $yearText = "2nd Year";
+        else if ($year === "3") $yearText = "3rd Year";
+        else if ($year === "4") $yearText = "4th Year";
+        else if ($year === "5") $yearText = "5th Year";
+        else $yearText = $year;
+      }
+      
+      $courseYear = trim(($studentData['program'] ?? '') . ' ' . $yearText);
+      if (empty(trim($courseYear))) {
+        $courseYear = null;
       }
 
+      // Insert the new officer
+      $st = $pdo->prepare("
+        INSERT INTO organization_officers 
+          (org_id, academic_term_id, user_id, position, full_name, course_year, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'Active', CURRENT_TIMESTAMP)
+      ");
+      
+      $fullName = trim($u['first_name'] . ' ' . ($u['middle_name'] ?? '') . ' ' . $u['last_name']);
+      $fullName = preg_replace('/\s+/', ' ', $fullName);
+      
+      $st->execute([
+        $orgId, 
+        $termId, 
+        $userId, 
+        $position, 
+        $fullName, 
+        $courseYear
+      ]);
+      
+      $officerId = (int)$pdo->lastInsertId();
+
+      // Fetch the newly created officer to return
+      $st = $pdo->prepare("
+        SELECT 
+          oo.id,
+          oo.position,
+          oo.status,
+          oo.user_id,
+          oo.full_name,
+          oo.course_year,
+          u.id_number,
+          u.program,
+          u.year_level
+        FROM organization_officers oo
+        LEFT JOIN users u ON u.id = oo.user_id
+        WHERE oo.id = ?
+      ");
+      $st->execute([$officerId]);
+      $newOfficer = $st->fetch();
+
+      out([
+        "ok" => true, 
+        "message" => "Officer added successfully.",
+        "officer_id" => $officerId,
+        "officer" => $newOfficer
+      ]);
+    }
+
+  // -----------------------------------------
+  // 8) Replace a returned document (multipart)
+  // -----------------------------------------
+  case "replace_document": {
+    $docId = (int)($_POST["doc_id"] ?? 0);
+    if ($docId <= 0) fail("Invalid document id.");
+
+    if (empty($_FILES["file"]) || !is_uploaded_file($_FILES["file"]["tmp_name"])) {
+      fail("No file uploaded.");
+    }
+
+    $sql = "
+      SELECT d.id, d.request_id, d.requirement_id, d.status AS doc_status,
+            ar.status AS req_status, ar.moderator_user_id
+      FROM accreditation_request_documents d
+      JOIN accreditation_requests ar ON ar.id = d.request_id
+      WHERE d.id = ?
+      LIMIT 1
+    ";
+    $st = $pdo->prepare($sql);
+    $st->execute([$docId]);
+    $row = $st->fetch();
+    if (!$row) fail("Document not found.", 404);
+    if ((int)$row["moderator_user_id"] !== $uid) fail("Forbidden.", 403);
+
+    $docReturned = strcasecmp((string)$row["doc_status"], "Returned") === 0;
+    $reqReturned = strcasecmp((string)$row["req_status"], "Returned") === 0;
+    if (!$docReturned && !$reqReturned) {
+      fail("This document is not marked as Returned.", 403);
+    }
+
+    $f = $_FILES["file"];
+    if ($f["error"] !== UPLOAD_ERR_OK) fail("Upload failed.");
+
+    $orig = (string)($f["name"] ?? "file");
+    $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+    $allowed = ["pdf", "docx", "png", "jpg", "jpeg", "webp"];
+    if (!in_array($ext, $allowed, true)) fail("Invalid file type.");
+
+    $requestId = (int)$row["request_id"];
+    $rid = (int)$row["requirement_id"];
+
+    $baseDirRel = "assets/uploads/accreditation/{$requestId}/req_{$rid}";
+    $baseDirFs = __DIR__ . "/../" . $baseDirRel;
+    if (!ensure_dir($baseDirFs)) fail("Cannot create upload directory.", 500);
+
+    $safe = safe_filename(pathinfo($orig, PATHINFO_FILENAME));
+    $fname = "replace_req{$rid}_" . date("Ymd_His") . "_" . bin2hex(random_bytes(4)) . "_" . $safe . "." . $ext;
+    $destFs = $baseDirFs . "/" . $fname;
+
+    if (!move_uploaded_file((string)$f["tmp_name"], $destFs)) fail("Failed to save file.", 500);
+
+    $publicPath = to_public_path($baseDirRel . "/" . $fname);
+
+    $upd = "
+      UPDATE accreditation_request_documents
+      SET file_path = ?, file_name = ?, status = 'Submitted',
+          reviewed_by = NULL, reviewed_at = NULL, return_reason = NULL,
+          uploaded_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    ";
+    $st = $pdo->prepare($upd);
+    $st->execute([$publicPath, $orig, $docId]);
+
+    $pdo->prepare("UPDATE accreditation_requests SET updated_at = CURRENT_TIMESTAMP, status='Pending' WHERE id = ?")
+      ->execute([$requestId]);
+
+    $specialAdminId = get_active_special_admin($pdo);
+    if ($specialAdminId) {
       add_notification(
         $pdo,
+        $specialAdminId,
         $uid,
-        $uid,
-        "Document Replaced",
-        "You have successfully replaced the document for requirement #{$rid}. The request status has been reset to Pending.",
+        "Document Replaced - Requires Review",
+        "A document has been replaced for accreditation request #{$requestId} by {$user['first_name']} {$user['last_name']}. The request status has been reset to Pending.",
         'accreditation',
         $requestId
       );
+    }
 
-      out(["ok" => true, "message" => "Document replaced."]);
+    // Notify the coordinator (faculty_admin)
+    // First get the coordinator ID from the request
+    $st = $pdo->prepare("SELECT coordinator_user_id FROM accreditation_requests WHERE id = ?");
+    $st->execute([$requestId]);
+    $coordinatorId = $st->fetchColumn();
+    
+    if ($coordinatorId) {
+      add_notification(
+        $pdo,
+        $coordinatorId,
+        $uid,
+        "Document Replaced - Requires Review",
+        "A document has been replaced for accreditation request #{$requestId} by the organization president. The request status has been reset to Pending for re-review.",
+        'accreditation',
+        $requestId
+      );
+    }
+
+    add_notification(
+      $pdo,
+      $uid,
+      $uid,
+      "Document Replaced",
+      "You have successfully replaced the document for requirement #{$rid}. The request status has been reset to Pending.",
+      'accreditation',
+      $requestId
+    );
+
+    out(["ok" => true, "message" => "Document replaced."]);
+  }
+
+    // -----------------------------------------
+    // 9) Check accreditation status (unchanged)
+    // -----------------------------------------
+    case "check_accreditation_status": {
+      $info = active_term_info($pdo);
+      if (!$info) fail("No active academic term found.");
+
+      $termId = (int)$info["id"];
+      $schoolYear = (string)$info["school_year"];
+
+      // For org_president, we don't need to check as strictly
+      if ($user["role"] === "org_president") {
+        out([
+          "ok" => true,
+          "has_current_term_request" => false,
+          "needs_renewal" => false,
+          "active_term" => $info["raw"]
+        ]);
+      }
+
+      // Check if user already has a request in CURRENT school year
+      $currentRequest = get_request_in_school_year($pdo, $uid, $schoolYear);
+      if ($currentRequest) {
+        out([
+          "ok" => true,
+          "has_current_term_request" => true,
+          "current_request" => $currentRequest,
+          "active_term" => $info["raw"],
+          "needs_renewal" => false,
+          "reason" => "Has request for active school year."
+        ]);
+      }
+
+      // Check if user has an accredited request within same school_year
+      if ($schoolYear !== "") {
+        $sameYearAcc = get_accreditation_in_school_year($pdo, $uid, $schoolYear, $termId);
+        if ($sameYearAcc) {
+          out([
+            "ok" => true,
+            "has_current_term_request" => false,
+            "active_term" => $info["raw"],
+            "needs_renewal" => false,
+            "has_accreditation_same_school_year" => true,
+            "accredited_request_same_school_year" => $sameYearAcc,
+            "reason" => "Already accredited within the active school year."
+          ]);
+        }
+      }
+
+      // Look for latest accredited request in any previous school year
+      $previousRequest = get_latest_accredited_request_any_year($pdo, $uid, $termId);
+      if ($previousRequest) {
+        out([
+          "ok" => true,
+          "has_current_term_request" => false,
+          "previous_request" => $previousRequest,
+          "active_term" => $info["raw"],
+          "needs_renewal" => true
+        ]);
+      }
+
+      out([
+        "ok" => true,
+        "has_current_term_request" => false,
+        "needs_renewal" => false,
+        "active_term" => $info["raw"]
+      ]);
+    }
+
+    // Helper functions for check_accreditation_status
+    function get_accreditation_in_school_year($pdo, $uid, $schoolYear, $excludeTermId = 0) {
+      $excludeTermId = (int)$excludeTermId;
+
+      $sql = "
+        SELECT ar.id, ar.status, ar.org_id, ar.submitted_at,
+               o.org_name, o.org_type, o.abbreviation,
+               at.id AS academic_term_id, at.school_year, at.semester
+        FROM accreditation_requests ar
+        JOIN organizations o ON o.id = ar.org_id
+        JOIN academic_terms at ON at.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND at.school_year = ?
+          AND ar.status IN ('Active', 'Approved')
+      ";
+      $params = [(int)$uid, (string)$schoolYear];
+
+      if ($excludeTermId > 0) {
+        $sql .= " AND ar.academic_term_id <> ? ";
+        $params[] = $excludeTermId;
+      }
+
+      $sql .= " ORDER BY ar.id DESC LIMIT 1 ";
+
+      $st = $pdo->prepare($sql);
+      $st->execute($params);
+      return $st->fetch() ?: null;
+    }
+
+    function get_latest_accredited_request_any_year($pdo, $uid, $excludeTermId = 0) {
+      $excludeTermId = (int)$excludeTermId;
+
+      $sql = "
+        SELECT ar.id, ar.status, ar.org_id, ar.submitted_at,
+               o.org_name, o.org_type, o.abbreviation,
+               at.id AS academic_term_id, at.school_year, at.semester
+        FROM accreditation_requests ar
+        JOIN organizations o ON o.id = ar.org_id
+        JOIN academic_terms at ON at.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND ar.status IN ('Active', 'Approved')
+      ";
+      $params = [(int)$uid];
+
+      if ($excludeTermId > 0) {
+        $sql .= " AND ar.academic_term_id <> ? ";
+        $params[] = $excludeTermId;
+      }
+
+      $sql .= " ORDER BY at.school_year DESC, at.id DESC, ar.id DESC LIMIT 1 ";
+
+      $st = $pdo->prepare($sql);
+      $st->execute($params);
+      return $st->fetch() ?: null;
+    }
+
+    // -----------------------------------------
+    // 10) Start renewal process (unchanged)
+    // -----------------------------------------
+    case "start_renewal": {
+      $previousRequestId = (int)($payload["previous_request_id"] ?? 0);
+      $newTermId = (int)($payload["new_term_id"] ?? 0);
+
+      if ($previousRequestId <= 0 || $newTermId <= 0) fail("Invalid request or term.");
+
+      // Verify user owns the previous request
+      $st = $pdo->prepare("
+        SELECT ar.*, o.*
+        FROM accreditation_requests ar
+        JOIN organizations o ON o.id = ar.org_id
+        WHERE ar.id = ? AND ar.coordinator_user_id = ?
+        LIMIT 1
+      ");
+      $st->execute([$previousRequestId, $uid]);
+      $previous = $st->fetch();
+
+      if (!$previous) fail("Previous accreditation not found.", 404);
+
+      // Prevent renewal within the same school year
+      $st = $pdo->prepare("
+        SELECT t.school_year
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.id = ?
+        LIMIT 1
+      ");
+      $st->execute([$previousRequestId]);
+      $prevSY = (string)($st->fetchColumn() ?? "");
+
+      $st = $pdo->prepare("SELECT school_year FROM academic_terms WHERE id = ? LIMIT 1");
+      $st->execute([$newTermId]);
+      $newSY = (string)($st->fetchColumn() ?? "");
+
+      if ($prevSY !== "" && $newSY !== "" && $prevSY === $newSY) {
+        fail("Renewal is only allowed when the school year changes. You already have accreditation for {$prevSY}.", 400);
+      }
+
+      // Check if renewal already exists for new school year
+      $st = $pdo->prepare("
+        SELECT ar.id
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND t.school_year = (SELECT school_year FROM academic_terms WHERE id = ?)
+          AND ar.previous_request_id = ?
+        LIMIT 1
+      ");
+      $st->execute([$uid, $newTermId, $previousRequestId]);
+      if ($st->fetch()) fail("Renewal already in progress for this term.", 400);
+
+      // Check if user already has a request for this school year
+      $st = $pdo->prepare("
+        SELECT ar.id
+        FROM accreditation_requests ar
+        JOIN academic_terms t ON t.id = ar.academic_term_id
+        WHERE ar.coordinator_user_id = ?
+          AND t.school_year = (SELECT school_year FROM academic_terms WHERE id = ?)
+        LIMIT 1
+      ");
+      $st->execute([$uid, $newTermId]);
+      if ($st->fetch()) fail("You already have an accreditation request for this term.", 400);
+
+      $pdo->beginTransaction();
+      try {
+        $orgId = (int)$previous["org_id"];
+        $previousTermId = (int)$previous["academic_term_id"];
+        $coordinatorUserId = (int)$previous["coordinator_user_id"];
+
+        // 1. Create new accreditation request as renewal (Draft)
+        $reqSql = "
+          INSERT INTO accreditation_requests
+            (org_id, academic_term_id, coordinator_user_id,
+             previous_request_id, is_renewal, status, submitted_at, updated_at)
+          VALUES (?, ?, ?, ?, 1, 'Draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ";
+        $st = $pdo->prepare($reqSql);
+        $st->execute([$orgId, $newTermId, $coordinatorUserId, $previousRequestId]);
+        $newRequestId = (int)$pdo->lastInsertId();
+
+        // 2. Copy officers from previous term
+        $offSql = "
+          INSERT INTO organization_officers
+            (org_id, academic_term_id, user_id, position,
+             full_name, course_year, status, created_at)
+          SELECT org_id, ?, user_id, position,
+                 full_name, course_year, 'Active', CURRENT_TIMESTAMP
+          FROM organization_officers
+          WHERE org_id = ?
+            AND academic_term_id = ?
+            AND status = 'Active'
+        ";
+        $st = $pdo->prepare($offSql);
+        $st->execute([$newTermId, $orgId, $previousTermId]);
+
+        // 3. Get requirements for new term
+        $requirementsSql = "
+          SELECT r.id, r.requirement_name, r.applies_to,
+                 art.file_path, art.file_name
+          FROM accreditation_requirements r
+          LEFT JOIN accreditation_requirement_templates art
+              ON art.requirement_id = r.id AND art.is_active = 1
+          WHERE r.status = 'Active'
+          ORDER BY r.sort_order ASC, r.id ASC
+        ";
+        $requirements = $pdo->query($requirementsSql)->fetchAll();
+
+        foreach ($requirements as $req) {
+          $rid = (int)$req["id"];
+
+          $st = $pdo->prepare("
+            SELECT id, file_path, file_name, status
+            FROM accreditation_request_documents
+            WHERE request_id = ? AND requirement_id = ?
+            LIMIT 1
+          ");
+          $st->execute([$previousRequestId, $rid]);
+          $previousDoc = $st->fetch();
+
+          if ($previousDoc && !empty($previousDoc["file_path"])) {
+            $docSql = "
+              INSERT INTO accreditation_request_documents
+                (request_id, requirement_id, file_path, file_name,
+                status, copied_from_doc_id, uploaded_at)
+              VALUES (?, ?, ?, ?, 'Draft', ?, CURRENT_TIMESTAMP)
+            ";
+            $st = $pdo->prepare($docSql);
+            $st->execute([
+              $newRequestId,
+              $rid,
+              (string)$previousDoc["file_path"],
+              (string)$previousDoc["file_name"],
+              (int)$previousDoc["id"]
+            ]);
+          } else {
+            $docSql = "
+              INSERT INTO accreditation_request_documents
+                (request_id, requirement_id, file_path, file_name,
+                status, copied_from_doc_id, uploaded_at)
+              VALUES (?, ?, 'pending', 'Not Submitted Yet', 'Pending', NULL, CURRENT_TIMESTAMP)
+            ";
+            $st = $pdo->prepare($docSql);
+            $st->execute([$newRequestId, $rid]);
+          }
+        }
+
+        $pdo->commit();
+
+        out([
+          "ok" => true,
+          "message" => "Renewal started. Please review and update requirements for the new term.",
+          "new_request_id" => $newRequestId,
+          "organization_id" => $orgId,
+          "term_id" => $newTermId,
+          "is_renewal" => true
+        ]);
+      } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+      }
     }
 
     default:

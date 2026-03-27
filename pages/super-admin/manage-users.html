@@ -90,6 +90,12 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
     table.table tbody tr.highlighted-row {
       animation: none;
     }
+    
+    /* President badge styling */
+    .badge-president {
+      background-color: #6f42c1;
+      color: white;
+    }
   </style>
 </head>
 
@@ -98,7 +104,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
   <div>
     <h1 class="mb-1">Manage Users</h1>
     <div class="text-muted">
-      Manage <span class="fw-semibold">Students</span> and <span class="fw-semibold">Coordinators</span>.
+      Manage <span class="fw-semibold">Students</span>, <span class="fw-semibold">Coordinators</span>, and <span class="fw-semibold">Presidents</span>.
       Supports CSV import/export for faster updates.
     </div>
   </div>
@@ -122,6 +128,13 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="tab-students" data-bs-toggle="tab" data-bs-target="#panel-students" type="button" role="tab" aria-controls="panel-students" aria-selected="true">
           <i class="bi bi-mortarboard-fill me-2"></i>Students
+        </button>
+      </li>
+
+      <!-- NEW: Presidents Tab (separate top-level tab) -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-presidents" data-bs-toggle="tab" data-bs-target="#panel-presidents" type="button" role="tab" aria-controls="panel-presidents" aria-selected="false">
+          <i class="bi bi-stars me-2"></i>Presidents
         </button>
       </li>
 
@@ -149,7 +162,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
         <!-- Tab header row (actions top-right inside tab) -->
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
           <div class="text-muted small">
-            Students are for application usage. Add students here and manage their status.
+            Students are for application usage. Add students here and manage their status. 
+            <span class="fw-semibold">Promote students to President role</span> using the More menu in Active tab.
           </div>
 
           <div class="d-flex align-items-center gap-3 flex-wrap action-buttons-container ms-auto">
@@ -185,16 +199,16 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
               <i class="bi bi-info-circle" style="font-size: 1.4rem;"></i>
             </div>
             <div class="flex-grow-1">
-              <div class="fw-semibold">CSV supported</div>
+              <div class="fw-semibold">CSV supported & President Role</div>
               <div class="text-muted small mb-0">
                 CSV columns (suggested): <span class="fw-semibold">id_number, first_name, middle_name, last_name, suffix, email, program, year_level, school_year, status</span>.
-                Passwords are handled server-side.
+                Passwords are handled server-side. <span class="fw-semibold">Promote students to President</span> using the More menu (⋮) in Active tab.
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Status tabs (Pending/Active/Inactive/Archived) -->
+        <!-- Status tabs (Pending/Active/Inactive/Archived) - NO PRESIDENTS HERE -->
         <ul class="nav nav-pills gap-2 mb-3" id="studentsStatusTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="students-status-pending-tab" data-bs-toggle="pill" data-bs-target="#students-status-pending" type="button" role="tab" aria-controls="students-status-pending" aria-selected="true">
@@ -223,7 +237,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- ===================== STUDENTS PENDING ===================== -->
           <div class="tab-pane fade show active" id="students-status-pending" role="tabpanel" aria-labelledby="students-status-pending-tab" tabindex="0">
 
-            <!-- Search bar for Students Pending - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Students Pending -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -303,14 +317,14 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- ===================== STUDENTS ACTIVE ===================== -->
           <div class="tab-pane fade" id="students-status-active" role="tabpanel" aria-labelledby="students-status-active-tab" tabindex="0">
 
-            <!-- Search bar for Students Active - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Students Active -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" id="studentsActiveSearch" placeholder="Search ID / name / program..." />
               </div>
               
-              <!-- Bulk action bar (ONLY show when there is at least 1 selection) -->
+              <!-- Bulk action bar -->
               <div class="bulkbar d-none" id="studentsActiveBulkBar">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                   <div class="text-muted small">
@@ -380,7 +394,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- ===================== STUDENTS INACTIVE ===================== -->
           <div class="tab-pane fade" id="students-status-inactive" role="tabpanel" aria-labelledby="students-status-inactive-tab" tabindex="0">
 
-            <!-- Search bar for Students Inactive - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Students Inactive -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -404,6 +418,11 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
 
                     <button type="button" class="btn btn-outline-primary btn-sm" id="studentsInactiveExportSelectedBtn">
                       <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+
+                    <!-- Activate Selected Button for Inactive -->
+                    <button type="button" class="btn btn-success btn-sm" id="studentsInactiveActivateSelectedBtn">
+                      <i class="bi bi-check-circle me-2"></i>Activate Selected
                     </button>
 
                     <button type="button" class="btn btn-outline-warning btn-sm" id="studentsInactiveArchiveSelectedBtn">
@@ -456,38 +475,34 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- ===================== STUDENTS ARCHIVED ===================== -->
           <div class="tab-pane fade" id="students-status-archived" role="tabpanel" aria-labelledby="students-status-archived-tab" tabindex="0">
 
-            <!-- Search bar for Students Archived - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Students Archived -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" id="studentsArchivedSearch" placeholder="Search ID / name / program..." />
               </div>
               
-              <div class="bulkbar d-none" id="studentsArchivedBulkBar">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                  <div class="text-muted small">
-                    Selected: <span class="fw-semibold" id="studentsArchivedSelectedCount">0</span>
-                  </div>
-
-                  <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="studentsArchivedSelectAllBtn">
-                      <i class="bi bi-check2-square me-2"></i>Select All
-                    </button>
-
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="studentsArchivedClearSelectionBtn">
-                      <i class="bi bi-x-circle me-2"></i>Clear
-                    </button>
-
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="studentsArchivedExportSelectedBtn">
-                      <i class="bi bi-upload me-2"></i>Export Selected
-                    </button>
-
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="studentsArchivedRestoreSelectedBtn">
-                      <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Selected
-                    </button>
-                  </div>
+            <div class="bulkbar d-none" id="studentsArchivedBulkBar">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="text-muted small">
+                  Selected: <span class="fw-semibold" id="studentsArchivedSelectedCount">0</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="studentsArchivedSelectAllBtn">
+                    <i class="bi bi-check2-square me-2"></i>Select All
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="studentsArchivedClearSelectionBtn">
+                    <i class="bi bi-x-circle me-2"></i>Clear
+                  </button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" id="studentsArchivedExportSelectedBtn">
+                    <i class="bi bi-upload me-2"></i>Export Selected
+                  </button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" id="studentsArchivedRestoreSelectedBtn">
+                    <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Selected
+                  </button>
                 </div>
               </div>
+            </div>
             </div>
 
             <div class="table-responsive-sm">
@@ -528,7 +543,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
               </nav>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -543,7 +557,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           </div>
 
           <div class="d-flex align-items-center gap-3 flex-wrap action-buttons-container ms-auto">
-            <!-- Buttons only (search bar moved to table header) -->
+            <!-- Buttons only -->
             <div class="dropdown">
               <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="btnFacultyExportDropdown">
                 <i class="bi bi-upload me-2"></i>Export
@@ -591,7 +605,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- FACULTY ACTIVE -->
           <div class="tab-pane fade show active" id="faculty-status-active" role="tabpanel" aria-labelledby="faculty-status-active-tab" tabindex="0">
 
-            <!-- Search bar for Faculty Active - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Faculty Active -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -653,21 +667,35 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- FACULTY INACTIVE -->
           <div class="tab-pane fade" id="faculty-status-inactive" role="tabpanel" aria-labelledby="faculty-status-inactive-tab" tabindex="0">
 
-            <!-- Search bar for Faculty Inactive - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Faculty Inactive -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" id="facultyInactiveSearch" placeholder="Search ID / name..." />
               </div>
-              
+
               <div class="bulkbar d-none" id="facultyInactiveBulkBar">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                  <div class="text-muted small">Selected: <span class="fw-semibold" id="facultyInactiveSelectedCount">0</span></div>
+                  <div class="text-muted small">
+                    Selected: <span class="fw-semibold" id="facultyInactiveSelectedCount">0</span>
+                  </div>
                   <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyInactiveSelectAllBtn"><i class="bi bi-check2-square me-2"></i>Select All</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyInactiveClearSelectionBtn"><i class="bi bi-x-circle me-2"></i>Clear</button>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyInactiveExportSelectedBtn"><i class="bi bi-upload me-2"></i>Export Selected</button>
-                    <button type="button" class="btn btn-outline-warning btn-sm" id="facultyInactiveArchiveSelectedBtn"><i class="bi bi-archive me-2"></i>Archive Selected</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyInactiveSelectAllBtn">
+                      <i class="bi bi-check2-square me-2"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyInactiveClearSelectionBtn">
+                      <i class="bi bi-x-circle me-2"></i>Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyInactiveExportSelectedBtn">
+                      <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+                    <!-- ADD THIS BUTTON -->
+                    <button type="button" class="btn btn-success btn-sm" id="facultyInactiveActivateSelectedBtn">
+                      <i class="bi bi-check-circle me-2"></i>Activate Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="facultyInactiveArchiveSelectedBtn">
+                      <i class="bi bi-archive me-2"></i>Archive Selected
+                    </button>
                   </div>
                 </div>
               </div>
@@ -715,21 +743,32 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- FACULTY ARCHIVED -->
           <div class="tab-pane fade" id="faculty-status-archived" role="tabpanel" aria-labelledby="faculty-status-archived-tab" tabindex="0">
 
-            <!-- Search bar for Faculty Archived - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Faculty Archived -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" id="facultyArchivedSearch" placeholder="Search ID / name..." />
               </div>
               
+              <!-- Find the faculty archived bulk bar and add the Activate Selected button -->
               <div class="bulkbar d-none" id="facultyArchivedBulkBar">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                  <div class="text-muted small">Selected: <span class="fw-semibold" id="facultyArchivedSelectedCount">0</span></div>
+                  <div class="text-muted small">
+                    Selected: <span class="fw-semibold" id="facultyArchivedSelectedCount">0</span>
+                  </div>
                   <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyArchivedSelectAllBtn"><i class="bi bi-check2-square me-2"></i>Select All</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyArchivedClearSelectionBtn"><i class="bi bi-x-circle me-2"></i>Clear</button>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyArchivedExportSelectedBtn"><i class="bi bi-upload me-2"></i>Export Selected</button>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyArchivedRestoreSelectedBtn"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore Selected</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyArchivedSelectAllBtn">
+                      <i class="bi bi-check2-square me-2"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="facultyArchivedClearSelectionBtn">
+                      <i class="bi bi-x-circle me-2"></i>Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyArchivedExportSelectedBtn">
+                      <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="facultyArchivedRestoreSelectedBtn">
+                      <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Selected
+                    </button>
                   </div>
                 </div>
               </div>
@@ -773,7 +812,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
               </nav>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -788,7 +826,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           </div>
 
           <div class="d-flex align-items-center gap-3 flex-wrap action-buttons-container ms-auto">
-            <!-- Buttons only (search bar moved to table header) -->
+            <!-- Buttons only -->
             <div class="dropdown">
               <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="btnModeratorsExportDropdown">
                 <i class="bi bi-upload me-2"></i>Export
@@ -836,7 +874,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- MOD ACTIVE -->
           <div class="tab-pane fade show active" id="moderators-status-active" role="tabpanel" aria-labelledby="moderators-status-active-tab" tabindex="0">
 
-            <!-- Search bar for Moderators Active - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Moderators Active -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -898,7 +936,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- MOD INACTIVE -->
           <div class="tab-pane fade" id="moderators-status-inactive" role="tabpanel" aria-labelledby="moderators-status-inactive-tab" tabindex="0">
 
-            <!-- Search bar for Moderators Inactive - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Moderators Inactive -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -960,7 +998,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
           <!-- MOD ARCHIVED -->
           <div class="tab-pane fade" id="moderators-status-archived" role="tabpanel" aria-labelledby="moderators-status-archived-tab" tabindex="0">
 
-            <!-- Search bar for Moderators Archived - MOVED TO TABLE HEADER -->
+            <!-- Search bar for Moderators Archived -->
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
               <div class="input-group input-group-sm" style="max-width: 300px;">
                 <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
@@ -1018,7 +1056,314 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPPPPPP
               </nav>
             </div>
           </div>
+        </div>
+      </div>
 
+      <!-- =====================================================
+        PRESIDENTS TAB (SEPARATE TOP-LEVEL TAB)
+      ====================================================== -->
+      <div class="tab-pane fade" id="panel-presidents" role="tabpanel" aria-labelledby="tab-presidents" tabindex="0">
+
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="text-muted small">
+            Organization Presidents. Presidents are students with special privileges.
+            <span class="fw-semibold">Promote students to President</span> from the Students tab, or add them directly here.
+          </div>
+
+          <div class="d-flex align-items-center gap-3 flex-wrap action-buttons-container ms-auto">
+            <!-- Export dropdown -->
+            <div class="dropdown">
+              <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="btnPresidentsExportDropdown">
+                <i class="bi bi-upload me-2"></i>Export
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li><button class="dropdown-item" type="button" id="exportPresidentsActiveCsv"><i class="bi bi-filetype-csv me-2"></i>Active</button></li>
+                <li><button class="dropdown-item" type="button" id="exportPresidentsInactiveCsv"><i class="bi bi-filetype-csv me-2"></i>Inactive</button></li>
+                <li><button class="dropdown-item" type="button" id="exportPresidentsArchivedCsv"><i class="bi bi-filetype-csv me-2"></i>Archived</button></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><button class="dropdown-item" type="button" id="exportPresidentsAllCsv"><i class="bi bi-filetype-csv me-2"></i>All</button></li>
+              </ul>
+            </div>
+
+            <!-- Import button -->
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportCsv" id="btnImportPresidentsCsv">
+              <i class="bi bi-download me-2"></i>Import
+            </button>
+
+            <!-- Add President button -->
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddPresident" id="btnAddPresidentTab">
+              <i class="bi bi-person-plus-fill me-2"></i>Add President
+            </button>
+          </div>
+        </div>
+
+        <!-- helper banner -->
+        <div class="border rounded-4 p-3 p-md-4 bg-light mb-3">
+          <div class="d-flex align-items-start gap-3">
+            <div class="text-primary">
+              <i class="bi bi-info-circle" style="font-size: 1.4rem;"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">CSV Import for Presidents</div>
+              <div class="text-muted small mb-0">
+                CSV columns: <span class="fw-semibold">id_number, first_name, middle_name, last_name, suffix, email, program, year_level, school_year, status</span>.
+                Role will be set to <span class="fw-semibold">org_president</span> automatically.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status tabs for Presidents -->
+        <ul class="nav nav-pills gap-2 mb-3" id="presidentsStatusTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="presidents-status-active-tab" data-bs-toggle="pill" data-bs-target="#presidents-status-active" type="button" role="tab" aria-controls="presidents-status-active" aria-selected="true">
+              <i class="bi bi-check-circle-fill me-2"></i>Active
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="presidents-status-inactive-tab" data-bs-toggle="pill" data-bs-target="#presidents-status-inactive" type="button" role="tab" aria-controls="presidents-status-inactive" aria-selected="false">
+              <i class="bi bi-dash-circle-fill me-2"></i>Inactive
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="presidents-status-archived-tab" data-bs-toggle="pill" data-bs-target="#presidents-status-archived" type="button" role="tab" aria-controls="presidents-status-archived" aria-selected="false">
+              <i class="bi bi-archive-fill me-2"></i>Archived
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="presidentsStatusTabsContent">
+
+          <!-- PRESIDENTS ACTIVE -->
+          <div class="tab-pane fade show active" id="presidents-status-active" role="tabpanel" aria-labelledby="presidents-status-active-tab" tabindex="0">
+
+            <!-- Search bar for Presidents Active -->
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+              <div class="input-group input-group-sm" style="max-width: 300px;">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="presidentsActiveSearch" placeholder="Search President..." />
+              </div>
+              
+              <div class="bulkbar d-none" id="presidentsActiveBulkBar">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="text-muted small">
+                    Selected: <span class="fw-semibold" id="presidentsActiveSelectedCount">0</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsActiveSelectAllBtn">
+                      <i class="bi bi-check2-square me-2"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsActiveClearSelectionBtn">
+                      <i class="bi bi-x-circle me-2"></i>Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="presidentsActiveExportSelectedBtn">
+                      <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="presidentsActiveArchiveSelectedBtn">
+                      <i class="bi bi-archive me-2"></i>Archive Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsActiveDemoteSelectedBtn">
+                      <i class="bi bi-arrow-down-circle me-2"></i>Demote Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive-sm">
+              <table class="table align-middle table-hover mb-0" id="tblPresidentsActive">
+                <thead class="table-light">
+                  <tr>
+                    <th class="chk-col">
+                      <input type="checkbox" class="form-check-input header-checkbox" id="presidentsActiveHeaderCheckbox">
+                    </th>
+                    <th style="width: 140px;">ID No.</th>
+                    <th style="width: 240px;">Full Name</th>
+                    <th style="width: 170px;">Program</th>
+                    <th style="width: 120px;">Year Level</th>
+                    <th style="width: 140px;">School Year</th>
+                    <th style="width: 120px;">Status</th>
+                    <th class="text-end" style="width: 200px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="presidentsActiveTbody">
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                      <div class="mb-2"><i class="bi bi-inbox" style="font-size: 1.5rem;"></i></div>
+                      No active presidents found.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+              <div class="text-muted small" id="presidentsActiveMeta">Showing 0–0 of 0</div>
+              <nav aria-label="Presidents active pagination">
+                <ul class="pagination pagination-sm mb-0" id="presidentsActivePagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+          <!-- PRESIDENTS INACTIVE -->
+          <div class="tab-pane fade" id="presidents-status-inactive" role="tabpanel" aria-labelledby="presidents-status-inactive-tab" tabindex="0">
+
+            <!-- Search bar for Presidents Inactive -->
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+              <div class="input-group input-group-sm" style="max-width: 300px;">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="presidentsInactiveSearch" placeholder="Search President..." />
+              </div>
+              
+              <div class="bulkbar d-none" id="presidentsInactiveBulkBar">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="text-muted small">
+                    Selected: <span class="fw-semibold" id="presidentsInactiveSelectedCount">0</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsInactiveSelectAllBtn">
+                      <i class="bi bi-check2-square me-2"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsInactiveClearSelectionBtn">
+                      <i class="bi bi-x-circle me-2"></i>Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="presidentsInactiveExportSelectedBtn">
+                      <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="presidentsInactiveActivateSelectedBtn">
+                      <i class="bi bi-check-circle me-2"></i>Activate Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="presidentsInactiveArchiveSelectedBtn">
+                      <i class="bi bi-archive me-2"></i>Archive Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsInactiveDemoteSelectedBtn">
+                      <i class="bi bi-arrow-down-circle me-2"></i>Demote Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive-sm">
+              <table class="table align-middle table-hover mb-0" id="tblPresidentsInactive">
+                <thead class="table-light">
+                  <tr>
+                    <th class="chk-col">
+                      <input type="checkbox" class="form-check-input header-checkbox" id="presidentsInactiveHeaderCheckbox">
+                    </th>
+                    <th style="width: 140px;">ID No.</th>
+                    <th style="width: 240px;">Full Name</th>
+                    <th style="width: 170px;">Program</th>
+                    <th style="width: 120px;">Year Level</th>
+                    <th style="width: 140px;">School Year</th>
+                    <th style="width: 120px;">Status</th>
+                    <th class="text-end" style="width: 200px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="presidentsInactiveTbody">
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                      <div class="mb-2"><i class="bi bi-inbox" style="font-size: 1.5rem;"></i></div>
+                      No inactive presidents found.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+              <div class="text-muted small" id="presidentsInactiveMeta">Showing 0–0 of 0</div>
+              <nav aria-label="Presidents inactive pagination">
+                <ul class="pagination pagination-sm mb-0" id="presidentsInactivePagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+          <!-- PRESIDENTS ARCHIVED -->
+          <div class="tab-pane fade" id="presidents-status-archived" role="tabpanel" aria-labelledby="presidents-status-archived-tab" tabindex="0">
+
+            <!-- Search bar for Presidents Archived -->
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+              <div class="input-group input-group-sm" style="max-width: 300px;">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="presidentsArchivedSearch" placeholder="Search President..." />
+              </div>
+              
+              <div class="bulkbar d-none" id="presidentsArchivedBulkBar">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="text-muted small">
+                    Selected: <span class="fw-semibold" id="presidentsArchivedSelectedCount">0</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsArchivedSelectAllBtn">
+                      <i class="bi bi-check2-square me-2"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsArchivedClearSelectionBtn">
+                      <i class="bi bi-x-circle me-2"></i>Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="presidentsArchivedExportSelectedBtn">
+                      <i class="bi bi-upload me-2"></i>Export Selected
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="presidentsArchivedActivateSelectedBtn">
+                      <i class="bi bi-check-circle me-2"></i>Activate Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="presidentsArchivedRestoreSelectedBtn">
+                      <i class="bi bi-arrow-counterclockwise me-2"></i>Restore Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="presidentsArchivedDemoteSelectedBtn">
+                      <i class="bi bi-arrow-down-circle me-2"></i>Demote Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive-sm">
+              <table class="table align-middle table-hover mb-0" id="tblPresidentsArchived">
+                <thead class="table-light">
+                  <tr>
+                    <th class="chk-col">
+                      <input type="checkbox" class="form-check-input header-checkbox" id="presidentsArchivedHeaderCheckbox">
+                    </th>
+                    <th style="width: 140px;">ID No.</th>
+                    <th style="width: 240px;">Full Name</th>
+                    <th style="width: 170px;">Program</th>
+                    <th style="width: 120px;">Year Level</th>
+                    <th style="width: 140px;">School Year</th>
+                    <th style="width: 120px;">Status</th>
+                    <th class="text-end" style="width: 200px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="presidentsArchivedTbody">
+                  <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                      <div class="mb-2"><i class="bi bi-inbox" style="font-size: 1.5rem;"></i></div>
+                      No archived presidents found.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+              <div class="text-muted small" id="presidentsArchivedMeta">Showing 0–0 of 0</div>
+              <nav aria-label="Presidents archived pagination">
+                <ul class="pagination pagination-sm mb-0" id="presidentsArchivedPagination">
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">Prev</a></li>
+                  <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                  <li class="page-item disabled"><a class="page-link" href="#" data-page="next">Next</a></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1118,9 +1463,10 @@ MODALS
                     <i class="bi bi-info-circle" style="font-size: 1.4rem;"></i>
                   </div>
                   <div class="flex-grow-1">
-                    <div class="fw-semibold">Password handling</div>
+                    <div class="fw-semibold">Password handling & President Role</div>
                     <div class="text-muted small mb-0">
                       Passwords are set as the student ID by default. Users are encouraged to change their passwords upon first login.
+                      <span class="fw-semibold">Promote students to President</span> using the More menu (⋮) in the Active tab.
                     </div>
                   </div>
                 </div>
@@ -1152,6 +1498,7 @@ MODALS
 MODALS (UPDATED: Staff now supports Program)
 - Added Program <select> to:
   ✅ Add Faculty Admin
+  ✅ Add President
   ✅ Add Moderator
   ✅ Edit Faculty Admin
   ✅ Edit Moderator
@@ -1159,6 +1506,123 @@ MODALS (UPDATED: Staff now supports Program)
   ✅ View Moderator
 - Fixed duplicate id="edit_suffix" (now unique per modal)
 ========================================================= -->
+
+<!-- Add President Modal -->
+<div class="modal fade" id="modalAddPresident" tabindex="-1" aria-labelledby="modalAddPresidentLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="modalAddPresidentLabel">Add President</h5>
+          <div class="text-muted small">Create a president account record. Role will be set to <span class="fw-semibold">org_president</span>.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form id="formAddPresident" autocomplete="off">
+        <div class="modal-body">
+          <div class="row g-3">
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">ID Number <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="president_id_number" name="id_number" placeholder="e.g. 2025-00000" required />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="president_email" name="email" placeholder="president@domain.com" />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Status</label>
+              <select class="form-select" id="president_status" name="status">
+                <option value="Active" selected>Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">First Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="president_first_name" name="first_name" required />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Middle Name</label>
+              <input type="text" class="form-control" id="president_middle_name" name="middle_name" />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Last Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="president_last_name" name="last_name" required />
+            </div>
+
+            <div class="col-12 col-md-3">
+              <label class="form-label">Suffix</label>
+              <input type="text" class="form-control" id="president_suffix" name="suffix" placeholder="Jr., III, etc." />
+            </div>
+
+            <div class="col-12 col-md-3">
+              <label class="form-label">Program</label>
+              <select class="form-select" id="president_program" name="program">
+                <option value="" selected>— Select program —</option>
+                <!-- JS should populate from programs table -->
+              </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+              <label class="form-label">Year Level</label>
+              <select class="form-select" id="president_year_level" name="year_level">
+                <option value="" selected>— Select year level —</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+                <option value="5th Year">5th Year</option>
+                <option value="Irregular">Irregular</option>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+              <label class="form-label">School Year</label>
+              <input type="text" class="form-control" id="president_school_year" name="school_year" placeholder="YYYY-YYYY" maxlength="9" readonly/>
+            </div>
+
+            <div class="col-12">
+              <div class="border rounded-4 p-3 bg-light h-100">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="text-primary">
+                    <i class="bi bi-info-circle" style="font-size: 1.4rem;"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold">Password handling</div>
+                    <div class="text-muted small mb-0">
+                      Passwords are set as the ID Number by default. Users are encouraged to change their passwords upon first login.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="alert alert-danger d-none mt-3" id="addPresidentError"></div>
+          <div class="alert alert-success d-none mt-3" id="addPresidentSuccess"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnSavePresident">
+            <span class="btnsave-president-text"><i class="bi bi-save me-2"></i>Save President</span>
+            <span class="btnsave-president-loading d-none">
+              <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Saving...
+            </span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- Add Faculty Admin Modal -->
 <div class="modal fade" id="modalAddFaculty" tabindex="-1" aria-labelledby="modalAddFacultyLabel" aria-hidden="true">
@@ -1396,7 +1860,7 @@ MODALS (UPDATED: Staff now supports Program)
 
       <form id="formImportCsv" autocomplete="off">
         <div class="modal-body">
-          <!-- target: students | faculty | moderators -->
+          <!-- target: students | faculty | moderators | presidents -->
           <input type="hidden" id="csv_import_target" value="students" />
           <!-- scope: active | inactive | archived | all (your JS can set this) -->
           <input type="hidden" id="csv_import_status_scope" value="all" />
@@ -1412,6 +1876,7 @@ MODALS (UPDATED: Staff now supports Program)
                   Use headers. Suggested columns:
                   <span class="fw-semibold">id_number, first_name, middle_name, last_name, suffix, email, program, year_level, school_year, role, status</span>.
                   <br>Year Level options: 1st Year, 2nd Year, 3rd Year, 4th Year, 5th Year, Irregular
+                  <br>Role options: student, org_president (for importing presidents)
                 </div>
               </div>
             </div>
@@ -1422,6 +1887,7 @@ MODALS (UPDATED: Staff now supports Program)
             <input type="file" class="form-control" id="csv_file" accept=".csv,text/csv" required />
             <div class="form-text">
               Tip: If importing staff, roles must be <span class="fw-semibold">faculty_admin</span> or <span class="fw-semibold">moderator</span>.
+              For presidents, use role <span class="fw-semibold">org_president</span>.
             </div>
           </div>
 
@@ -1526,6 +1992,12 @@ MODALS (UPDATED: Staff now supports Program)
           <div class="col-md-4">
             <div class="small text-muted mb-1">Last Login</div>
             <div class="fw-semibold" id="viewStudentLastLogin">—</div>
+          </div>
+          
+          <!-- Row 5 - Role -->
+          <div class="col-md-4">
+            <div class="small text-muted mb-1">Role</div>
+            <div class="fw-semibold" id="viewStudentRole">—</div>
           </div>
         </div>
       </div>

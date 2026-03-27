@@ -72,15 +72,18 @@
       </tr>`;
   }
 
-  async function fetchActive(A) {
+  async function fetchActive(A, overridePage) {
     const { store } = A;
     const p = store.active;
+
+    // Use overridePage if supplied so pagination clicks are never stale
+    const requestPage = (overridePage != null) ? Number(overridePage) : p.page;
 
     const data = await A.postJSON({
       action: "list_requests",
       mode: "active",
       q: store.search || "",
-      page: p.page,
+      page: requestPage,
       per_page: p.perPage,
     });
 
@@ -117,7 +120,7 @@
 
     A.renderPagination(pag, pagMeta, p.page, p.perPage, p.total, (newPage) => {
       A.store.active.page = newPage;
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
+      fetchActive(A, newPage).catch((e) => A.safeShowError(e.message));
     });
 
     // Initialize tooltips for the edit/view buttons
@@ -146,21 +149,26 @@
   function init(root) {
     const A = mustBase();
     const r = root || document;
-    if (r.__adActiveInited) return;
-    r.__adActiveInited = true;
 
+    // Always re-bind DOM listeners (bind helpers guard per-element)
     bindActive(A, r);
 
-    fetchActive(A).catch((e) => A.safeShowError(e.message));
+    // Always fetch fresh data on init / re-navigation
+    fetchActive(A, 1).catch((e) => A.safeShowError(e.message));
 
-    A.bus.on("search:changed", () => {
-      A.store.active.page = 1;
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load
+    if (!window.__adActiveBusListening) {
+      window.__adActiveBusListening = true;
 
-    A.bus.on("refresh:all", () => {
-      fetchActive(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("search:changed", () => {
+        A.store.active.page = 1;
+        fetchActive(A, 1).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on("refresh:all", () => {
+        fetchActive(A, A.store.active.page).catch((e) => A.safeShowError(e.message));
+      });
+    }
   }
 
   try {

@@ -105,12 +105,13 @@
                         </li>       
                     </ul>
                 </li>
+
+            <div class="sidebar-abit">
+                <!-- Account Switcher will be inserted here by JavaScript -->
+            </div>     
+
             </ul>
-
-         
-            
-
-            <!-- Removed old sidebar-footer logout to match super-admin design -->
+                        
         </aside>
 
         <!-- Main Component -->
@@ -266,11 +267,9 @@
 
             <div class="modal-body">
                 <form id="profileForm">
-
                     <div class="row">
                         <!-- LEFT COLUMN -->
                         <div class="col-md-4 text-center">
-
                             <!-- Profile Picture -->
                             <div class="profile-picture-section mb-4">
                                 <img id="profilePreview"
@@ -312,7 +311,6 @@
 
                         <!-- RIGHT COLUMN -->
                         <div class="col-md-8">
-
                             <!-- Basic Info -->
                             <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
@@ -338,25 +336,25 @@
 
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">First Name</label>
-                                            <input type="text" class="form-control" id="first_name" readonly>
+                                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="first_name">
                                         </div>
 
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Last Name</label>
-                                            <input type="text" class="form-control" id="last_name" readonly>
+                                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="last_name">
                                         </div>
                                     </div>
 
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Middle Name</label>
-                                            <input type="text" class="form-control" id="middle_name" readonly>
+                                            <input type="text" class="form-control" id="middle_name">
                                         </div>
 
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Suffix</label>
-                                            <input type="text" class="form-control" id="suffix" readonly>
+                                            <input type="text" class="form-control" id="suffix" placeholder="Jr., III, etc.">
                                         </div>
                                     </div>
                                 </div>
@@ -376,7 +374,7 @@
                                         </div>
 
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Email Address *</label>
+                                            <label class="form-label">Email Address <span class="text-danger">*</span></label>
                                             <input type="email" class="form-control" id="email" name="email" required>
                                             <div class="form-text">
                                                 You can update your email address.
@@ -387,7 +385,7 @@
                             </div>
 
                             <!-- Account Status -->
-                            <div class="card border-0 bg-light">
+                            <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
                                     <h6 class="card-title border-bottom pb-2 mb-3">
                                         <i class="bi bi-shield-check me-2"></i>Account Status
@@ -413,6 +411,38 @@
                                 </div>
                             </div>
 
+                            <!-- Change Password Section -->
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title border-bottom pb-2 mb-3">
+                                        <i class="bi bi-key me-2"></i>Change Password
+                                    </h6>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Current Password</label>
+                                        <input type="password" class="form-control" id="current_password" autocomplete="off">
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">New Password</label>
+                                            <input type="password" class="form-control" id="new_password" autocomplete="off">
+                                            <div class="form-text">Minimum 8 characters</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Confirm New Password</label>
+                                            <input type="password" class="form-control" id="confirm_password" autocomplete="off">
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="button" class="btn btn-warning" id="changePasswordBtn">
+                                            <i class="bi bi-key me-1"></i>Change Password
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -441,7 +471,13 @@
             crossorigin="anonymous"></script>
 
     <!--Utils Script-->       
-    <script src="js/utils/status-modal.js"></script>        
+    <script src="js/utils/status-modal.js"></script> 
+    
+    <!--Accreditation-->
+    <script src="js/accreditation/admin/accreditation.js"></script>
+    <script src="js/accreditation/admin/pending.js"></script>
+    <script src="js/accreditation/admin/active.js"></script>
+    <script src="js/accreditation/admin/returned.js"></script>
 
     <!--Clubs Script-->       
     <script src="js/clubs/clubs.js"></script>
@@ -476,6 +512,9 @@
 
     <!-- Transaction History Script -->
     <script src="js/transaction-history/user-transaction-history.js"></script>
+
+    <!-- Account Switcher-->
+    <script src="js/account-switcher.js"></script>
 
 </body>
 

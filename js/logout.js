@@ -8,11 +8,11 @@
 
     // Configuration
     const LOGOUT_CONFIG = {
-        sessionCheckInterval: 500, // Check session every 0.5 sec (500 ms)
+        sessionCheckInterval: 500,
         loginPageUrl: 'index.html',
         logoutEndpoint: 'php/logout.php',
         sessionCheckEndpoint: 'php/check-session.php',
-        debug: true // Set to false in production
+        debug: true
     };
 
     let sessionChecker = null;
@@ -39,13 +39,9 @@
             });
         });
 
-        // Check session on page load (with delay)
         setTimeout(() => checkSession(), 1000);
-
-        // Start periodic session checker
         startSessionChecker();
 
-        // Add activity listeners to reset on user interaction
         ['click', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
             document.addEventListener(event, () => {
                 lastValidSession = Date.now();
@@ -53,7 +49,6 @@
         });
     }
 
-    // Start periodic session checker
     function startSessionChecker() {
         if (sessionChecker) {
             clearInterval(sessionChecker);
@@ -61,62 +56,66 @@
         sessionChecker = setInterval(() => checkSession(), LOGOUT_CONFIG.sessionCheckInterval);
     }
 
-    // Show logout confirmation modal
     function showLogoutConfirmation() {
-        const logoutModal = new bootstrap.Modal(document.getElementById('logoutModal'));
+        const logoutModalEl = document.getElementById('logoutModal');
+        const logoutModal = new bootstrap.Modal(logoutModalEl);
         logoutModal.show();
     }
 
-    // Handle logout action
     async function handleLogout() {
+        // DEBUG: Check value at the VERY START
+        console.log('🔥 LOGOUT STARTED - default_account:', localStorage.getItem('default_account'));
+        console.log('🔥 LOGOUT STARTED - last_used_account:', localStorage.getItem('last_used_account'));
+        
         if (isLoggingOut) return;
         isLoggingOut = true;
 
         try {
-            // Close any open modals
-            const logoutModal = bootstrap.Modal.getInstance(document.getElementById('logoutModal'));
+            // Properly dispose of the logout modal
+            const logoutModalEl = document.getElementById('logoutModal');
+            const logoutModal = bootstrap.Modal.getInstance(logoutModalEl);
+            
             if (logoutModal) {
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) backdrop.remove();
+                
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                
                 logoutModal.hide();
+                logoutModal.dispose();
             }
 
-            // Show loading state
             showLoadingOverlay();
 
             // Call logout endpoint
             const response = await fetch(LOGOUT_CONFIG.logoutEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin'
             });
 
-            if (!response.ok) {
-                throw new Error(`Logout failed: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Logout failed: ${response.status}`);
 
             const data = await response.json();
             
             if (data.success) {
-                // Clear any client-side storage
-                clearClientStorage();
+                // Clear client storage BUT PRESERVE PREFERENCES
+                await clearClientStoragePreservePreferences();
                 
-                // Stop session checker
                 if (sessionChecker) {
                     clearInterval(sessionChecker);
                     sessionChecker = null;
                 }
                 
-                // Redirect to login page
                 window.location.href = LOGOUT_CONFIG.loginPageUrl;
             } else {
                 throw new Error(data.message || 'Logout failed');
             }
         } catch (error) {
             console.error('Logout error:', error);
-            
-            // Even if server logout fails, clear client-side and redirect
-            clearClientStorage();
+            await clearClientStoragePreservePreferences();
             window.location.href = LOGOUT_CONFIG.loginPageUrl;
         } finally {
             isLoggingOut = false;
@@ -124,45 +123,80 @@
         }
     }
 
-    // Clear all client-side storage
-    function clearClientStorage() {
+    // FIXED FUNCTION: Clear storage but KEEP preferences
+    async function clearClientStoragePreservePreferences() {
         try {
-            // Clear localStorage
+            // DEBUG: Check value BEFORE saving
+            console.log('📥 BEFORE SAVING - default_account:', localStorage.getItem('default_account'));
+            
+            // SAVE PREFERENCES
+            const preferences = {
+                default_account: localStorage.getItem('default_account'),
+                last_used_account: localStorage.getItem('last_used_account'),
+                available_accounts: localStorage.getItem('available_accounts'),
+                officer_position: localStorage.getItem('officer_position'),
+                officer_org_name: localStorage.getItem('officer_org_name'),
+                officer_org_abbreviation: localStorage.getItem('officer_org_abbreviation'),
+                is_officer: localStorage.getItem('is_officer'),
+                role: localStorage.getItem('role'),
+                program: localStorage.getItem('program')
+            };
+
+            console.log('📦 SAVED preferences:', preferences);
+
+            // DEBUG: Check if we have the value
+            if (preferences.default_account) {
+                console.log('✅ Found default_account to save:', preferences.default_account);
+            } else {
+                console.warn('⚠️ default_account is NULL before clearing!');
+            }
+
+            // Clear everything
+            console.log('🧹 Clearing localStorage...');
             localStorage.clear();
-            
-            // Clear sessionStorage
             sessionStorage.clear();
-            
-            // Delete all cookies
+            console.log('✅ localStorage cleared');
+
+            // RESTORE PREFERENCES
+            console.log('🔄 Restoring preferences...');
+            let restoredCount = 0;
+            Object.entries(preferences).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    localStorage.setItem(key, value);
+                    restoredCount++;
+                    console.log(`✅ Restored ${key}:`, value);
+                }
+            });
+
+            console.log(`✅ Restored ${restoredCount} preferences`);
+
+            // Delete cookies
             document.cookie.split(';').forEach(cookie => {
                 document.cookie = cookie
                     .replace(/^ +/, '')
                     .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
             });
+
+            // FINAL CHECK
+            console.log('🔍 FINAL CHECK - default_account:', localStorage.getItem('default_account'));
+            console.log('🔍 FINAL CHECK - last_used_account:', localStorage.getItem('last_used_account'));
+
         } catch (e) {
             console.warn('Error clearing client storage:', e);
         }
     }
 
-    // Show loading overlay
     function showLoadingOverlay() {
         const intro = document.getElementById('intro');
-        if (intro) {
-            intro.style.display = 'flex';
-        }
+        if (intro) intro.style.display = 'flex';
     }
 
-    // Hide loading overlay
     function hideLoadingOverlay() {
         const intro = document.getElementById('intro');
-        if (intro) {
-            intro.style.display = 'none';
-        }
+        if (intro) intro.style.display = 'none';
     }
 
-    // Check if user is still logged in
     async function checkSession() {
-        // Skip check on login page or if already logging out
         if (window.location.pathname.includes('login.html') || 
             window.location.pathname.includes('index.html') || 
             isLoggingOut) {
@@ -173,46 +207,33 @@
             const response = await fetch(LOGOUT_CONFIG.sessionCheckEndpoint, {
                 method: 'GET',
                 credentials: 'same-origin',
-                headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                }
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
             });
 
-            if (!response.ok) {
-                throw new Error(`Session check failed: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Session check failed: ${response.status}`);
 
             const data = await response.json();
 
-            if (LOGOUT_CONFIG.debug) {
-                console.log('Session check:', data);
-            }
+            if (LOGOUT_CONFIG.debug) console.log('Session check:', data);
 
-            // Reset consecutive failures on success
             if (data.logged_in && data.user_id) {
                 consecutiveFailures = 0;
                 lastValidSession = Date.now();
                 return;
             }
 
-            // Only redirect if we have a definitive "not logged in" response
             if (data.logged_in === false) {
                 console.log('Session expired - logged_in is false');
                 consecutiveFailures++;
                 
-                // Check if we've had multiple failures or this is a clear not logged in
                 if (consecutiveFailures >= MAX_FAILURES) {
                     redirectToLogin('Your session has expired. Please log in again.');
                 }
             }
         } catch (error) {
             console.error('Session check error:', error);
-            
-            // Count consecutive failures for network errors too
             consecutiveFailures++;
             
-            // Only redirect after multiple failures to avoid false positives
             if (consecutiveFailures >= MAX_FAILURES) {
                 console.log('Multiple session check failures, redirecting to login...');
                 redirectToLogin('Unable to verify session. Please log in again.');
@@ -220,28 +241,26 @@
         }
     }
 
-    // Redirect to login with optional message
     function redirectToLogin(message = null) {
-        // Don't redirect if already logging out
         if (isLoggingOut) return;
         
         const currentPage = window.location.pathname;
         
-        // Don't redirect if already on login page
-        if (currentPage.includes('login.html') || currentPage.includes('index.html')) {
-            return;
-        }
+        if (currentPage.includes('login.html') || currentPage.includes('index.html')) return;
 
         console.log('Redirecting to login. Reason:', message);
         
-        if (message) {
-            sessionStorage.setItem('logout_message', message);
-        }
+        if (message) sessionStorage.setItem('logout_message', message);
+
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
 
         window.location.href = LOGOUT_CONFIG.loginPageUrl;
     }
 
-    // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initLogout);
     } else {

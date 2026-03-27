@@ -491,6 +491,7 @@ function fetch_events(PDO $pdo, string $schoolYear, string $semester, int $orgId
     FROM event_events e
     INNER JOIN organizations o ON o.id = e.org_id
     {$where}
+      AND e.accomplishment_status = 'Approved'
   ";
   $st = $pdo->prepare($countSql);
   $st->execute($params);
@@ -504,16 +505,18 @@ function fetch_events(PDO $pdo, string $schoolYear, string $semester, int $orgId
       e.title,
       e.event_date,
       e.status,
+      e.accomplishment_status,
       o.org_name,
       o.abbreviation,
       CONCAT(o.org_name, IF(o.abbreviation IS NULL OR o.abbreviation='', '', CONCAT(' (', o.abbreviation, ')'))) AS org_label,
-      COALESCE(SUM(pl.amount_in),0) AS total_credits,
-      COALESCE(SUM(pl.amount_out),0) AS total_debits,
-      (COALESCE(SUM(pl.amount_in),0) - COALESCE(SUM(pl.amount_out),0)) AS balance
+      COALESCE((SELECT SUM(ec.amount) FROM event_credits ec WHERE ec.event_id = e.id), 0) AS total_credits,
+      COALESCE((SELECT SUM(ed.amount) FROM event_debits ed WHERE ed.event_id = e.id), 0) AS total_debits,
+      COALESCE((SELECT SUM(ec.amount) FROM event_credits ec WHERE ec.event_id = e.id), 0)
+        - COALESCE((SELECT SUM(ed.amount) FROM event_debits ed WHERE ed.event_id = e.id), 0) AS balance
     FROM event_events e
     INNER JOIN organizations o ON o.id = e.org_id
-    LEFT JOIN passbook_logs pl ON pl.event_id = e.id
     {$where}
+      AND e.accomplishment_status = 'Approved'
     GROUP BY e.id
     ORDER BY e.event_date DESC, e.id DESC
     LIMIT {$pageSize} OFFSET {$offset}
@@ -525,17 +528,17 @@ function fetch_events(PDO $pdo, string $schoolYear, string $semester, int $orgId
   $sumSql = "
     SELECT
       COUNT(DISTINCT e.id) AS total_events,
-      COALESCE(SUM(pl.amount_in),0) AS total_credits,
-      COALESCE(SUM(pl.amount_out),0) AS total_debits,
-      (COALESCE(SUM(pl.amount_in),0) - COALESCE(SUM(pl.amount_out),0)) AS total_balance
+      COALESCE(SUM((SELECT SUM(ec.amount) FROM event_credits ec WHERE ec.event_id = e.id)), 0) AS total_credits,
+      COALESCE(SUM((SELECT SUM(ed.amount) FROM event_debits ed WHERE ed.event_id = e.id)), 0) AS total_debits
     FROM event_events e
     INNER JOIN organizations o ON o.id = e.org_id
-    LEFT JOIN passbook_logs pl ON pl.event_id = e.id
     {$where}
+      AND e.accomplishment_status = 'Approved'
   ";
   $s = $pdo->prepare($sumSql);
   $s->execute($params);
-  $summary = $s->fetch(PDO::FETCH_ASSOC) ?: ['total_events' => 0, 'total_credits' => 0, 'total_debits' => 0, 'total_balance' => 0];
+  $summary = $s->fetch(PDO::FETCH_ASSOC) ?: ['total_events' => 0, 'total_credits' => 0, 'total_debits' => 0];
+  $summary['total_balance'] = (float)($summary['total_credits'] ?? 0) - (float)($summary['total_debits'] ?? 0);
 
   return [
     'rows' => $rows,
@@ -612,7 +615,7 @@ if ($method === 'GET') {
     header('Content-Disposition: attachment; filename="event_expenses.csv"');
 
     $res = fetch_events($pdo, $schoolYear, $semester, $orgId, $search, 1, 50000, $allowed);
-    echo "Event,Organization,Date,Credits,Debits,Balance,Status\n";
+    echo "Event,Organization,Date,Credits,Debits,Balance,Status,Accomplishment\n";
     foreach ($res['rows'] as $r) {
       echo implode(",", [
         csv_escape((string)($r['title'] ?? '')),
@@ -622,6 +625,7 @@ if ($method === 'GET') {
         csv_escape(money((float)($r['total_debits'] ?? 0))),
         csv_escape(money((float)($r['balance'] ?? 0))),
         csv_escape((string)($r['status'] ?? '')),
+        csv_escape((string)($r['accomplishment_status'] ?? '')),
       ]) . "\n";
     }
     exit;

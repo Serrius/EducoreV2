@@ -607,7 +607,7 @@
     </div>
     </div>
 
-    <!-- Profile Modal -->
+<!-- Profile Modal -->
 <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -617,35 +617,42 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+
             <div class="modal-body">
-                <form id="profileForm" enctype="multipart/form-data">
+                <form id="profileForm">
                     <div class="row">
-                        <!-- Left Column - Profile Picture -->
+                        <!-- LEFT COLUMN -->
                         <div class="col-md-4 text-center">
+                            <!-- Profile Picture -->
                             <div class="profile-picture-section mb-4">
-                                <div class="profile-picture-container">
-                                    <img id="profilePreview" src="assets/images/profile.png" 
-                                         alt="Profile Picture" 
-                                         class="img-thumbnail rounded-circle profile-picture-lg">
-                                    <div class="profile-overlay" id="changePhotoBtn">
-                                        <i class="bi bi-camera-fill"></i>
-                                        <span>Change Photo</span>
-                                    </div>
+                                <img id="profilePreview"
+                                     src="assets/images/profile.png"
+                                     alt="Profile Picture"
+                                     class="img-thumbnail rounded-circle profile-picture-lg">
+
+                                <!-- Disabled Upload Notice -->
+                                <div class="alert alert-info mt-3 text-start small">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Profile Picture Upload Disabled</strong>
+                                    <br>
+                                    To maintain system performance and optimize hosting resource usage,
+                                    profile picture uploads are currently unavailable.
+                                    <br>
+                                    Thank you for your understanding.
                                 </div>
-                                <input type="file" id="profilePicture" name="profile_picture" accept="image/*" class="d-none">
-                                <div class="mt-2">
-                                    <small class="text-muted">Max size: 2MB (JPG, PNG, GIF, WebP)</small>
-                                </div>
-                                <div id="profileUploadStatus" class="mt-2"></div>
                             </div>
-                            
+
+                            <!-- Account Badge -->
                             <div class="user-badge bg-light p-3 rounded border">
-                                <h6 class="mb-2"><i class="bi bi-award me-2"></i>Account Type</h6>
+                                <h6 class="mb-2">
+                                    <i class="bi bi-award me-2"></i>Account Type
+                                </h6>
+
                                 <div class="d-flex flex-column gap-1">
                                     <span class="badge bg-primary" id="userTypeBadge">Loading...</span>
                                     <span class="badge bg-info" id="roleBadge">Loading...</span>
                                 </div>
-                                
+
                                 <div class="mt-3 pt-2 border-top">
                                     <small class="text-muted d-block">
                                         <i class="bi bi-calendar me-1"></i>
@@ -654,101 +661,138 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Right Column - Profile Information -->
+
+                        <!-- RIGHT COLUMN -->
                         <div class="col-md-8">
-                            <!-- Basic Info Section -->
+                            <!-- Basic Info -->
                             <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
                                     <h6 class="card-title border-bottom pb-2 mb-3">
                                         <i class="bi bi-person-vcard me-2"></i>Basic Information
                                     </h6>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label for="id_number" class="form-label">
-                                                <i class="bi bi-card-heading me-1"></i>Employee ID
+                                            <label class="form-label">
+                                                <i class="bi bi-card-heading me-1"></i>ID Number
                                             </label>
                                             <input type="text" class="form-control" id="id_number" readonly>
                                         </div>
-                                        
+
                                         <div class="col-md-6 mb-3">
-                                            <label for="school_year" class="form-label">
+                                            <label class="form-label">
                                                 <i class="bi bi-calendar-week me-1"></i>School Year
                                             </label>
                                             <input type="text" class="form-control" id="school_year" readonly>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label for="first_name" class="form-label">First Name</label>
-                                            <input type="text" class="form-control" id="first_name" readonly>
+                                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="first_name">
                                         </div>
-                                        
+
                                         <div class="col-md-6 mb-3">
-                                            <label for="last_name" class="form-label">Last Name</label>
-                                            <input type="text" class="form-control" id="last_name" readonly>
+                                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="last_name">
                                         </div>
                                     </div>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label for="middle_name" class="form-label">Middle Name</label>
-                                            <input type="text" class="form-control" id="middle_name" readonly>
+                                            <label class="form-label">Middle Name</label>
+                                            <input type="text" class="form-control" id="middle_name">
                                         </div>
-                                        
+
                                         <div class="col-md-6 mb-3">
-                                            <label for="suffix" class="form-label">Suffix</label>
-                                            <input type="text" class="form-control" id="suffix" readonly>
+                                            <label class="form-label">Suffix</label>
+                                            <input type="text" class="form-control" id="suffix" placeholder="Jr., III, etc.">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Contact & Department Section -->
+
+                            <!-- Academic & Contact -->
                             <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
                                     <h6 class="card-title border-bottom pb-2 mb-3">
                                         <i class="bi bi-building me-2"></i>Academic & Contact Information
                                     </h6>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label for="department" class="form-label">Department/Course</label>
+                                            <label class="form-label">Department/Course</label>
                                             <input type="text" class="form-control" id="department" readonly>
                                         </div>
-                                        
+
                                         <div class="col-md-6 mb-3">
-                                            <label for="email" class="form-label">Email Address *</label>
+                                            <label class="form-label">Email Address <span class="text-danger">*</span></label>
                                             <input type="email" class="form-control" id="email" name="email" required>
-                                            <div class="form-text">You can change your email address</div>
+                                            <div class="form-text">
+                                                You can update your email address.
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Account Status Section -->
-                            <div class="card border-0 bg-light">
+
+                            <!-- Account Status -->
+                            <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
                                     <h6 class="card-title border-bottom pb-2 mb-3">
                                         <i class="bi bi-shield-check me-2"></i>Account Status
                                     </h6>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <div class="d-flex align-items-center justify-content-between">
-                                                <div>
-                                                    <span class="me-2">Status:</span>
-                                                    <span class="badge" id="statusBadge">Loading...</span>
-                                                </div>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm" 
-                                                        id="refreshProfileBtn" title="Refresh profile data">
-                                                    <i class="bi bi-arrow-clockwise"></i>
-                                                </button>
-                                            </div>
-                                            <small class="text-muted">Account status is managed by administrators</small>
+
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <span class="me-2">Status:</span>
+                                            <span class="badge" id="statusBadge">Loading...</span>
                                         </div>
+
+                                        <button type="button"
+                                                class="btn btn-outline-secondary btn-sm"
+                                                id="refreshProfileBtn"
+                                                title="Refresh profile data">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </div>
+
+                                    <small class="text-muted">
+                                        Account status is managed by administrators.
+                                    </small>
+                                </div>
+                            </div>
+
+                            <!-- Change Password Section -->
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title border-bottom pb-2 mb-3">
+                                        <i class="bi bi-key me-2"></i>Change Password
+                                    </h6>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Current Password</label>
+                                        <input type="password" class="form-control" id="current_password" autocomplete="off">
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">New Password</label>
+                                            <input type="password" class="form-control" id="new_password" autocomplete="off">
+                                            <div class="form-text">Minimum 8 characters</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Confirm New Password</label>
+                                            <input type="password" class="form-control" id="confirm_password" autocomplete="off">
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="button" class="btn btn-warning" id="changePasswordBtn">
+                                            <i class="bi bi-key me-1"></i>Change Password
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -756,6 +800,7 @@
                     </div>
                 </form>
             </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i>Close
@@ -767,6 +812,7 @@
         </div>
     </div>
 </div>
+
     <!-- Scripts -->
     <script src="js/special-admin-script.js"></script>
     <script src="js/update-profile.js"></script>

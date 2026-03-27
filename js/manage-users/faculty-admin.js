@@ -183,8 +183,11 @@
   };
 
   const common = {
-    search: "#facultySearch",
-    pageSize: "#facultyPageSize",
+    // Updated to use per-tab search inputs
+    searchActive: "#facultyActiveSearch",
+    searchInactive: "#facultyInactiveSearch",
+    searchArchived: "#facultyArchivedSearch",
+    pageSize: "#facultyPageSize", // You'll need to add this to HTML
     btnAdd: "#btnAddFacultyTab",
     btnImport: "#btnImportFacultyCsv",
     exportActiveCsv: "#exportFacultyActiveCsv",
@@ -194,7 +197,11 @@
   };
 
   const state = {
-    search: "",
+    search: {
+      Active: "",
+      Inactive: "",
+      Archived: ""
+    },
     limit: 10,
     Active: { page: 1, total: 0, rows: [], signature: "" },
     Inactive: { page: 1, total: 0, rows: [], signature: "" },
@@ -206,7 +213,198 @@
       paused: false,
       running: false,
     },
+    searchDebounceTimers: {
+      Active: null,
+      Inactive: null,
+      Archived: null
+    }
   };
+
+  // Add this function to reinitialize event listeners after refresh
+  function reinitializeEventListeners() {
+    console.log('[Faculty] Reinitializing event listeners...');
+    
+    // Re-bind bulk bars for all statuses
+    for (const st of STATUSES) {
+      const cfg = UI[st];
+      
+      // Re-bind select all buttons
+      const btnSelectAll = S.qs(cfg.btnSelectAll);
+      if (btnSelectAll) {
+        const newBtn = btnSelectAll.cloneNode(true);
+        btnSelectAll.parentNode.replaceChild(newBtn, btnSelectAll);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          setAllRowChecks(st, true);
+          syncBulkBar(st);
+        });
+      }
+      
+      // Re-bind clear buttons
+      const btnClear = S.qs(cfg.btnClear);
+      if (btnClear) {
+        const newBtn = btnClear.cloneNode(true);
+        btnClear.parentNode.replaceChild(newBtn, btnClear);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          clearSelection(st);
+        });
+      }
+      
+      // Re-bind export buttons
+      const btnExport = S.qs(cfg.btnExport);
+      if (btnExport) {
+        const newBtn = btnExport.cloneNode(true);
+        btnExport.parentNode.replaceChild(newBtn, btnExport);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          exportSelected(st);
+        });
+      }
+      
+      // Re-bind archive buttons
+      if (cfg.btnArchive) {
+        const btn = S.qs(cfg.btnArchive);
+        if (btn) {
+          const newBtn = btn.cloneNode(true);
+          btn.parentNode.replaceChild(newBtn, btn);
+          newBtn.addEventListener("click", createArchiveHandler(st));
+        }
+      }
+      
+      // Re-bind restore buttons
+      if (cfg.btnRestore) {
+        const btn = S.qs(cfg.btnRestore);
+        if (btn) {
+          const newBtn = btn.cloneNode(true);
+          btn.parentNode.replaceChild(newBtn, btn);
+          newBtn.addEventListener("click", createRestoreHandler(st));
+        }
+      }
+    }
+  }
+
+  // Handler factory functions
+  function createArchiveHandler(status) {
+    return async (e) => {
+      e.preventDefault();
+      const ids = getSelectedIds(status);
+      if (!ids.length) return;
+
+      const doIt = async () => {
+        await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Archived", ids });
+        clearSelection(status);
+        await refresh();
+        S.safeShowSuccess(`Archived ${ids.length} user(s).`);
+      };
+
+      if (typeof S.showConfirmModal === "function") {
+        S.showConfirmModal({
+          title: "Archive Selected",
+          subtitle: "Move selected users to Archived",
+          message: `Archive ${ids.length} selected user(s)?`,
+          type: "archive",
+          btnText: "Archive",
+          btnClass: "warning",
+          btnIcon: "archive",
+          onConfirm: doIt,
+        });
+      } else {
+        await doIt();
+      }
+    };
+  }
+
+  function createRestoreHandler(status) {
+    return async (e) => {
+      e.preventDefault();
+      const ids = getSelectedIds(status);
+      if (!ids.length) return;
+
+      const doIt = async () => {
+        await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
+        clearSelection(status);
+        await refresh();
+        S.safeShowSuccess(`Restored ${ids.length} user(s).`);
+      };
+
+      if (typeof S.showConfirmModal === "function") {
+        S.showConfirmModal({
+          title: "Restore Selected",
+          subtitle: "Move selected users back to Active",
+          message: `Restore ${ids.length} selected user(s) to Active?`,
+          type: "restore",
+          btnText: "Restore",
+          btnClass: "success",
+          btnIcon: "arrow-counterclockwise",
+          onConfirm: doIt,
+        });
+      } else {
+        await doIt();
+      }
+    };
+  }
+  
+  // Handler factory functions
+  function createArchiveHandler(status) {
+    return async (e) => {
+      e.preventDefault();
+      const ids = getSelectedIds(status);
+      if (!ids.length) return;
+
+      const doIt = async () => {
+        await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Archived", ids });
+        clearSelection(status);
+        await refresh();
+        S.safeShowSuccess(`Archived ${ids.length} user(s).`);
+      };
+
+      if (typeof S.showConfirmModal === "function") {
+        S.showConfirmModal({
+          title: "Archive Selected",
+          subtitle: "Move selected users to Archived",
+          message: `Archive ${ids.length} selected user(s)?`,
+          type: "archive",
+          btnText: "Archive",
+          btnClass: "warning",
+          btnIcon: "archive",
+          onConfirm: doIt,
+        });
+      } else {
+        await doIt();
+      }
+    };
+  }
+
+  function createRestoreHandler(status) {
+    return async (e) => {
+      e.preventDefault();
+      const ids = getSelectedIds(status);
+      if (!ids.length) return;
+
+      const doIt = async () => {
+        await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
+        clearSelection(status);
+        await refresh();
+        S.safeShowSuccess(`Restored ${ids.length} user(s).`);
+      };
+
+      if (typeof S.showConfirmModal === "function") {
+        S.showConfirmModal({
+          title: "Restore Selected",
+          subtitle: "Move selected users back to Active",
+          message: `Restore ${ids.length} selected user(s) to Active?`,
+          type: "restore",
+          btnText: "Restore",
+          btnClass: "success",
+          btnIcon: "arrow-counterclockwise",
+          onConfirm: doIt,
+        });
+      } else {
+        await doIt();
+      }
+    };
+  }
 
   // -------------------------
   // Signature-based change detection
@@ -395,13 +593,14 @@
   // -------------------------
   // Data fetch
   // -------------------------
+  // Update fetchList to use status-specific search
   async function fetchList(status) {
     const st = state[status];
     const data = await S.postJSON({
       action: "list_users",
       group: GROUP,
       status,
-      search: state.search,
+      search: state.search[status], // Use status-specific search
       page: st.page,
       limit: state.limit,
     });
@@ -410,6 +609,33 @@
     st.total = Number(data.total || 0);
 
     return computeSignatureFromListPayload(data);
+  }
+
+  // New function to bind per-tab search
+  function bindSearch() {
+    const statuses = ["Active", "Inactive", "Archived"];
+    
+    statuses.forEach(status => {
+      const searchId = common[`search${status}`];
+      const searchEl = S.qs(searchId);
+      
+      if (searchEl) {
+        searchEl.addEventListener("input", () => {
+          // Clear existing timer
+          if (state.searchDebounceTimers[status]) {
+            clearTimeout(state.searchDebounceTimers[status]);
+          }
+
+          // Set new timer
+          state.searchDebounceTimers[status] = setTimeout(() => {
+            state.search[status] = searchEl.value.trim();
+            state[status].page = 1;
+            refreshStatus(status);
+            console.log(`[Faculty] Searching ${status}:`, state.search[status]);
+          }, 300);
+        });
+      }
+    });
   }
 
   // -------------------------
@@ -612,6 +838,8 @@
 
   async function refresh() {
     await Promise.all(STATUSES.map((st) => refreshStatus(st)));
+    // Reinitialize event listeners after data refresh
+    setTimeout(() => reinitializeEventListeners(), 100);
   }
 
   // -------------------------
@@ -1057,80 +1285,192 @@
   function bindBulkBar(status) {
     const cfg = UI[status];
 
-    S.qs(cfg.btnSelectAll)?.addEventListener("click", (e) => {
-      e.preventDefault();
-      setAllRowChecks(status, true);
-      syncBulkBar(status);
-    });
-
-    S.qs(cfg.btnClear)?.addEventListener("click", (e) => {
-      e.preventDefault();
-      clearSelection(status);
-    });
-
-    S.qs(cfg.btnExport)?.addEventListener("click", (e) => {
-      e.preventDefault();
-      exportSelected(status);
-    });
-
-    if (cfg.btnArchive) {
-      S.qs(cfg.btnArchive)?.addEventListener("click", async (e) => {
+    // Select All button
+    const btnSelectAll = S.qs(cfg.btnSelectAll);
+    if (btnSelectAll) {
+      const newBtn = btnSelectAll.cloneNode(true);
+      btnSelectAll.parentNode.replaceChild(newBtn, btnSelectAll);
+      newBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        const ids = getSelectedIds(status);
-        if (!ids.length) return;
-
-        const doIt = async () => {
-          await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Archived", ids });
-          clearSelection(status);
-          await refresh();
-          S.safeShowSuccess(`Archived ${ids.length} user(s).`);
-        };
-
-        if (typeof S.showConfirmModal === "function") {
-          S.showConfirmModal({
-            title: "Archive Selected",
-            subtitle: "Move selected users to Archived",
-            message: `Archive ${ids.length} selected user(s)?`,
-            type: "archive",
-            btnText: "Archive",
-            btnClass: "warning",
-            btnIcon: "archive",
-            onConfirm: doIt,
-          });
-        } else {
-          await doIt();
-        }
+        setAllRowChecks(status, true);
+        syncBulkBar(status);
       });
     }
 
-    if (cfg.btnRestore) {
-      S.qs(cfg.btnRestore)?.addEventListener("click", async (e) => {
+    // Clear button
+    const btnClear = S.qs(cfg.btnClear);
+    if (btnClear) {
+      const newBtn = btnClear.cloneNode(true);
+      btnClear.parentNode.replaceChild(newBtn, btnClear);
+      newBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        const ids = getSelectedIds(status);
-        if (!ids.length) return;
-
-        const doIt = async () => {
-          await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
-          clearSelection(status);
-          await refresh();
-          S.safeShowSuccess(`Restored ${ids.length} user(s).`);
-        };
-
-        if (typeof S.showConfirmModal === "function") {
-          S.showConfirmModal({
-            title: "Restore Selected",
-            subtitle: "Move selected users back to Active",
-            message: `Restore ${ids.length} selected user(s) to Active?`,
-            type: "restore",
-            btnText: "Restore",
-            btnClass: "success",
-            btnIcon: "arrow-counterclockwise",
-            onConfirm: doIt,
-          });
-        } else {
-          await doIt();
-        }
+        clearSelection(status);
       });
+    }
+
+    // Export button
+    const btnExport = S.qs(cfg.btnExport);
+    if (btnExport) {
+      const newBtn = btnExport.cloneNode(true);
+      btnExport.parentNode.replaceChild(newBtn, btnExport);
+      newBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        exportSelected(status);
+      });
+    }
+
+    // Archive button (for Active, Inactive tabs)
+    if (cfg.btnArchive) {
+      const btn = S.qs(cfg.btnArchive);
+      if (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const ids = getSelectedIds(status);
+          if (!ids.length) return;
+
+          const doIt = async () => {
+            await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Archived", ids });
+            clearSelection(status);
+            await refresh();
+            S.safeShowSuccess(`Archived ${ids.length} user(s).`);
+          };
+
+          if (typeof S.showConfirmModal === "function") {
+            S.showConfirmModal({
+              title: "Archive Selected",
+              subtitle: "Move selected users to Archived",
+              message: `Archive ${ids.length} selected user(s)?`,
+              type: "archive",
+              btnText: "Archive",
+              btnClass: "warning",
+              btnIcon: "archive",
+              onConfirm: doIt,
+            });
+          } else {
+            await doIt();
+          }
+        });
+      }
+    }
+
+    // Restore button (for Archived tab)
+    if (cfg.btnRestore) {
+      const btn = S.qs(cfg.btnRestore);
+      if (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const ids = getSelectedIds(status);
+          if (!ids.length) return;
+
+          const doIt = async () => {
+            await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
+            clearSelection(status);
+            await refresh();
+            S.safeShowSuccess(`Restored ${ids.length} user(s).`);
+          };
+
+          if (typeof S.showConfirmModal === "function") {
+            S.showConfirmModal({
+              title: "Restore Selected",
+              subtitle: "Move selected users back to Active",
+              message: `Restore ${ids.length} selected user(s) to Active?`,
+              type: "restore",
+              btnText: "Restore",
+              btnClass: "success",
+              btnIcon: "arrow-counterclockwise",
+              onConfirm: doIt,
+            });
+          } else {
+            await doIt();
+          }
+        });
+      }
+    }
+
+    // Activate button for Inactive tab (Faculty/Coordinators)
+    if (status === "Inactive") {
+      const btnActivate = S.qs("#facultyInactiveActivateSelectedBtn");
+      if (btnActivate) {
+        const newBtn = btnActivate.cloneNode(true);
+        btnActivate.parentNode.replaceChild(newBtn, btnActivate);
+        newBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const ids = getSelectedIds(status);
+          if (!ids.length) return;
+
+          const doIt = async () => {
+            await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
+            clearSelection(status);
+            await refresh();
+            S.safeShowSuccess(`Activated ${ids.length} user(s).`);
+          };
+
+          if (typeof S.showConfirmModal === "function") {
+            S.showConfirmModal({
+              title: "Activate Selected",
+              subtitle: "Move selected users to Active",
+              message: `Activate ${ids.length} selected user(s)?`,
+              type: "success",
+              btnText: "Activate",
+              btnClass: "success",
+              btnIcon: "check-circle",
+              onConfirm: doIt,
+            });
+          } else {
+            await doIt();
+          }
+        });
+      }
+    }
+
+    // Activate button for Archived tab (Students, Faculty, Presidents)
+    if (status === "Archived") {
+      // Try different possible IDs for the activate button in archived tab
+      const possibleIds = [
+        "#studentsArchivedActivateSelectedBtn",
+        "#facultyArchivedActivateSelectedBtn", 
+        "#presidentsArchivedActivateSelectedBtn"
+      ];
+      
+      for (const id of possibleIds) {
+        const btnActivate = S.qs(id);
+        if (btnActivate) {
+          const newBtn = btnActivate.cloneNode(true);
+          btnActivate.parentNode.replaceChild(newBtn, btnActivate);
+          newBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const ids = getSelectedIds(status);
+            if (!ids.length) return;
+
+            const doIt = async () => {
+              await S.postJSON({ action: "bulk_set_status", group: GROUP, status: "Active", ids });
+              clearSelection(status);
+              await refresh();
+              S.safeShowSuccess(`Activated ${ids.length} user(s).`);
+            };
+
+            if (typeof S.showConfirmModal === "function") {
+              S.showConfirmModal({
+                title: "Activate Selected",
+                subtitle: "Move selected archived users to Active",
+                message: `Activate ${ids.length} selected user(s)?`,
+                type: "success",
+                btnText: "Activate",
+                btnClass: "success",
+                btnIcon: "check-circle",
+                onConfirm: doIt,
+              });
+            } else {
+              await doIt();
+            }
+          });
+          break; // Only bind the first one found
+        }
+      }
     }
   }
 
@@ -1219,7 +1559,7 @@
     enableDropdownPortal();
     setupVisibilityHandlers();
 
-    bindSearchAndPageSize();
+    bindSearch(); // Replace bindSearchAndPageSize with this
 
     for (const st of STATUSES) {
       bindPagination(st);
@@ -1239,7 +1579,6 @@
 
     startPolling();
   }
-
   window.UsersFacultyAdmin = {
     init,
     refresh,

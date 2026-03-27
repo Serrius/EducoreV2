@@ -23,6 +23,9 @@ CLUBS MODULE (Cards -> Details -> Join/Manage)
 - Manage: Tabs (Pending Requests, Active Members, Fee Records)
 - Pending -> Confirm payment -> Activate member (per DOCX)
 ========================================================= -->
+<head>
+  <title>Clubs</title>
+</head>
 
 <div class="container-fluid py-3">
 
@@ -180,6 +183,37 @@ CLUBS MODULE (Cards -> Details -> Join/Manage)
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btnViewClubMembers">
                       <i class="bi bi-people me-2"></i>View
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MY MEMBERSHIP STATUS (for regular students only) -->
+            <div id="clubMyStatusWrap" class="d-none">
+              <div class="accordion mb-3" id="clubMyStatusAccordion">
+                <div class="accordion-item">
+                  <h2 class="accordion-header" id="clubMyStatusAccHead">
+                    <button class="accordion-button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#clubMyStatusAccBody"
+                            aria-expanded="false" aria-controls="clubMyStatusAccBody">
+                      <i class="bi bi-person-badge me-2"></i>My Membership Status
+                      <span class="badge ms-2 d-none" id="clubMyStatusBadge">—</span>
+                    </button>
+                  </h2>
+                  <div id="clubMyStatusAccBody" class="accordion-collapse collapse"
+                       aria-labelledby="clubMyStatusAccHead"
+                       data-bs-parent="#clubMyStatusAccordion">
+                    <div class="accordion-body">
+                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div>
+                          <div class="fw-semibold" id="clubMyStatusText">—</div>
+                          <div class="text-muted small mt-1" id="clubMyStatusMeta">—</div>
+                        </div>
+                        <button type="button" class="btn btn-dark d-none" id="btnClubPrintMyReceipt">
+                          <i class="bi bi-printer me-2"></i>Print My Receipt
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

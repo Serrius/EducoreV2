@@ -1493,20 +1493,25 @@ function openAcceptDocumentModal(docId, fileName) {
     const searchEl = rqs("#saAccSearch");
     const refreshBtn = rqs("#saAccRefreshBtn");
 
-    if (searchEl && !searchEl.__saBound) {
-      searchEl.__saBound = true;
-      searchEl.addEventListener(
+    if (searchEl) {
+      // Always sync the visible input with the (freshly-cleared) store on re-navigation
+      searchEl.value = store.search || "";
+
+      if (!searchEl.__saBound) {
+        searchEl.__saBound = true;
+        searchEl.addEventListener(
         "input",
         debounce(() => {
           store.search = String(searchEl.value || "").trim();
           store.pending.page = 1;
-          store.recommended.page = 1; // ✅ NEW
+          store.recommended.page = 1;
           store.active.page = 1;
           store.reqs.page = 1;
           bus.emit("search:changed", store.search);
         }, 250)
       );
-    }
+      } // end !searchEl.__saBound
+    } // end if (searchEl)
 
     if (refreshBtn && !refreshBtn.__saBound) {
       refreshBtn.__saBound = true;
@@ -1522,17 +1527,19 @@ function openAcceptDocumentModal(docId, fileName) {
   async function init(root) {
     const r = root || document;
 
-    // ✅ Prevent double-init for the same injected DOM chunk
-    if (r.__saAccInited) return;
-    r.__saAccInited = true;
-
-    // remember root so all helpers (modals/selects) target the injected page
+    // Always update root so rqs() targets the right element after re-navigation
     store._root = r;
 
+    // Reset pagination + search so re-entering the page fetches from scratch
+    store.search = "";
+    store.pending    = { items: [], page: 1, perPage: store.pending?.perPage    || 10, total: 0, status: "Pending", termId: store.pending?.termId    || "", year: store.pending?.year    || "" };
+    store.active     = { items: [], page: 1, perPage: store.active?.perPage     || 10, total: 0, termId: store.active?.termId     || "", year: store.active?.year     || "" };
+    store.recommended= { items: [], page: 1, perPage: store.recommended?.perPage|| 10, total: 0, termId: store.recommended?.termId|| "", year: store.recommended?.year|| "" };
+    store.reqs       = { items: [], page: 1, perPage: store.reqs?.perPage       || 10, total: 0, status: store.reqs?.status       || "Active" };
+
+    // Bind UI elements — helpers guard per-element so no double-listeners
     bindHeader();
     bindTermFilters();
-
-    // Call this after setting store._root
     bindPreviewModalActions();
 
     try {
@@ -1542,34 +1549,13 @@ function openAcceptDocumentModal(docId, fileName) {
       safeShowError(e.message || "Failed to load terms.");
     }
 
-    // Let feature modules init after base is ready
+    // Emit booted — tab modules listen to (re-)fetch their data
     bus.emit("booted", { root: r });
 
-    // ✅ Call submodules (if you have them)
-    try {
-      window.SAAccreditationPending?.init?.(r);
-    } catch (e) {
-      console.error("[Pending.init] failed", e);
-    }
-    
-    // ✅ NEW: Call recommended module
-    try {
-      window.SAAccreditationRecommended?.init?.(r);
-    } catch (e) {
-      console.error("[Recommended.init] failed", e);
-    }
-
-    try {
-      window.SAAccreditationActive?.init?.(r);
-    } catch (e) {
-      console.error("[Active.init] failed", e);
-    }
-
-    try {
-      window.SAAccreditationFiles?.init?.(r);
-    } catch (e) {
-      console.error("[Files.init] failed", e);
-    }
+    try { window.SAAccreditationPending?.init?.(r);     } catch (e) { console.error("[Pending.init] failed", e); }
+    try { window.SAAccreditationRecommended?.init?.(r); } catch (e) { console.error("[Recommended.init] failed", e); }
+    try { window.SAAccreditationActive?.init?.(r);      } catch (e) { console.error("[Active.init] failed", e); }
+    try { window.SAAccreditationFiles?.init?.(r);       } catch (e) { console.error("[Files.init] failed", e); }
   }
 
   // -------------------------

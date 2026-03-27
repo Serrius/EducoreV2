@@ -161,6 +161,7 @@
 
   const GROUP = "students";
   const STATUSES = ["Pending", "Active", "Inactive", "Archived"];
+  const PRESIDENT_STATUS = "President"; // New separate group
 
   const UI = {
     Pending: {
@@ -208,40 +209,375 @@
       btnExport: "#studentsArchivedExportSelectedBtn",
       btnRestore: "#studentsArchivedRestoreSelectedBtn",
     },
+    President: { // NEW: President UI configuration
+      tbody: "#studentsPresidentTbody",
+      meta: "#studentsPresidentMeta",
+      pag: "#studentsPresidentPagination",
+      bulkBar: "#studentsPresidentBulkBar",
+      selCount: "#studentsPresidentSelectedCount",
+      btnSelectAll: "#studentsPresidentSelectAllBtn",
+      btnClear: "#studentsPresidentClearSelectionBtn",
+      btnExport: "#studentsPresidentExportSelectedBtn",
+    },
   };
 
   const common = {
-    search: "#studentsSearch",
-    pageSize: "#studentsPageSize",
-    exportCsv: "#exportStudentsCsv",
+    // Updated to use per-tab search inputs instead of a global one
+    searchPending: "#studentsPendingSearch",
+    searchActive: "#studentsActiveSearch",
+    searchInactive: "#studentsInactiveSearch",
+    searchArchived: "#studentsArchivedSearch",
+    pageSize: "#studentsPageSize", // You'll need to add this to HTML
     exportPendingCsv: "#exportStudentsPendingCsv",
     exportActiveCsv: "#exportStudentsActiveCsv",
     exportInactiveCsv: "#exportStudentsInactiveCsv",
     exportArchivedCsv: "#exportStudentsArchivedCsv",
+    exportAllCsv: "#exportStudentsAllCsv",
     importCsv: "#importStudentsCsv",
   };
 
   const state = {
-    search: "",
+    search: {
+      Pending: "",
+      Active: "",
+      Inactive: "",
+      Archived: ""
+    },
     limit: 10,
     Pending: { page: 1, total: 0, rows: [], signature: "" },
     Active: { page: 1, total: 0, rows: [], signature: "" },
     Inactive: { page: 1, total: 0, rows: [], signature: "" },
     Archived: { page: 1, total: 0, rows: [], signature: "" },
     
-    // Polling state
     polling: { 
       timer: null, 
-      everyMs: 6000, // 6 seconds, same as manage-program.js
+      everyMs: 6000,
       paused: false, 
       running: false 
     },
     delegatedBound: false,
     currentRoot: null,
-    
-    // Notification highlight state
-    pendingHighlight: null
+    pendingHighlight: null,
+    searchDebounceTimers: {
+      Pending: null,
+      Active: null,
+      Inactive: null,
+      Archived: null
+    }
   };
+
+    // Handler factory functions for bulk actions
+  function createApproveHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Pending";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Approve Selected Students',
+          subtitle: 'Change status from Pending to Active',
+          message: `Are you sure you want to approve ${ids.length} selected student(s)?`,
+          type: 'approve',
+          btnText: 'Approve',
+          btnClass: 'success',
+          btnIcon: 'check-circle',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Active");
+              S.safeShowSuccess(`Successfully approved ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to approve selected students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  function createRejectHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Pending";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Reject Selected Students',
+          subtitle: 'Remove selected pending students',
+          message: `Reject ${ids.length} selected student(s)?`,
+          type: 'danger',
+          btnText: 'Reject',
+          btnClass: 'danger',
+          btnIcon: 'x-circle',
+          showWarning: true,
+          warningText: 'This action is irreversible.',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Inactive");
+              S.safeShowSuccess(`Rejected ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to reject students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  function createActiveArchiveHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Active";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Archive Selected Students',
+          subtitle: 'Move selected active students to archive',
+          message: `Archive ${ids.length} selected student(s)?`,
+          type: 'archive',
+          btnText: 'Archive',
+          btnClass: 'warning',
+          btnIcon: 'archive',
+          showWarning: true,
+          warningText: 'Archived students will not appear in active lists.',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Archived");
+              S.safeShowSuccess(`Archived ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to archive students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  function createInactiveActivateHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Inactive";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Activate Selected Students',
+          subtitle: 'Move selected inactive students to Active',
+          message: `Activate ${ids.length} selected student(s)?`,
+          type: 'success',
+          btnText: 'Activate',
+          btnClass: 'success',
+          btnIcon: 'check-circle',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkActivateInactive(ids);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to activate students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  function createInactiveArchiveHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Inactive";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Archive Selected Students',
+          subtitle: 'Move selected inactive students to archive',
+          message: `Archive ${ids.length} selected student(s)?`,
+          type: 'archive',
+          btnText: 'Archive',
+          btnClass: 'warning',
+          btnIcon: 'archive',
+          showWarning: true,
+          warningText: 'Archived students will not appear in active/inactive lists.',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Archived");
+              S.safeShowSuccess(`Archived ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to archive students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+    function createArchivedActivateHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Archived";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Activate Selected Students',
+          subtitle: 'Move selected archived students to Active',
+          message: `Activate ${ids.length} selected student(s)?`,
+          type: 'success',
+          btnText: 'Activate',
+          btnClass: 'success',
+          btnIcon: 'check-circle',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Active");
+              S.safeShowSuccess(`Activated ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to activate students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  function createArchivedRestoreHandler() {
+    return async (e) => {
+      e.preventDefault();
+      const status = "Archived";
+      const ids = getSelectedIds(status);
+      const studentInfo = getSelectedStudentInfo(status);
+      if (!ids.length) return;
+      
+      if (typeof S.showConfirmModal === 'function') {
+        S.showConfirmModal({
+          title: 'Restore Selected Students',
+          subtitle: 'Move selected archived students back to Active',
+          message: `Restore ${ids.length} selected student(s) to Active?`,
+          type: 'restore',
+          btnText: 'Restore',
+          btnClass: 'primary',
+          btnIcon: 'arrow-counterclockwise',
+          items: studentInfo.slice(0, 5),
+          onConfirm: async function() {
+            try {
+              await bulkSetStatus(status, ids, "Active");
+              S.safeShowSuccess(`Restored ${ids.length} student(s).`);
+            } catch (err) {
+              S.safeShowError(err?.message || "Failed to restore students.");
+            }
+          }
+        });
+      }
+    };
+  }
+
+  // Add this function to reinitialize event listeners after refresh
+  function reinitializeEventListeners() {
+    console.log('[Students] Reinitializing event listeners...');
+    
+    // Re-bind bulk bars for all statuses
+    for (const st of STATUSES) {
+      const cfg = UI[st];
+      
+      // Re-bind select all buttons
+      const btnSelectAll = S.qs(cfg.btnSelectAll);
+      if (btnSelectAll) {
+        const newBtn = btnSelectAll.cloneNode(true);
+        btnSelectAll.parentNode.replaceChild(newBtn, btnSelectAll);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          setAllRowChecks(st, true);
+          syncBulkBar(st);
+        });
+      }
+      
+      // Re-bind clear buttons
+      const btnClear = S.qs(cfg.btnClear);
+      if (btnClear) {
+        const newBtn = btnClear.cloneNode(true);
+        btnClear.parentNode.replaceChild(newBtn, btnClear);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          clearSelection(st);
+        });
+      }
+      
+      // Re-bind export buttons
+      const btnExport = S.qs(cfg.btnExport);
+      if (btnExport) {
+        const newBtn = btnExport.cloneNode(true);
+        btnExport.parentNode.replaceChild(newBtn, btnExport);
+        newBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          exportSelected(st);
+        });
+      }
+    }
+    
+    // Re-bind Pending tab buttons
+    const pendingApprove = S.qs("#studentsPendingApproveSelectedBtn");
+    if (pendingApprove) {
+      const newBtn = pendingApprove.cloneNode(true);
+      pendingApprove.parentNode.replaceChild(newBtn, pendingApprove);
+      newBtn.addEventListener("click", createApproveHandler());
+    }
+    
+    const pendingReject = S.qs("#studentsPendingRejectSelectedBtn");
+    if (pendingReject) {
+      const newBtn = pendingReject.cloneNode(true);
+      pendingReject.parentNode.replaceChild(newBtn, pendingReject);
+      newBtn.addEventListener("click", createRejectHandler());
+    }
+    
+    // Re-bind Active tab archive button
+    const activeArchive = S.qs("#studentsActiveArchiveSelectedBtn");
+    if (activeArchive) {
+      const newBtn = activeArchive.cloneNode(true);
+      activeArchive.parentNode.replaceChild(newBtn, activeArchive);
+      newBtn.addEventListener("click", createActiveArchiveHandler());
+    }
+    
+    // Re-bind Inactive tab buttons
+    const inactiveActivate = S.qs("#studentsInactiveActivateSelectedBtn");
+    if (inactiveActivate) {
+      const newBtn = inactiveActivate.cloneNode(true);
+      inactiveActivate.parentNode.replaceChild(newBtn, inactiveActivate);
+      newBtn.addEventListener("click", createInactiveActivateHandler());
+    }
+    
+    const inactiveArchive = S.qs("#studentsInactiveArchiveSelectedBtn");
+    if (inactiveArchive) {
+      const newBtn = inactiveArchive.cloneNode(true);
+      inactiveArchive.parentNode.replaceChild(newBtn, inactiveArchive);
+      newBtn.addEventListener("click", createInactiveArchiveHandler());
+    }
+    
+    // Re-bind Archived tab restore button
+    const archivedRestore = S.qs("#studentsArchivedRestoreSelectedBtn");
+    if (archivedRestore) {
+      const newBtn = archivedRestore.cloneNode(true);
+      archivedRestore.parentNode.replaceChild(newBtn, archivedRestore);
+      newBtn.addEventListener("click", createArchivedRestoreHandler());
+    }
+  }
 
   // -------------------------
   // Signature-based change detection (from manage-program.js)
@@ -261,6 +597,21 @@
       action: "list_users",
       group: GROUP,
       status,
+      search,
+      page: 1,
+      limit: 1,
+    });
+
+    return computeSignatureFromListPayload(data);
+  }
+
+  // NEW: Fetch signature for presidents (separate group)
+  async function fetchPresidentSignature() {
+    const search = state.search;
+    
+    const data = await S.postJSON({
+      action: "list_users",
+      group: "presidents",
       search,
       page: 1,
       limit: 1,
@@ -294,11 +645,12 @@
     state.polling.running = true;
     try {
       // Fetch signatures for all status types in parallel
-      const [sigP, sigA, sigI, sigR] = await Promise.all([
+      const [sigP, sigA, sigI, sigR, sigPres] = await Promise.all([
         fetchSignature("Pending"),
         fetchSignature("Active"),
         fetchSignature("Inactive"),
-        fetchSignature("Archived")
+        fetchSignature("Archived"),
+        fetchPresidentSignature() // NEW: President signature
       ]);
       
       // Check if any signature changed
@@ -306,7 +658,8 @@
         sigP !== state.Pending.signature || 
         sigA !== state.Active.signature || 
         sigI !== state.Inactive.signature || 
-        sigR !== state.Archived.signature;
+        sigR !== state.Archived.signature ||
+        sigPres !== state.President.signature; // NEW: Check president
 
       if (changed) {
         console.log('Database changes detected in students, refreshing all tables...');
@@ -319,6 +672,7 @@
         state.Active.signature = sigA;
         state.Inactive.signature = sigI;
         state.Archived.signature = sigR;
+        state.President.signature = sigPres; // NEW: Update president signature
         
         // Show subtle notification
         if (document.visibilityState === 'visible') {
@@ -548,6 +902,50 @@
       action: "list_users",
       group: GROUP,
       status,
+      search: state.search[status], // Use status-specific search
+      page: st.page,
+      limit: state.limit,
+    });
+
+    st.rows = Array.isArray(data.rows) ? data.rows : [];
+    st.total = Number(data.total || 0);
+    
+    return computeSignatureFromListPayload(data);
+  }
+
+  // New function to bind per-tab search
+  function bindSearch() {
+    const statuses = ["Pending", "Active", "Inactive", "Archived"];
+    
+    statuses.forEach(status => {
+      const searchId = common[`search${status}`];
+      const searchEl = S.qs(searchId);
+      
+      if (searchEl) {
+        searchEl.addEventListener("input", () => {
+          // Clear existing timer
+          if (state.searchDebounceTimers[status]) {
+            clearTimeout(state.searchDebounceTimers[status]);
+          }
+
+          // Set new timer
+          state.searchDebounceTimers[status] = setTimeout(() => {
+            state.search[status] = searchEl.value.trim();
+            state[status].page = 1;
+            refreshStatus(status);
+            console.log(`[Students] Searching ${status}:`, state.search[status]);
+          }, 300);
+        });
+      }
+    });
+  }
+
+  // NEW: Fetch presidents list
+  async function fetchPresidentList() {
+    const st = state.President;
+    const data = await S.postJSON({
+      action: "list_users",
+      group: "presidents",
       search: state.search,
       page: st.page,
       limit: state.limit,
@@ -556,7 +954,6 @@
     st.rows = Array.isArray(data.rows) ? data.rows : [];
     st.total = Number(data.total || 0);
     
-    // Return signature for polling
     return computeSignatureFromListPayload(data);
   }
 
@@ -577,14 +974,83 @@
     return result;
   }
 
-  // NEW FUNCTION: Refresh both source and destination tabs
+  // NEW FUNCTION: Refresh both source and destination statuses (FIXED - was missing)
   async function refreshBothStatuses(sourceStatus, destinationStatus) {
     await refreshStatus(sourceStatus);
     if (destinationStatus && destinationStatus !== sourceStatus) {
       await refreshStatus(destinationStatus);
     }
+    // Also refresh presidents if needed
+    if (destinationStatus === "President" || sourceStatus === "President") {
+      await refreshPresidentTab();
+    }
   }
 
+  async function bulkActivateInactive(ids) {
+    if (!ids.length) return;
+    
+    const result = await S.postJSON({
+      action: "bulk_set_status",
+      group: GROUP,
+      status: "Active",
+      ids,
+    });
+    
+    clearSelection("Inactive");
+    
+    // Refresh both Inactive and Active tabs
+    await refreshStatus("Inactive");
+    await refreshStatus("Active");
+    
+    // Show success message
+    if (typeof S.showSuccessModal === 'function') {
+      S.showSuccessModal({
+        title: 'Students Activated',
+        message: `Successfully activated ${ids.length} student(s).`,
+        icon: 'check-circle-fill'
+      });
+    } else {
+      S.safeShowSuccess(`Successfully activated ${ids.length} student(s).`);
+    }
+    
+    return result;
+  }
+
+  // FIXED: Promote student to President (single function)
+  async function promoteToPresident(id) {
+    const result = await S.postJSON({
+      action: "update_user_role",
+      id: id,
+      role: "org_president",
+    });
+    
+    // Refresh the Active tab
+    await refreshStatus("Active");
+    
+    // Also refresh presidents if the module exists
+    if (window.UsersPresident?.refresh) {
+      await window.UsersPresident.refresh();
+    }
+    
+    return result;
+  }
+
+  // FIXED: Demote president to Student
+  async function demoteToStudent(id) {
+    const result = await S.postJSON({
+      action: "update_user_role",
+      id: id,
+      role: "student",
+    });
+    
+    // Refresh both tabs
+    if (window.UsersPresident?.refresh) {
+      await window.UsersPresident.refresh();
+    }
+    await refreshStatus("Active");
+    
+    return result;
+  }
   async function bulkResetPassword(status, ids) {
     const result = await S.postJSON({ action: "bulk_reset_password", ids });
     clearSelection(status);
@@ -622,102 +1088,115 @@
   }
 
   function actionsHtml(status, id, studentData) {
-  const sid = S.escapeHtml(id);
-  const studentName = studentData ? fullName(studentData) : "Student";
+    const sid = S.escapeHtml(id);
+    const studentName = studentData ? fullName(studentData) : "Student";
 
-  // More menu - same structure as faculty/moderator
-  const moreMenu = `
-    <div class="dropdown d-inline-block">
-      <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="More">
-        <i class="bi bi-three-dots-vertical"></i>
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li>
-          <a class="dropdown-item mu-student-view-one" href="#" data-id="${sid}">
-            <i class="bi bi-eye me-2"></i>View
-          </a>
-        </li>
-        <li>
-          <a class="dropdown-item mu-student-edit-one" href="#" data-id="${sid}">
-            <i class="bi bi-pencil-square me-2"></i>Edit
-          </a>
-        </li>
-        <li><hr class="dropdown-divider"></li>
-        <li>
-          <a class="dropdown-item mu-student-reset-one" href="#" data-id="${sid}" data-name="${S.escapeHtml(studentName)}">
-            <i class="bi bi-key me-2"></i>Reset Password
-          </a>
-        </li>
-      </ul>
-    </div>
-  `;
-
-  // PENDING - similar to faculty Active but with specific buttons
-  if (status === "Pending") {
-    return `
-      <div class="d-flex justify-content-end gap-1 flex-wrap">
-        <button class="btn btn-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Approve">
-          <i class="bi bi-check-circle"></i>
+    // More menu - same structure as faculty/moderator
+    const moreMenu = `
+      <div class="dropdown d-inline-block">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="More">
+          <i class="bi bi-three-dots-vertical"></i>
         </button>
-        <button class="btn btn-outline-secondary btn-sm mu-set-status" data-id="${sid}" data-next="Inactive" data-name="${S.escapeHtml(studentName)}" type="button" title="Decline">
-          <i class="bi bi-dash-circle"></i>
-        </button>
-        ${moreMenu}
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <a class="dropdown-item mu-student-view-one" href="#" data-id="${sid}">
+              <i class="bi bi-eye me-2"></i>View
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item mu-student-edit-one" href="#" data-id="${sid}">
+              <i class="bi bi-pencil-square me-2"></i>Edit
+            </a>
+          </li>
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <a class="dropdown-item mu-student-reset-one" href="#" data-id="${sid}" data-name="${S.escapeHtml(studentName)}">
+              <i class="bi bi-key me-2"></i>Reset Password
+            </a>
+          </li>
+          <!-- NEW: Promote to President option for Active students -->
+          ${status === "Active" ? `
+          <li>
+            <a class="dropdown-item mu-student-promote-president" href="#" data-id="${sid}" data-name="${S.escapeHtml(studentName)}">
+              <i class="bi bi-stars me-2"></i>Promote to President
+            </a>
+          </li>
+          ` : ''}
+        </ul>
       </div>
     `;
+
+    // PENDING - similar to faculty Active but with specific buttons
+    if (status === "Pending") {
+      return `
+        <div class="d-flex justify-content-end gap-1 flex-wrap">
+          <button class="btn btn-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Approve">
+            <i class="bi bi-check-circle"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-sm mu-set-status" data-id="${sid}" data-next="Inactive" data-name="${S.escapeHtml(studentName)}" type="button" title="Decline">
+            <i class="bi bi-dash-circle"></i>
+          </button>
+          ${moreMenu}
+        </div>
+      `;
+    }
+
+    // ACTIVE - same as faculty Active
+    if (status === "Active") {
+      return `
+        <div class="d-flex justify-content-end gap-1 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm mu-set-status" data-id="${sid}" data-next="Inactive" data-name="${S.escapeHtml(studentName)}" type="button" title="Set Inactive">
+            <i class="bi bi-dash-circle"></i>
+          </button>
+          <button class="btn btn-outline-warning btn-sm mu-set-status" data-id="${sid}" data-next="Archived" data-name="${S.escapeHtml(studentName)}" type="button" title="Archive">
+            <i class="bi bi-archive"></i>
+          </button>
+          ${moreMenu}
+        </div>
+      `;
+    }
+
+    // INACTIVE - same as faculty Inactive
+    if (status === "Inactive") {
+      return `
+        <div class="d-flex justify-content-end gap-1 flex-wrap">
+          <button class="btn btn-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Activate">
+            <i class="bi bi-check-circle"></i>
+          </button>
+          <button class="btn btn-outline-warning btn-sm mu-set-status" data-id="${sid}" data-next="Archived" data-name="${S.escapeHtml(studentName)}" type="button" title="Archive">
+            <i class="bi bi-archive"></i>
+          </button>
+          ${moreMenu}
+        </div>
+      `;
+    }
+
+    // ARCHIVED - same as faculty Archived
+    if (status === "Archived") {
+      return `
+        <div class="d-flex justify-content-end gap-1 flex-wrap">
+          <button class="btn btn-outline-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Restore">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+          ${moreMenu}
+        </div>
+      `;
+    }
+
+    return moreMenu; // Default for other statuses
   }
 
-  // ACTIVE - same as faculty Active
-  if (status === "Active") {
-    return `
-      <div class="d-flex justify-content-end gap-1 flex-wrap">
-        <button class="btn btn-outline-secondary btn-sm mu-set-status" data-id="${sid}" data-next="Inactive" data-name="${S.escapeHtml(studentName)}" type="button" title="Set Inactive">
-          <i class="bi bi-dash-circle"></i>
-        </button>
-        <button class="btn btn-outline-warning btn-sm mu-set-status" data-id="${sid}" data-next="Archived" data-name="${S.escapeHtml(studentName)}" type="button" title="Archive">
-          <i class="bi bi-archive"></i>
-        </button>
-        ${moreMenu}
-      </div>
-    `;
-  }
-
-  // INACTIVE - same as faculty Inactive
-  if (status === "Inactive") {
-    return `
-      <div class="d-flex justify-content-end gap-1 flex-wrap">
-        <button class="btn btn-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Activate">
-          <i class="bi bi-check-circle"></i>
-        </button>
-        <button class="btn btn-outline-warning btn-sm mu-set-status" data-id="${sid}" data-next="Archived" data-name="${S.escapeHtml(studentName)}" type="button" title="Archive">
-          <i class="bi bi-archive"></i>
-        </button>
-        ${moreMenu}
-      </div>
-    `;
-  }
-
-  // ARCHIVED - same as faculty Archived
-  return `
-    <div class="d-flex justify-content-end gap-1 flex-wrap">
-      <button class="btn btn-outline-success btn-sm mu-set-status" data-id="${sid}" data-next="Active" data-name="${S.escapeHtml(studentName)}" type="button" title="Restore">
-        <i class="bi bi-arrow-counterclockwise"></i>
-      </button>
-      ${moreMenu}
-    </div>
-  `;
-  }
-
-  function renderRows(status) {
-    const cfg = UI[status];
+  // NEW: Render presidents rows
+  function renderPresidentRows() {
+    const cfg = UI.President;
     const tbody = S.qs(cfg.tbody);
     if (!tbody) return;
 
-    const rows = state[status].rows;
+    const rows = state.President.rows;
 
     if (!rows.length) {
-      tbody.innerHTML = renderEmptyRow(9, `No ${status.toLowerCase()} students found.`);
-      syncBulkBar(status);
+      tbody.innerHTML = renderEmptyRow(7, "No presidents found.");
+      syncBulkBar("President");
       return;
     }
 
@@ -731,6 +1210,59 @@
           <tr data-id="${S.escapeHtml(r.id)}">
             <td>${S.escapeHtml(r.id_number || "—")}</td>
             <td>${S.escapeHtml(fullName(r) || "—")}</td>
+            <td>${S.escapeHtml(prog)}</td>
+            <td>${S.escapeHtml(ylvl)}</td>
+            <td>${S.escapeHtml(sy)}</td>
+            <td><span class="badge bg-light text-dark border">${S.escapeHtml(r.status || "—")}</span></td>
+            <td class="text-end">
+              <div class="d-flex justify-content-end gap-1 flex-wrap">
+                <button class="btn btn-outline-secondary btn-sm mu-president-view-one" data-id="${S.escapeHtml(r.id)}" title="View">
+                  <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-outline-warning btn-sm mu-president-demote" data-id="${S.escapeHtml(r.id)}" data-name="${S.escapeHtml(fullName(r))}" title="Demote to Student">
+                  <i class="bi bi-arrow-down-circle"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm mu-set-status" data-id="${S.escapeHtml(r.id)}" data-next="Inactive" data-name="${S.escapeHtml(fullName(r))}" title="Set Inactive">
+                  <i class="bi bi-dash-circle"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    ensureHeaderCheckbox("President");
+    injectRowCheckboxes("President");
+    syncBulkBar("President");
+  }
+
+  function renderRows(status) {
+    const cfg = UI[status];
+    const tbody = S.qs(cfg.tbody);
+    if (!tbody) return;
+
+    const rows = state[status].rows;
+
+    if (!rows.length) {
+      tbody.innerHTML = renderEmptyRow(8, `No ${status.toLowerCase()} students found.`);
+      syncBulkBar(status);
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map((r) => {
+        const prog = r.program || "—";
+        const ylvl = r.year_level || "—";
+        const sy = r.school_year || "—";
+        // Show role badge if not 'student'
+        const roleBadge = r.role && r.role !== 'student' ? 
+          `<span class="badge bg-primary ms-2">${S.escapeHtml(r.role.replace('_', ' '))}</span>` : '';
+
+        return `
+          <tr data-id="${S.escapeHtml(r.id)}">
+            <td>${S.escapeHtml(r.id_number || "—")}</td>
+            <td>${S.escapeHtml(fullName(r) || "—")}${roleBadge}</td>
             <td>${S.escapeHtml(prog)}</td>
             <td>${S.escapeHtml(ylvl)}</td>
             <td>${S.escapeHtml(sy)}</td>
@@ -750,7 +1282,6 @@
     // Check if there's a pending highlight after rendering
     checkPendingHighlight();
   }
-
 
   function renderMeta(status) {
     const cfg = UI[status];
@@ -809,11 +1340,22 @@
     renderPagination(status);
   }
 
+  // NEW: Refresh president tab
+  async function refreshPresidentTab() {
+    const signature = await fetchPresidentList();
+    state.President.signature = signature;
+    renderPresidentRows();
+    renderMeta("President");
+    renderPagination("President");
+  }
+
   async function refresh() {
-    // Refresh all status tabs in parallel for faster updates
     const refreshPromises = STATUSES.map(status => refreshStatus(status));
     await Promise.all(refreshPromises);
+    // Reinitialize event listeners after data refresh
+    setTimeout(() => reinitializeEventListeners(), 100);
   }
+
 
   // -------------------------
   // NOTIFICATION HIGHLIGHTING FUNCTIONS
@@ -862,7 +1404,7 @@
     }
     
     // Make sure students tab is active
-    const studentsTabTrigger = document.querySelector('#students-tab');
+    const studentsTabTrigger = document.querySelector('#tab-students');
     if (studentsTabTrigger && !studentsTabTrigger.classList.contains('active')) {
       console.log("[Students] Activating students tab");
       const tab = new bootstrap.Tab(studentsTabTrigger);
@@ -1103,276 +1645,6 @@
     return true;
   }
 
-// NEW DEDICATED HIGHLIGHT FUNCTION - PERSISTENT UNTIL NEW NOTIFICATION
-async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
-  console.log("[Students] ===== HIGHLIGHT FROM NOTIFICATION =====");
-  console.log("[Students] Received params:", { userId, idNumber });
-  
-  if (!userId && !idNumber) {
-    console.error("[Students] Both userId and idNumber are empty!");
-    return false;
-  }
-  
-  // Make sure students tab is active
-  const studentsTabTrigger = document.querySelector('#students-tab');
-  if (studentsTabTrigger && !studentsTabTrigger.classList.contains('active')) {
-    console.log("[Students] Activating students tab");
-    const tab = new bootstrap.Tab(studentsTabTrigger);
-    tab.show();
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-  
-  // Try multiple strategies to find the student
-  let found = false;
-  
-  // Strategy 1: Direct API call to get student by ID
-  if (userId && !found) {
-    console.log("[Students] Strategy 1: Fetching student by ID from API");
-    try {
-      const response = await S.postJSON({
-        action: "get_user",
-        group: GROUP,
-        id: userId
-      });
-      
-      if (response && response.success && response.data) {
-        console.log("[Students] Found student via get_user:", response.data);
-        const student = response.data;
-        
-        // Add to cache
-        const status = student.status || "Pending";
-        if (STATUSES.includes(status)) {
-          state[status].rows = [student, ...state[status].rows];
-          await refreshStatus(status);
-          
-          // Try to highlight after refresh (no success modal)
-          setTimeout(() => {
-            highlightStudentRow(student.id, student.id_number);
-          }, 500);
-          found = true;
-        }
-      }
-    } catch (e) {
-      console.log("[Students] get_user failed:", e);
-    }
-  }
-  
-  // Strategy 2: Search all status tabs with larger limit
-  if (!found && userId) {
-    console.log("[Students] Strategy 2: Searching all status tabs");
-    for (const status of STATUSES) {
-      try {
-        const data = await S.postJSON({
-          action: "list_users",
-          group: GROUP,
-          status,
-          search: userId,
-          page: 1,
-          limit: 100,
-        });
-        
-        const rows = Array.isArray(data.rows) ? data.rows : [];
-        const match = rows.find(r => String(r.id) === String(userId) || String(r.id_number).includes(userId));
-        
-        if (match) {
-          console.log("[Students] Found student in", status, "tab:", match);
-          state[status].rows = [match, ...state[status].rows];
-          await refreshStatus(status);
-          
-          setTimeout(() => {
-            highlightStudentRow(match.id, match.id_number);
-          }, 500);
-          found = true;
-          break;
-        }
-      } catch (e) {
-        console.log(`[Students] Search in ${status} failed:`, e);
-      }
-    }
-  }
-  
-  // Strategy 3: Try to find in DOM by searching all rows
-  if (!found) {
-    console.log("[Students] Strategy 3: Searching DOM directly");
-    const allRows = document.querySelectorAll('tbody[id*="students"] tr[data-id]');
-    console.log(`[Students] Found ${allRows.length} rows in DOM`);
-    
-    for (const row of allRows) {
-      const rowId = row.getAttribute('data-id');
-      const idCell = row.querySelector('td:first-child');
-      const rowIdNumber = idCell?.textContent?.trim() || "";
-      
-      if (rowId === String(userId) || (idNumber && rowIdNumber === String(idNumber))) {
-        console.log("[Students] Found matching row in DOM!");
-        highlightStudentRow(userId, idNumber);
-        found = true;
-        break;
-      }
-    }
-  }
-  
-  // Strategy 4: Force refresh all tables and try DOM again
-  if (!found) {
-    console.log("[Students] Strategy 4: Refreshing all tables");
-    await refresh();
-    
-    // Try DOM one more time after refresh
-    setTimeout(() => {
-      const allRows = document.querySelectorAll('tbody[id*="students"] tr[data-id]');
-      for (const row of allRows) {
-        const rowId = row.getAttribute('data-id');
-        if (rowId === String(userId)) {
-          highlightStudentRow(userId, idNumber);
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) {
-        // Only show error if really not found
-        console.error(`[Students] Student with ID ${userId} not found`);
-      }
-    }, 1000);
-  }
-  
-  return found;
-}
-
-// NEW DEDICATED HIGHLIGHT FUNCTION - NO MODAL AND NO SUCCESS MODAL
-async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
-  console.log("[Students] ===== HIGHLIGHT FROM NOTIFICATION =====");
-  console.log("[Students] Received params:", { userId, idNumber });
-  
-  if (!userId && !idNumber) {
-    console.error("[Students] Both userId and idNumber are empty!");
-    return false;
-  }
-  
-  // Make sure students tab is active
-  const studentsTabTrigger = document.querySelector('#students-tab');
-  if (studentsTabTrigger && !studentsTabTrigger.classList.contains('active')) {
-    console.log("[Students] Activating students tab");
-    const tab = new bootstrap.Tab(studentsTabTrigger);
-    tab.show();
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-  
-  // Try multiple strategies to find the student
-  let found = false;
-  
-  // Strategy 1: Direct API call to get student by ID
-  if (userId && !found) {
-    console.log("[Students] Strategy 1: Fetching student by ID from API");
-    try {
-      const response = await S.postJSON({
-        action: "get_user",
-        group: GROUP,
-        id: userId
-      });
-      
-      if (response && response.success && response.data) {
-        console.log("[Students] Found student via get_user:", response.data);
-        const student = response.data;
-        
-        // Add to cache
-        const status = student.status || "Pending";
-        if (STATUSES.includes(status)) {
-          state[status].rows = [student, ...state[status].rows];
-          await refreshStatus(status);
-          
-          // Try to highlight after refresh (no success modal)
-          setTimeout(() => {
-            highlightStudentRow(student.id, student.id_number);
-          }, 500);
-          found = true;
-        }
-      }
-    } catch (e) {
-      console.log("[Students] get_user failed:", e);
-    }
-  }
-  
-  // Strategy 2: Search all status tabs with larger limit
-  if (!found && userId) {
-    console.log("[Students] Strategy 2: Searching all status tabs");
-    for (const status of STATUSES) {
-      try {
-        const data = await S.postJSON({
-          action: "list_users",
-          group: GROUP,
-          status,
-          search: userId,
-          page: 1,
-          limit: 100,
-        });
-        
-        const rows = Array.isArray(data.rows) ? data.rows : [];
-        const match = rows.find(r => String(r.id) === String(userId) || String(r.id_number).includes(userId));
-        
-        if (match) {
-          console.log("[Students] Found student in", status, "tab:", match);
-          state[status].rows = [match, ...state[status].rows];
-          await refreshStatus(status);
-          
-          setTimeout(() => {
-            highlightStudentRow(match.id, match.id_number);
-          }, 500);
-          found = true;
-          break;
-        }
-      } catch (e) {
-        console.log(`[Students] Search in ${status} failed:`, e);
-      }
-    }
-  }
-  
-  // Strategy 3: Try to find in DOM by searching all rows
-  if (!found) {
-    console.log("[Students] Strategy 3: Searching DOM directly");
-    const allRows = document.querySelectorAll('tbody[id*="students"] tr[data-id]');
-    console.log(`[Students] Found ${allRows.length} rows in DOM`);
-    
-    for (const row of allRows) {
-      const rowId = row.getAttribute('data-id');
-      const idCell = row.querySelector('td:first-child');
-      const rowIdNumber = idCell?.textContent?.trim() || "";
-      
-      if (rowId === String(userId) || (idNumber && rowIdNumber === String(idNumber))) {
-        console.log("[Students] Found matching row in DOM!");
-        highlightStudentRow(userId, idNumber);
-        found = true;
-        break;
-      }
-    }
-  }
-  
-    // Strategy 4: Force refresh all tables and try DOM again
-    if (!found) {
-      console.log("[Students] Strategy 4: Refreshing all tables");
-      await refresh();
-      
-      // Try DOM one more time after refresh
-      setTimeout(() => {
-        const allRows = document.querySelectorAll('tbody[id*="students"] tr[data-id]');
-        for (const row of allRows) {
-          const rowId = row.getAttribute('data-id');
-          if (rowId === String(userId)) {
-            highlightStudentRow(userId, idNumber);
-            found = true;
-            break;
-          }
-        }
-        
-        if (!found) {
-          // Only show error if really not found
-          console.error(`[Students] Student with ID ${userId} not found`);
-        }
-      }, 1000);
-    }
-    
-    return found;
-  }
-
   // Also modify fetchStudentByIdNumber to be more aggressive
   async function fetchStudentByIdNumber(idNumber) {
     const needle = String(idNumber || "").trim();
@@ -1568,162 +1840,99 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
   function bindBulkBar(status) {
     const cfg = UI[status];
 
+    // Select All button
     const btnSelectAll = S.qs(cfg.btnSelectAll);
+    if (btnSelectAll) {
+      const newBtn = btnSelectAll.cloneNode(true);
+      btnSelectAll.parentNode.replaceChild(newBtn, btnSelectAll);
+      newBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        setAllRowChecks(status, true);
+        syncBulkBar(status);
+      });
+    }
+
+    // Clear button
     const btnClear = S.qs(cfg.btnClear);
+    if (btnClear) {
+      const newBtn = btnClear.cloneNode(true);
+      btnClear.parentNode.replaceChild(newBtn, btnClear);
+      newBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        clearSelection(status);
+      });
+    }
+
+    // Export button
     const btnExport = S.qs(cfg.btnExport);
+    if (btnExport) {
+      const newBtn = btnExport.cloneNode(true);
+      btnExport.parentNode.replaceChild(newBtn, btnExport);
+      newBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        exportSelected(status);
+      });
+    }
 
-    btnSelectAll?.addEventListener("click", (e) => {
-      e.preventDefault();
-      setAllRowChecks(status, true);
-      syncBulkBar(status);
-    });
-
-    btnClear?.addEventListener("click", (e) => {
-      e.preventDefault();
-      clearSelection(status);
-    });
-
-    btnExport?.addEventListener("click", (e) => {
-      e.preventDefault();
-      exportSelected(status);
-    });
-
+    // Pending tab buttons
     if (status === "Pending") {
-      S.qs(cfg.btnApprove)?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const ids = getSelectedIds(status);
-        const studentInfo = getSelectedStudentInfo(status);
-        if (!ids.length) return;
-        
-        // Use global confirm modal
-        if (typeof S.showConfirmModal === 'function') {
-          S.showConfirmModal({
-            title: 'Approve Selected Students',
-            subtitle: 'Change status from Pending to Active',
-            message: `Are you sure you want to approve ${ids.length} selected student(s)? Their status will be changed to Active.`,
-            type: 'approve',
-            btnText: 'Approve',
-            btnClass: 'success',
-            btnIcon: 'check-circle',
-            showWarning: false,
-            items: studentInfo.slice(0, 5),
-            onConfirm: async function() {
-              try {
-                await bulkSetStatus(status, ids, "Active");
-                
-                // Use global success notification
-                S.safeShowSuccess(`Successfully approved ${ids.length} student(s). Their status has been changed to Active.`);
-              } catch (err) {
-                S.safeShowError(err?.message || "Failed to approve selected students.");
-              }
-            }
-          });
-        }
-      });
+      const btnApprove = S.qs(cfg.btnApprove);
+      if (btnApprove) {
+        const newBtn = btnApprove.cloneNode(true);
+        btnApprove.parentNode.replaceChild(newBtn, btnApprove);
+        newBtn.addEventListener("click", createApproveHandler());
+      }
 
-      S.qs(cfg.btnReject)?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const ids = getSelectedIds(status);
-        const studentInfo = getSelectedStudentInfo(status);
-        if (!ids.length) return;
-        
-        // Use global confirm modal
-        if (typeof S.showConfirmModal === 'function') {
-          S.showConfirmModal({
-            title: 'Reject Selected Students',
-            subtitle: 'Remove selected pending students',
-            message: `Are you sure you want to reject ${ids.length} selected student(s)? They will be removed from the system.`,
-            type: 'danger',
-            btnText: 'Reject',
-            btnClass: 'danger',
-            btnIcon: 'x-circle',
-            showWarning: true,
-            warningText: 'This action is irreversible. Rejected students will be permanently deleted.',
-            items: studentInfo.slice(0, 5),
-            onConfirm: async function() {
-              try {
-                await bulkSetStatus(status, ids, "Inactive");
-                
-                // Use global success notification
-                S.safeShowSuccess(`Successfully rejected ${ids.length} student(s). They have been removed from the system.`);
-              } catch (err) {
-                S.safeShowError(err?.message || "Failed to reject selected students.");
-              }
-            }
-          });
-        }
-      });
+      const btnReject = S.qs(cfg.btnReject);
+      if (btnReject) {
+        const newBtn = btnReject.cloneNode(true);
+        btnReject.parentNode.replaceChild(newBtn, btnReject);
+        newBtn.addEventListener("click", createRejectHandler());
+      }
     }
 
-    if (status === "Active" || status === "Inactive") {
-      S.qs(cfg.btnArchive)?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const ids = getSelectedIds(status);
-        const studentInfo = getSelectedStudentInfo(status);
-        if (!ids.length) return;
-        
-        const targetStatus = status === "Active" ? "Active" : "Inactive";
-        
-        // Use global confirm modal
-        if (typeof S.showConfirmModal === 'function') {
-          S.showConfirmModal({
-            title: 'Archive Selected Students',
-            subtitle: `Move selected ${targetStatus.toLowerCase()} students to archive`,
-            message: `Are you sure you want to archive ${ids.length} selected student(s)? They will be moved to the archived section.`,
-            type: 'archive',
-            btnText: 'Archive',
-            btnClass: 'warning',
-            btnIcon: 'archive',
-            showWarning: true,
-            warningText: 'Archived students will not appear in active/inactive lists.',
-            items: studentInfo.slice(0, 5),
-            onConfirm: async function() {
-              try {
-                await bulkSetStatus(status, ids, "Archived");
-                
-                // Use global success notification
-                S.safeShowSuccess(`Successfully archived ${ids.length} student(s). They have been moved to the archived section.`);
-              } catch (err) {
-                S.safeShowError(err?.message || "Failed to archive selected students.");
-              }
-            }
-          });
-        }
-      });
+    // Archive button (Active tab)
+    if (status === "Active" && cfg.btnArchive) {
+      const btn = S.qs(cfg.btnArchive);
+      if (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener("click", createActiveArchiveHandler());
+      }
     }
 
+    // Inactive tab buttons
+    if (status === "Inactive") {
+      const btnActivate = S.qs("#studentsInactiveActivateSelectedBtn");
+      if (btnActivate) {
+        const newBtn = btnActivate.cloneNode(true);
+        btnActivate.parentNode.replaceChild(newBtn, btnActivate);
+        newBtn.addEventListener("click", createInactiveActivateHandler());
+      }
+
+      const btnArchive = S.qs(cfg.btnArchive);
+      if (btnArchive) {
+        const newBtn = btnArchive.cloneNode(true);
+        btnArchive.parentNode.replaceChild(newBtn, btnArchive);
+        newBtn.addEventListener("click", createInactiveArchiveHandler());
+      }
+    }
+
+    // Archived tab buttons
     if (status === "Archived") {
-      S.qs(cfg.btnRestore)?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const ids = getSelectedIds(status);
-        const studentInfo = getSelectedStudentInfo(status);
-        if (!ids.length) return;
-        
-        // Use global confirm modal
-        if (typeof S.showConfirmModal === 'function') {
-          S.showConfirmModal({
-            title: 'Restore Selected Students',
-            subtitle: 'Move selected archived students back to Active status',
-            message: `Are you sure you want to restore ${ids.length} selected student(s)? They will be moved back to the active section.`,
-            type: 'restore',
-            btnText: 'Restore',
-            btnClass: 'primary',
-            btnIcon: 'arrow-counterclockwise',
-            showWarning: false,
-            items: studentInfo.slice(0, 5),
-            onConfirm: async function() {
-              try {
-                await bulkSetStatus(status, ids, "Active");
-                
-                // Use global success notification
-                S.safeShowSuccess(`Successfully restored ${ids.length} student(s). They have been moved back to the active section.`);
-              } catch (err) {
-                S.safeShowError(err?.message || "Failed to restore selected students.");
-              }
-            }
-          });
-        }
-      });
+      const btnActivate = S.qs("#studentsArchivedActivateSelectedBtn");
+      if (btnActivate) {
+        const newBtn = btnActivate.cloneNode(true);
+        btnActivate.parentNode.replaceChild(newBtn, btnActivate);
+        newBtn.addEventListener("click", createArchivedActivateHandler());
+      }
+
+      const btnRestore = S.qs(cfg.btnRestore);
+      if (btnRestore) {
+        const newBtn = btnRestore.cloneNode(true);
+        btnRestore.parentNode.replaceChild(newBtn, btnRestore);
+        newBtn.addEventListener("click", createArchivedRestoreHandler());
+      }
     }
   }
 
@@ -1745,6 +1954,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       program: r.program || "",
       year_level: r.year_level || "",
       school_year: r.school_year || "",
+      role: r.role || "student",
       status: r.status || "",
     }));
 
@@ -1758,6 +1968,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       "program",
       "year_level",
       "school_year",
+      "role",
       "status",
     ]);
 
@@ -1797,6 +2008,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
           program: r.program || "",
           year_level: r.year_level || "",
           school_year: r.school_year || "",
+          role: r.role || "student",
           status: r.status || "",
         })));
         
@@ -1807,9 +2019,42 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       }
     }
     
+    // Also export presidents
+    const presLimit = 200;
+    let presPage = 1;
+    while (true) {
+      const data = await S.postJSON({
+        action: "list_users",
+        group: "presidents",
+        search: state.search,
+        page: presPage,
+        limit: presLimit,
+      });
+      
+      const pageRows = Array.isArray(data.rows) ? data.rows : [];
+      rows.push(...pageRows.map(r => ({
+        id_number: r.id_number || "",
+        first_name: r.first_name || "",
+        middle_name: r.middle_name || "",
+        last_name: r.last_name || "",
+        suffix: r.suffix || "",
+        email: r.email || "",
+        program: r.program || "",
+        year_level: r.year_level || "",
+        school_year: r.school_year || "",
+        role: r.role || "org_president",
+        status: r.status || "",
+      })));
+      
+      const total = Number(data.total || 0);
+      const totalPages = total ? Math.ceil(total / presLimit) : 1;
+      if (presPage >= totalPages) break;
+      presPage++;
+    }
+    
     const csv = S.toCSV(rows, [
       "id_number", "first_name", "middle_name", "last_name", "suffix", 
-      "email", "program", "year_level", "school_year", "status"
+      "email", "program", "year_level", "school_year", "role", "status"
     ]);
     
     S.downloadText("students_all.csv", csv);
@@ -1825,7 +2070,10 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     if (searchEl) {
       searchEl.addEventListener("input", () => {
         state.search = searchEl.value.trim();
-        for (const s of STATUSES) state[s].page = 1;
+        for (const s of STATUSES) {
+          if (state[s]) state[s].page = 1;
+        }
+        state.President.page = 1; // Reset president page
         refresh();
       });
     }
@@ -1833,7 +2081,10 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     if (sizeEl) {
       sizeEl.addEventListener("change", () => {
         state.limit = parseInt(sizeEl.value, 10) || 10;
-        for (const s of STATUSES) state[s].page = 1;
+        for (const s of STATUSES) {
+          if (state[s]) state[s].page = 1;
+        }
+        state.President.page = 1; // Reset president page
         refresh();
       });
     }
@@ -1851,13 +2102,19 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
 
       const val = a.getAttribute("data-page");
       const st = state[status];
+      if (!st) return;
+      
       const totalPages = Math.max(1, Math.ceil((st.total || 0) / state.limit));
 
       if (val === "prev") st.page = Math.max(1, st.page - 1);
       else if (val === "next") st.page = Math.min(totalPages, st.page + 1);
       else st.page = parseInt(val, 10) || 1;
 
-      refreshStatus(status);
+      if (status === "President") {
+        refreshPresidentTab();
+      } else {
+        refreshStatus(status);
+      }
     });
   }
 
@@ -1867,48 +2124,53 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
   function findStudentById(id) {
     const needle = Number(id);
     for (const st of STATUSES) {
-      const rows = state[st].rows || [];
+      const rows = state[st]?.rows || [];
       const found = rows.find((r) => Number(r.id) === needle);
       if (found) return found;
     }
+    // Also check presidents
+    const presRows = state.President?.rows || [];
+    const presFound = presRows.find((r) => Number(r.id) === needle);
+    if (presFound) return presFound;
+    
     return null;
   }
 
   function fillViewStudentModal(r) {
-  const dash = (v) => {
-    const s = String(v ?? "").trim();
-    return s ? s : "—";
-  };
+    const dash = (v) => {
+      const s = String(v ?? "").trim();
+      return s ? s : "—";
+    };
 
-  const set = (sel, val) => {
-    const el = S.qs(sel);
-    if (el) el.textContent = dash(val);
-  };
+    const set = (sel, val) => {
+      const el = S.qs(sel);
+      if (el) el.textContent = dash(val);
+    };
 
-  // IDs that you already have (based on your function)
-  set("#viewStudentIdNo", r?.id_number);
-  set("#viewStudentEmail", r?.email);
-  set("#viewStudentProgram", r?.program);
-  set("#viewStudentYearLevel", r?.year_level);
-  set("#viewStudentSchoolYear", r?.school_year);
-  set("#viewStudentStatus", r?.status);
-  set("#viewStudentLastLogin", r?.last_login_at);
-  set("#viewStudentCreated", r?.created_at);
+    // IDs that you already have (based on your function)
+    set("#viewStudentIdNo", r?.id_number);
+    set("#viewStudentEmail", r?.email);
+    set("#viewStudentProgram", r?.program);
+    set("#viewStudentYearLevel", r?.year_level);
+    set("#viewStudentSchoolYear", r?.school_year);
+    set("#viewStudentStatus", r?.status);
+    set("#viewStudentLastLogin", r?.last_login_at);
+    set("#viewStudentCreated", r?.created_at);
 
-  // ✅ FIX: set the separate name fields used by your modal layout
-  set("#viewStudentFirstName", r?.first_name);
-  set("#viewStudentMiddleName", r?.middle_name);
-  set("#viewStudentLastName", r?.last_name);
-  set("#viewStudentSuffix", r?.suffix);
+    // ✅ FIX: set the separate name fields used by your modal layout
+    set("#viewStudentFirstName", r?.first_name);
+    set("#viewStudentMiddleName", r?.middle_name);
+    set("#viewStudentLastName", r?.last_name);
+    set("#viewStudentSuffix", r?.suffix);
+    set("#viewStudentRole", r?.role || "student");
 
-  // Optional: if your HTML ALSO has a combined name field, fill it too (won’t break if missing)
-  set("#viewStudentName", fullName(r));
+    // Optional: if your HTML ALSO has a combined name field, fill it too (won’t break if missing)
+    set("#viewStudentName", fullName(r));
 
-  // keep your edit-from-view working
-  const btn = S.qs("#btnOpenEditStudentFromView");
-  if (btn) btn.setAttribute("data-id", String(r?.id || ""));
-}
-
+    // keep your edit-from-view working
+    const btn = S.qs("#btnOpenEditStudentFromView");
+    if (btn) btn.setAttribute("data-id", String(r?.id || ""));
+  }
 
   function populateEditProgramDropdown({ force = false, selectedValue = null } = {}) {
     const sel = S.qs("#edit_student_program");
@@ -2094,9 +2356,37 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
   }
 
   function openViewStudent(id) {
-    const r = findStudentById(id);
-    if (!r) return S.safeShowError("Student not found in current page data. Try refreshing.");
+    // Try to find in local state first
+    let r = findStudentById(id);
+    
+    if (!r) {
+      // If not found in state, fetch from API directly
+      S.postJSON({ action: "get_user", id: id })
+        .then(data => {
+          const user = data?.user || data;
+          if (user) {
+            fillViewStudentModal(user);
+            const modalEl = S.qs("#modalViewStudent");
+            if (modalEl) {
+              const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+              modal.show();
+              state.polling.paused = true;
+              modalEl.addEventListener("hidden.bs.modal", () => {
+                state.polling.paused = false;
+              }, { once: true });
+            }
+          } else {
+            S.safeShowError("Student not found. Please refresh the page.");
+          }
+        })
+        .catch(err => {
+          console.error("Failed to fetch student:", err);
+          S.safeShowError("Failed to load student details.");
+        });
+      return;
+    }
 
+    // Found in local state
     fillViewStudentModal(r);
     const modalEl = S.qs("#modalViewStudent");
     if (!modalEl) return S.safeShowError("View Student modal is missing in HTML.");
@@ -2104,10 +2394,67 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
     
-    // Pause polling while modal is open
     state.polling.paused = true;
     
-    // Resume when modal closes
+    modalEl.addEventListener("hidden.bs.modal", () => {
+      state.polling.paused = false;
+    }, { once: true });
+  }
+
+  function openEditStudent(id) {
+    // Try to find in local state first
+    let r = findStudentById(id);
+    
+    if (!r) {
+      // If not found in state, fetch from API directly
+      S.postJSON({ action: "get_user", id: id })
+        .then(data => {
+          const user = data?.user || data;
+          if (user) {
+            // reset alerts
+            const err = S.qs("#editStudentError");
+            const ok = S.qs("#editStudentSuccess");
+            if (err) err.classList.add("d-none");
+            if (ok) ok.classList.add("d-none");
+
+            fillEditStudentModal(user);
+
+            const modalEl = S.qs("#modalEditStudent");
+            if (modalEl) {
+              const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+              modal.show();
+              state.polling.paused = true;
+              modalEl.addEventListener("hidden.bs.modal", () => {
+                state.polling.paused = false;
+              }, { once: true });
+            }
+          } else {
+            S.safeShowError("Student not found. Please refresh the page.");
+          }
+        })
+        .catch(err => {
+          console.error("Failed to fetch student:", err);
+          S.safeShowError("Failed to load student for editing.");
+        });
+      return;
+    }
+
+    // Found in local state
+    const err = S.qs("#editStudentError");
+    const ok = S.qs("#editStudentSuccess");
+    if (err) err.classList.add("d-none");
+    if (ok) ok.classList.add("d-none");
+
+    fillEditStudentModal(r);
+
+    const modalEl = S.qs("#modalEditStudent");
+    if (!modalEl) return S.safeShowError("Edit Student modal is missing in HTML.");
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    
+    state.polling.paused = true;
+    
     modalEl.addEventListener("hidden.bs.modal", () => {
       state.polling.paused = false;
     }, { once: true });
@@ -2140,7 +2487,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     }, { once: true });
   }
 
-    function bindStudentViewEditModals() {
+  function bindStudentViewEditModals() {
     // View modal -> open edit
     S.qs("#btnOpenEditStudentFromView")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -2301,14 +2648,13 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
         setBtnLoading(false);
       }
     });
-    }
-
+  }
 
   // -------------------------
   
   function bindRowActions() {
     document.addEventListener("click", async (e) => {
-      const viewBtn = e.target.closest(".mu-student-view-one");
+      const viewBtn = e.target.closest(".mu-student-view-one, .mu-president-view-one");
       if (viewBtn) {
         e.preventDefault();
         const id = parseInt(viewBtn.getAttribute("data-id") || "0", 10);
@@ -2360,6 +2706,86 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
         return;
       }
 
+            // FIXED: Promote to President action
+      const promoteBtn = e.target.closest(".mu-student-promote-president");
+      if (promoteBtn) {
+        e.preventDefault();
+        const id = parseInt(promoteBtn.getAttribute("data-id") || "0", 10);
+        const studentName = promoteBtn.getAttribute("data-name") || "Student";
+        if (!id) return;
+
+        if (typeof S.showConfirmModal === 'function') {
+          S.showConfirmModal({
+            title: 'Promote to President',
+            subtitle: `Change role for ${studentName}`,
+            message: `Are you sure you want to promote ${studentName} to President? This will change their role from Student to Organization President.`,
+            type: 'success',
+            btnText: 'Promote',
+            btnClass: 'success',
+            btnIcon: 'stars',
+            onConfirm: async function() {
+              try {
+                await S.postJSON({ 
+                  action: "update_user_role", 
+                  id: id, 
+                  role: "org_president" 
+                });
+                S.safeShowSuccess(`${studentName} has been promoted to President.`);
+                
+                // Refresh both tabs
+                await refreshStatus("Active");
+                if (window.UsersPresident?.refresh) {
+                  await window.UsersPresident.refresh();
+                }
+              } catch (err) {
+                S.safeShowError(err?.message || "Failed to promote student.");
+              }
+            }
+          });
+        }
+        return;
+      }
+
+      // FIXED: Demote from President action
+      const demoteBtn = e.target.closest(".mu-president-demote");
+      if (demoteBtn) {
+        e.preventDefault();
+        const id = parseInt(demoteBtn.getAttribute("data-id") || "0", 10);
+        const presidentName = demoteBtn.getAttribute("data-name") || "President";
+        if (!id) return;
+
+        if (typeof S.showConfirmModal === 'function') {
+          S.showConfirmModal({
+            title: 'Demote to Student',
+            subtitle: `Change role for ${presidentName}`,
+            message: `Are you sure you want to demote ${presidentName} from President back to Student?`,
+            type: 'warning',
+            btnText: 'Demote',
+            btnClass: 'warning',
+            btnIcon: 'arrow-down-circle',
+            onConfirm: async function() {
+              try {
+                await S.postJSON({ 
+                  action: "update_user_role", 
+                  id: id, 
+                  role: "student" 
+                });
+                S.safeShowSuccess(`${presidentName} has been demoted to Student.`);
+                
+                // Refresh both tabs
+                if (window.UsersPresident?.refresh) {
+                  await window.UsersPresident.refresh();
+                }
+                await refresh();
+              } catch (err) {
+                S.safeShowError(err?.message || "Failed to demote president.");
+              }
+            }
+          });
+        }
+        return;
+      }
+
       const statusBtn = e.target.closest(".mu-set-status");
       if (statusBtn) {
         e.preventDefault();
@@ -2374,6 +2800,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
           : tbody?.id?.includes("Active") ? "Active"
           : tbody?.id?.includes("Inactive") ? "Inactive"
           : tbody?.id?.includes("Archived") ? "Archived"
+          : tbody?.id?.includes("President") ? "President"
           : "";
 
         // Map next status to action names for the confirmation modal
@@ -2425,7 +2852,8 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
             warningText: warningMessages[next],
             onConfirm: async function() {
               try {
-                await S.postJSON({ action: "set_status", group: GROUP, id, status: next });
+                const group = status === "President" ? "presidents" : GROUP;
+                await S.postJSON({ action: "set_status", group, id, status: next });
                 
                 // Use global success notification
                 const successMessages = {
@@ -2439,11 +2867,18 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
                 S.safeShowSuccess(`${studentName}: ${successMessages[next] || 'Status updated successfully'}.`);
                 
                 // FIXED: Refresh BOTH the source AND destination tabs
-                if (status) {
+                if (status === "President") {
+                  await refreshPresidentTab(); // Source tab
+                } else if (status) {
                   await refreshStatus(status); // Source tab
                 }
+                
                 if (next && next !== status) {
-                  await refreshStatus(next); // Destination tab
+                  if (next === "President") {
+                    await refreshPresidentTab(); // Destination tab
+                  } else {
+                    await refreshStatus(next); // Destination tab
+                  }
                 }
               } catch (err) {
                 S.safeShowError(err?.message || "Failed to update status.");
@@ -2455,12 +2890,11 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     });
   }
 
-
   // -------------------------
   // Export dropdown (loaded page)
   // -------------------------
   function exportLoaded(status) {
-    const rows = state[status].rows || [];
+    const rows = state[status]?.rows || [];
     const exportRows = rows.map((r) => ({
       id_number: r.id_number || "",
       first_name: r.first_name || "",
@@ -2471,6 +2905,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       program: r.program || "",
       year_level: r.year_level || "",
       school_year: r.school_year || "",
+      role: r.role || "student",
       status: r.status || "",
     }));
 
@@ -2484,6 +2919,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       "program",
       "year_level",
       "school_year",
+      "role",
       "status",
     ]);
 
@@ -2506,6 +2942,10 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     S.qs(common.exportArchivedCsv)?.addEventListener("click", (e) => {
       e.preventDefault();
       exportLoaded("Archived");
+    });
+    S.qs("#exportStudentsPresidentCsv")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      exportLoaded("President");
     });
     
     // ADD THIS: Bind the "All" button
@@ -2744,6 +3184,20 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       const exact = rows.find(r => String(r.id_number || "").trim() === needle);
       if (exact) return exact;
     }
+    
+    // Search presidents
+    const presData = await S.postJSON({
+      action: "list_users",
+      group: "presidents",
+      search: needle,
+      page: 1,
+      limit: 25,
+    });
+    
+    const presRows = Array.isArray(presData.rows) ? presData.rows : [];
+    const presExact = presRows.find(r => String(r.id_number || "").trim() === needle);
+    if (presExact) return presExact;
+    
     return null;
   }
 
@@ -2766,6 +3220,20 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
       const exact = rows.find(r => Number(r.id) === id);
       if (exact) return exact;
     }
+    
+    // Search presidents
+    const presData = await S.postJSON({
+      action: "list_users",
+      group: "presidents",
+      search: String(id),
+      page: 1,
+      limit: 25,
+    });
+    
+    const presRows = Array.isArray(presData.rows) ? presData.rows : [];
+    const presExact = presRows.find(r => Number(r.id) === id);
+    if (presExact) return presExact;
+    
     return null;
   }
 
@@ -2775,7 +3243,7 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
   function init(shared) {
     S = shared;
     
-    bindSearchAndPageSize();
+    bindSearch(); // Replace bindSearchAndPageSize with this
     bindAddStudentModal();
 
     enableDropdownPortal();
@@ -2791,16 +3259,11 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     bindExportDropdown();
     bindImport();
     
-    // Setup database change detection
     setupVisibilityHandlers();
     startPolling();
-    
-    // Setup notification listener
     setupNotificationListener();
     
-    // Initial refresh and fetch signatures
     refresh().then(async () => {
-      // Get initial signatures for polling
       const [sigP, sigA, sigI, sigR] = await Promise.all([
         fetchSignature("Pending"),
         fetchSignature("Active"),
@@ -2821,11 +3284,11 @@ async function highlightFromNotification({ userId = "", idNumber = "" } = {}) {
     refresh,
     refreshStatus,
     refreshBothStatuses,
+    refreshPresidentTab,
     startPolling,
     stopPolling,
-    highlightFromNotification, // New highlight function
-    openFromNotification: highlightFromNotification // Alias for backward compatibility
+    highlightFromNotification,
+    openFromNotification: highlightFromNotification
   };
 
 })();
-//fillViewStudentModal

@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const usernameField = document.getElementById('username');
   const passwordField = document.getElementById('password');
   const rememberMeCheckbox = document.getElementById('rememberMe');
+  
+  // Debug logs
+  console.log('🚨 LOGIN.JS STARTED - default_account:', localStorage.getItem('default_account'));
+  console.log('🚨 LOGIN.JS STARTED - all keys:', Object.keys(localStorage));
 
   // Load saved credentials if cookies exist
   if (document.cookie) {
@@ -41,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.style.animation = "fadeOut 3s";
     setTimeout(function () {
       modal.style.display = "none";
-    }, 3000); // Match this to the duration of the fade-out animation
+    }, 3000);
     console.log("Modal faded and closed!");
   }
   // Close the modal automatically after 2 seconds
@@ -84,29 +88,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
           // core user
           localStorage.setItem('id', data.id);
-          localStorage.setItem('username', data.full_name); // not just the input username
-
-          // roles: keep both raw_role + role (role may be elevated to "Officer")
+          localStorage.setItem('username', data.full_name);
           localStorage.setItem('role', data.role || '');
           localStorage.setItem('raw_role', data.raw_role || '');
-
+          localStorage.setItem('original_role', data.original_role || '');
           localStorage.setItem('currentUserRole', data.role || '');
-
-          // program display (was department before)
           localStorage.setItem('program', data.program || '');
-          localStorage.setItem('currentUserDepartment', data.program || ''); // keep your existing key so other pages won't break
-
+          localStorage.setItem('currentUserDepartment', data.program || '');
           localStorage.setItem('firstName', data.first_name || '');
-
-          // officer display fields
           localStorage.setItem('is_officer', data.is_officer ? '1' : '0');
           localStorage.setItem('officer_term_id', data.officer_term_id ? String(data.officer_term_id) : '');
           localStorage.setItem('officer_position', data.officer_position || '');
-
-          // e-signature file (only set when NOT officer, based on your backend)
           localStorage.setItem('signature_file', data.signature_file || '');
-
-          // In the login response handler (login.js)
           localStorage.setItem('officer_org_name', data.officer_org_name || '');
           localStorage.setItem('officer_org_abbreviation', data.officer_org_abbreviation || '');
 
@@ -114,53 +107,18 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('profile_picture', data.profile_picture);
           }
 
-          // Normalize redirect role:
-          // - backend role may be "Officer" (capitalized) when elevated
-          // - otherwise backend role is typically lowercase like "student"
-          const redirectRole = String(data.role || '').toLowerCase();
-
-          switch (redirectRole) {
-            case 'overseer':
-              window.location.href = 'overseer.html';
-              break;
-            case 'super_admin':
-              window.location.href = 'super-admin.html';
-              break;
-            case 'faculty_admin':
-              window.location.href = 'faculty-admin.html';
-              break;
-            case 'moderator':
-              window.location.href = 'moderator.html';
-              break;
-            case 'special_admin':
-              window.location.href = 'special-admin.html';
-              break;
-
-            // If you still have these legacy roles in DB, keep them:
-            case 'org_president':
-              window.location.href = 'org-president.html';
-              break;
-            case 'org_officer':
-              window.location.href = 'org-officer.html';
-              break;
-            case 'treasurer':
-              window.location.href = 'treasurer.html';
-              break;
-
-            // NEW: officer elevated role
-            case 'officer':
-              // If you don't have a separate officer dashboard, send them to student.html
-              // (sidebar will show: Student | <position>)
-              window.location.href = 'student.html';
-              break;
-
-            case 'student':
-              window.location.href = 'student.html';
-              break;
-
-            default:
-              alert("Unknown role");
+          // SIMPLIFIED: Just redirect based on role - no modal, no preferences
+          console.log('🔄 Redirecting based on role:', data.role);
+          
+          // If user is an officer (org_president, treasurer, org_officer, or elevated officer)
+          if (data.is_officer) {
+            console.log('👔 User is an officer - sending to officer.html');
+            window.location.href = 'officer.html';
+          } else {
+            // Regular redirect based on role
+            redirectBasedOnRole(data.role);
           }
+          
         } else {
           alert(data.message || 'Login failed.');
         }
@@ -169,5 +127,38 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error:', error);
       });
   });
-
 });
+
+function redirectBasedOnRole(role) {
+  const redirectRole = String(role || '').toLowerCase();
+
+  switch (redirectRole) {
+    case 'overseer':
+      window.location.href = 'overseer.html';
+      break;
+    case 'super_admin':
+      window.location.href = 'super-admin.html';
+      break;
+    case 'faculty_admin':
+      window.location.href = 'faculty-admin.html';
+      break;
+    case 'moderator':
+      window.location.href = 'moderator.html';
+      break;
+    case 'special_admin':
+      window.location.href = 'special-admin.html';
+      break;
+    case 'org_president':
+    case 'org_officer':
+    case 'treasurer':
+    case 'officer':
+      window.location.href = 'officer.html';
+      break;
+    case 'student':
+      window.location.href = 'student.html';
+      break;
+    default:
+      console.log('Unknown role:', role);
+      alert("Unknown role. Please contact administrator.");
+  }
+}

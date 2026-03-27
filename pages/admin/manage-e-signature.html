@@ -43,15 +43,9 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
         </div>
       </div>
 
-      <!-- Right-side actions like your other pages -->
-      <div class="d-flex flex-wrap gap-2 justify-content-md-end">
-        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#sigHelpModal">
-          <i class="bi bi-info-circle me-1"></i> Help
-        </button>
-        <button class="btn btn-outline-primary" type="button" id="btnPreviewFull" data-bs-toggle="modal" data-bs-target="#sigPreviewModal">
-          <i class="bi bi-eye me-1"></i> Preview
-        </button>
-        <button class="btn btn-primary" type="button" id="btnAddReplace" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
+      <!-- ONLY ONE BUTTON -->
+      <div>
+        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
           <i class="bi bi-pen me-1"></i> Add / Replace
         </button>
       </div>
@@ -82,7 +76,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
               <div class="text-center" id="sigEmptyState">
                 <div class="display-6 opacity-50">✍️</div>
                 <div class="fw-semibold mt-2">No signature uploaded</div>
-                <div class="text-muted small">Click <span class="fw-semibold">Add / Replace</span> to upload your e-signature.</div>
+                <div class="text-muted small">Upload your signature to enable approvals</div>
               </div>
 
               <!-- If signature exists, your JS can swap this in -->
@@ -116,16 +110,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
               <div class="small text-muted">File Type</div>
               <div class="fw-semibold" id="sigFileType">—</div>
             </div>
-          </div>
-
-          <!-- Inline actions -->
-          <div class="d-flex flex-wrap gap-2 mt-4">
-            <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
-              <i class="bi bi-upload me-1"></i> Upload / Replace
-            </button>
-            <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#sigRemoveModal">
-              <i class="bi bi-trash me-1"></i> Remove
-            </button>
           </div>
         </div>
       </div>
@@ -164,12 +148,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
               <span class="fw-semibold">Avoid:</span> blurry photos, shadows, and colored paper.
             </div>
           </div>
-
-          <div class="d-grid mt-3">
-            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
-              <i class="bi bi-pen me-1"></i> Add / Replace Signature
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -179,7 +157,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
 
 <!-- =========================
   Upload / Replace Modal
-  ✅ UPDATED: Added "Draw Signature" option (saves as transparent PNG)
 ========================= -->
 <div class="modal fade" id="sigUploadModal" tabindex="-1" aria-labelledby="sigUploadModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -264,11 +241,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
 
           </div>
         </form>
-
-        <!-- Small note for dev -->
-        <div class="text-muted small mt-2">
-          Dev note: on Save you can either submit the selected file (<code>#sigFile</code>) or the drawn canvas PNG (<code>#sigCanvas</code>).
-        </div>
       </div>
 
       <div class="modal-footer">
@@ -313,7 +285,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
   Full Preview Modal
 ========================= -->
 <div class="modal fade" id="sigPreviewModal" tabindex="-1" aria-labelledby="sigPreviewModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
+  <div class="dialog modal-xl modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header">
         <h5 class="modal-title fw-bold" id="sigPreviewModalLabel">E-Signature Preview</h5>
@@ -333,9 +305,6 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
 
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
-          <i class="bi bi-pen me-1"></i> Replace
-        </button>
       </div>
     </div>
   </div>
@@ -378,18 +347,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB  PPPPPPPPPP
 
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sigUploadModal">
-          <i class="bi bi-pen me-1"></i> Add / Replace
-        </button>
       </div>
     </div>
   </div>
 </div>
-
-<!-- =========================================================
-  Inline JS (for visualization + working draw preview)
-  - Toggle upload/draw
-  - Canvas draw w/ mouse + touch
-  - Preview shows drawn canvas or uploaded file
-  notes
-========================================================= -->

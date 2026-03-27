@@ -20,6 +20,29 @@ function fadeOutIntroLoader() {
 window.addEventListener('load', fadeOutIntroLoader);
 
 document.addEventListener('DOMContentLoaded', function () {
+  // ================== CHECK ACTIVE ACCOUNT ==================
+  const activeAccount = localStorage.getItem('active_account');
+  const hasDualAccount = localStorage.getItem('available_accounts') !== null;
+  const isOfficer = localStorage.getItem('is_officer') === '1' || localStorage.getItem('is_officer') === 'true';
+  
+  // If this is an officer page but user wants student view, or vice versa
+  if (hasDualAccount && isOfficer) {
+    const currentPage = window.location.pathname.split('/').pop();
+    const isOfficerPage = currentPage === 'officer.html';
+    const isStudentPage = currentPage === 'student.html';
+    
+    // Check if we're on the wrong page for the active account
+    if (isOfficerPage && activeAccount === 'student') {
+      console.log('[UserScript] Redirecting to student.html (active account: student)');
+      window.location.href = 'student.html';
+      return;
+    } else if (isStudentPage && activeAccount === 'officer') {
+      console.log('[UserScript] Redirecting to officer.html (active account: officer)');
+      window.location.href = 'officer.html';
+      return;
+    }
+  }
+
   // ================== SIDEBAR TOGGLER ==================
   const toggler = document.querySelector('.toggler-btn');
   if (toggler) {
@@ -125,18 +148,56 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
+  // Store original showSection function for overriding
+  const originalShowSection = showSection;
+  
+  window.showSection = function(section) {
+    // Check if trying to access officer section in student mode
+    const activeAccount = localStorage.getItem('active_account');
+    const officerOnlySections = ['manage-accreditation', 'manage-e-signature'];
+    
+    if (activeAccount === 'student' && officerOnlySections.includes(section)) {
+      console.warn('[UserScript] Cannot access officer section in student mode.');
+      showSection('home');
+      
+      // Update selected link
+      document.querySelectorAll('.sidebar-link').forEach(l => {
+        l.classList.remove('selected');
+      });
+      const homeLink = document.querySelector('.sidebar-link[data-section="home"]');
+      if (homeLink) homeLink.classList.add('selected');
+      
+      return;
+    }
+    
+    // Call original showSection
+    if (typeof originalShowSection === 'function') {
+      originalShowSection(section);
+    }
+  };
+
   function showSection(section) {
     const contentArea = document.getElementById('content-area');
     if (!contentArea) return;
 
-    // Guard: If user is not an officer, block the manage-e-signature section even if they try to access it
-    const isOfficerGuard =
-      localStorage.getItem('is_officer') === '1' ||
-      localStorage.getItem('is_officer') === 'true';
+    // Get isOfficer from localStorage - SIMPLIFIED
+    const isOfficer = localStorage.getItem('is_officer') === '1' || localStorage.getItem('is_officer') === 'true';
 
-    if (section === 'manage-e-signature' && !isOfficerGuard) {
+    // Guard: If user is not an officer, block the manage-e-signature section
+    if (section === 'manage-e-signature' && !isOfficer) {
       console.warn('[UserScript] Blocked access to manage-e-signature (not an officer).');
-      // Kick back to home (or choose another safe section)
+      // Kick back to home
+      showSection('home');
+      return;
+    }
+
+    // Guard: If user is not an org_president, block the manage-accreditation section
+    const userRole = localStorage.getItem('role');
+    const isOrgPresident = userRole === 'org_president';
+    
+    if (section === 'manage-accreditation' && !isOrgPresident) {
+      console.warn('[UserScript] Blocked access to manage-accreditation (not an org president).');
+      // Kick back to home
       showSection('home');
       return;
     }
@@ -148,6 +209,7 @@ document.addEventListener('DOMContentLoaded', function () {
       announcements: 'pages/student/announcements.html',
       'manage-e-signature': 'pages/super-admin/manage-e-signature.html',
       'org-fee': 'pages/student/organization-fees.html',
+      'manage-accreditation': 'pages/admin/accreditation.html',
       'transact-history': 'pages/student/transact-history.html',
       'dept-event-expenses': 'pages/student/event-expenses.html',
       'clubs': 'pages/student/clubs.html',
@@ -175,8 +237,8 @@ document.addEventListener('DOMContentLoaded', function () {
           window.ManageESignature.init(contentArea);
         }
 
-        if (section === 'clubs' && window.Clubs?.init) {
-          window.Clubs.init();
+        if (section === "manage-accreditation" && window.SAAccreditation?.init) {
+          window.SAAccreditation.init(contentArea);
         }
 
         if (section === 'clubs' && window.Clubs?.init) {
@@ -258,25 +320,10 @@ document.addEventListener('DOMContentLoaded', function () {
       credentials: 'include',
     })
       .then(() => {
-        // Clear stored user info
-        localStorage.removeItem('username');
-        localStorage.removeItem('role');
-        localStorage.removeItem('raw_role');
-        localStorage.removeItem('profile_picture');
-        localStorage.removeItem('user_id');
-        localStorage.removeItem('id_number');
-
-        // Fix: clear the keys you actually use
-        localStorage.removeItem('department');
-        localStorage.removeItem('currentUserDepartment');
-        localStorage.removeItem('program');
-
-        // officer / signature
-        localStorage.removeItem('is_officer');
-        localStorage.removeItem('officer_term_id');
-        localStorage.removeItem('officer_position');
-        localStorage.removeItem('signature_file');
-
+        // Clear all stored user info including account preferences
+        localStorage.clear();
+        sessionStorage.clear();
+        
         // Redirect to login
         window.location.href = 'login.html';
       })
@@ -287,6 +334,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const fullName = localStorage.getItem('username');
   const role = localStorage.getItem('role');
   const profilePic = localStorage.getItem('profile_picture');
+  
+  // USE the isOfficer from the top - DON'T redeclare!
+  // const isOfficer = ... // REMOVED - already declared at the top
 
   // program line
   const program =
@@ -294,15 +344,9 @@ document.addEventListener('DOMContentLoaded', function () {
     localStorage.getItem('currentUserDepartment');
 
   // officer line
-  const isOfficer =
-    localStorage.getItem('is_officer') === '1' ||
-    localStorage.getItem('is_officer') === 'true';
-
   const officerPosition = localStorage.getItem('officer_position');
 
   // ================== HIDE MANAGE E-SIGNATURE IF NOT OFFICER ==================
-  // If the current logged in user is not an officer, hide:
-  // <li class="sidebar-item"><a class="sidebar-link" data-section="manage-e-signature">...</a></li>
   (function hideManageESignatureIfNotOfficer() {
     const link = document.querySelector('.sidebar-link[data-section="manage-e-signature"]');
     if (!link) return;
@@ -312,13 +356,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!isOfficer) {
       li.style.display = 'none';
-
-      // If somehow currently selected, remove selected state
       link.classList.remove('selected');
       console.log('[UserScript] manage-e-signature sidebar item hidden (not an officer).');
     } else {
-      // Ensure it shows for officers
       li.style.display = '';
+    }
+  })();
+
+  // ================== HIDE MANAGE ACCREDITATION IF NOT ORG PRESIDENT ==================
+  (function hideManageAccreditationIfNotOrgPresident() {
+    const link = document.querySelector('.sidebar-link[data-section="manage-accreditation"]');
+    if (!link) return;
+
+    const li = link.closest('li.sidebar-item') || link.closest('li');
+    if (!li) return;
+
+    const isOrgPresident = role === 'org_president';
+    
+    if (!isOrgPresident) {
+      li.style.display = 'none';
+      link.classList.remove('selected');
+      console.log('[UserScript] manage-accreditation sidebar item hidden (not an org president). Role:', role);
+    } else {
+      li.style.display = '';
+      console.log('[UserScript] manage-accreditation sidebar item shown for org president.');
     }
   })();
 
@@ -335,24 +396,15 @@ document.addEventListener('DOMContentLoaded', function () {
     displayRole = 'student';
   }
 
+  // ===== UPDATED RANK DISPLAY - SHOW "Officer" FOR ANY OFFICER =====
   // Build role display
   let rankText = displayRole
     ? displayRole.charAt(0).toUpperCase() + displayRole.slice(1)
     : 'Unknown';
 
-  // EXACT output requested: Student | President / Chairperson
-  // We keep officerPosition exactly as stored in DB (no changes)
-  if (isOfficer && officerPosition) {
-  // You'll need to fetch the organization name for this officer
-  // Option 1: If you have the org info available in localStorage
-  const orgName = localStorage.getItem('officer_org_name') || 
-                  localStorage.getItem('officer_org_abbreviation') || 
-                  'Organization';
-  rankText = `${orgName} - ${officerPosition}`;
-  
-  // Option 2: If you want the abbreviation (like "SOCE" instead of full name)
-  const orgAbbr = localStorage.getItem('officer_org_abbreviation') || 'ORG';
-  rankText = `${orgAbbr} - ${officerPosition}`;
+  // SIMPLIFIED: For ANY officer, display "Officer" instead of specific position
+  if (isOfficer) {
+    rankText = 'Officer';
   }
 
   if (usernameEl) usernameEl.textContent = fullName ?? 'Unknown';
@@ -364,7 +416,10 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   console.log('User program:', program);
-  console.log('Officer:', isOfficer, 'Position:', officerPosition);
+  console.log('Is officer:', isOfficer);
+  console.log('Officer position (raw):', officerPosition);
+  console.log('Displayed role:', rankText);
+  console.log('User role:', role);
 
   if (profilePic) {
     const path = `assets/uploads/${profilePic}`;
@@ -372,5 +427,3 @@ document.addEventListener('DOMContentLoaded', function () {
     if (navbarProfilePic) navbarProfilePic.src = path;
   }
 });
-
-//sidebar

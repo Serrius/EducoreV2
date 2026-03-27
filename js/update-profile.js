@@ -117,17 +117,80 @@
 
   async function saveProfile() {
     const emailEl = qs("#email");
+    const firstNameEl = qs("#first_name");
+    const middleNameEl = qs("#middle_name");
+    const lastNameEl = qs("#last_name");
+    const suffixEl = qs("#suffix");
+
     const email = String(emailEl?.value || "").trim();
+    const first_name = String(firstNameEl?.value || "").trim();
+    const middle_name = String(middleNameEl?.value || "").trim();
+    const last_name = String(lastNameEl?.value || "").trim();
+    const suffix = String(suffixEl?.value || "").trim();
 
     // Basic client-side validation
     if (!email) {
       safeShowError("Email is required.");
       return;
     }
+    if (!first_name) {
+      safeShowError("First name is required.");
+      return;
+    }
+    if (!last_name) {
+      safeShowError("Last name is required.");
+      return;
+    }
 
-    const data = await postJSON({ action: "update", email });
+    const data = await postJSON({ 
+      action: "update", 
+      email,
+      first_name,
+      middle_name,
+      last_name,
+      suffix
+    });
     fillProfile(data.profile || {});
     safeShowSuccess(data.message || "Profile updated.");
+  }
+
+  async function changePassword() {
+    const currentPasswordEl = qs("#current_password");
+    const newPasswordEl = qs("#new_password");
+    const confirmPasswordEl = qs("#confirm_password");
+
+    const current_password = currentPasswordEl?.value || "";
+    const new_password = newPasswordEl?.value || "";
+    const confirm_password = confirmPasswordEl?.value || "";
+
+    if (!current_password || !new_password || !confirm_password) {
+      safeShowError("All password fields are required.");
+      return;
+    }
+
+    if (new_password !== confirm_password) {
+      safeShowError("New password and confirm password do not match.");
+      return;
+    }
+
+    if (new_password.length < 8) {
+      safeShowError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    await postJSON({ 
+      action: "change_password", 
+      current_password,
+      new_password,
+      confirm_password
+    });
+
+    // Clear password fields
+    currentPasswordEl.value = "";
+    newPasswordEl.value = "";
+    confirmPasswordEl.value = "";
+
+    safeShowSuccess("Password changed successfully.");
   }
 
   function hookProfileMenu() {
@@ -178,6 +241,20 @@
           safeShowError(err?.message || "Failed to save changes.");
         } finally {
           saveBtn.disabled = false;
+        }
+      });
+    }
+
+    const changePasswordBtn = qs("#changePasswordBtn");
+    if (changePasswordBtn) {
+      changePasswordBtn.addEventListener("click", async () => {
+        try {
+          changePasswordBtn.disabled = true;
+          await changePassword();
+        } catch (err) {
+          safeShowError(err?.message || "Failed to change password.");
+        } finally {
+          changePasswordBtn.disabled = false;
         }
       });
     }

@@ -295,6 +295,76 @@ function check_sufficient_funds(PDO $pdo, int $eventId, float $proposedDebit): b
 }
 
 
+/**
+ * Process proposed expenses from Add Event modal
+ * - Creates credits for each proposed expense
+ * - Stores proposed expense items for reference
+ */
+function process_proposed_expenses(PDO $pdo, int $eventId, array $items, int $uid): void {
+    if (empty($items)) return;
+    
+    $creditSt = $pdo->prepare("
+        INSERT INTO event_credits (event_id, credit_date, source, notes, amount, recorded_by_user_id)
+        VALUES (:eid, :date, :source, :notes, :amount, :uid)
+    ");
+    
+    $debitSt = $pdo->prepare("
+        INSERT INTO event_debits (event_id, debit_date, category, notes, amount, unit_price, quantity, recorded_by_user_id)
+        VALUES (:eid, :date, :category, :notes, :amount, :unit_price, :quantity, :uid)
+    ");
+    
+    $proposedSt = $pdo->prepare("
+        INSERT INTO event_proposed_expenses (event_id, description, quantity, estimated_cost, type)
+        VALUES (:eid, :desc, :qty, :cost, :type)
+    ");
+    
+    $today = date('Y-m-d');
+    
+    foreach ($items as $item) {
+        $desc = trim($item['description'] ?? '');
+        $qty = (int)($item['quantity'] ?? 1);
+        $cost = (float)($item['estimated_cost'] ?? 0);
+        $type = $item['type'] ?? 'credit';
+        $total = $qty * $cost;
+        
+        if ($desc === '' || $qty < 1 || $cost <= 0) continue;
+        
+        if ($type === 'credit') {
+            // Insert as credit (budget allocation)
+            $creditSt->execute([
+                ':eid' => $eventId,
+                ':date' => $today,
+                ':source' => "Budget: {$desc}",
+                ':notes' => "Qty: {$qty} x ₱" . number_format($cost, 2),
+                ':amount' => $total,
+                ':uid' => $uid
+            ]);
+        } else {
+            // Insert as debit (expense)
+            $debitSt->execute([
+                ':eid' => $eventId,
+                ':date' => $today,
+                ':category' => 'proposed',
+                ':notes' => $desc,
+                ':amount' => $total,
+                ':unit_price' => $cost,
+                ':quantity' => $qty,
+                ':uid' => $uid
+            ]);
+        }
+        
+        // Store proposed expense details with type
+        $proposedSt->execute([
+            ':eid' => $eventId,
+            ':desc' => $desc,
+            ':qty' => $qty,
+            ':cost' => $cost,
+            ':type' => $type
+        ]);
+    }
+}
+
+
 /* =========================
    Accomplishment helpers
    ========================= */
@@ -405,6 +475,7 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
   if (!$term) return [];
 
   $sy = trim((string)$term['school_year']);
+  $currentTermId = (int)$term['id'];
   if ($sy === '') return [];
 
   $hasCreatedBy = has_column($pdo, 'organizations', 'created_by');
@@ -413,9 +484,12 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
 
   $uname = get_user_full_name($pdo, $uid);
 
-  // ✅ Officer org picker - use school year, not specific term
+  // Debug log
+  error_log("fetch_visible_orgs_for_active_term - User: $uid, Role: $role, Term: $currentTermId, SY: $sy");
+
+  // ✅ Officer org picker - only show orgs with ACTIVE accreditation
   if (is_officer_role($role)) {
-    $st = $pdo->prepare("
+    $sql = "
       SELECT DISTINCT o.id, o.org_name, o.abbreviation, COALESCE(o.org_type,'') AS org_type
       FROM organizations o
       INNER JOIN organization_officers oo ON oo.org_id = o.id
@@ -423,10 +497,27 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
       WHERE " . officer_match_where('oo') . "
         AND oo.status = 'Active'
         AND t.school_year = :sy
-        AND (LOWER(COALESCE(o.status,'')) IN ('active','approved') OR COALESCE(o.status,'') = '')
+        AND EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = o.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
       ORDER BY o.org_name ASC, o.id ASC
-    ");
-    $st->execute([':uid' => $uid, ':uname' => $uname, ':sy' => $sy]);
+    ";
+    
+    $params = [
+      ':uid' => $uid, 
+      ':uname' => $uname, 
+      ':sy' => $sy,
+      ':term_id' => $currentTermId
+    ];
+    
+    error_log("Officer SQL: " . $sql);
+    error_log("Officer Params: " . print_r($params, true));
+    
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
 
     $out = [];
     while ($r = $st->fetch()) {
@@ -438,6 +529,8 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
         'label' => trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : '')),
       ];
     }
+    
+    error_log("Officer results: " . count($out) . " organizations found");
     return $out;
   }
 
@@ -447,12 +540,26 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
   if ($hasOrgProgram) $userProgAbbr = get_user_program_abbr($pdo, $uid);
 
   if (is_super_viewer($role)) {
-    $st = $pdo->query("
+    $sql = "
       SELECT id, org_name, abbreviation, COALESCE(org_type,'') AS org_type
-      FROM organizations
-      WHERE (LOWER(COALESCE(status,'')) IN ('active','approved') OR COALESCE(status,'') = '')
+      FROM organizations o
+      WHERE EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = o.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
       ORDER BY org_name ASC, id ASC
-    ");
+    ";
+    
+    $params = [':term_id' => $currentTermId];
+    
+    error_log("Super Viewer SQL: " . $sql);
+    error_log("Super Viewer Params: " . print_r($params, true));
+    
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    
     $out = [];
     while ($r = $st->fetch()) {
       $out[] = [
@@ -463,18 +570,33 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
         'label' => trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : '')),
       ];
     }
+    
+    error_log("Super Viewer results: " . count($out) . " organizations found");
     return $out;
   }
 
   if (can_review_events_role($role) && $hasCreatedBy) {
-    $st = $pdo->prepare("
+    $sql = "
       SELECT id, org_name, abbreviation, COALESCE(org_type,'') AS org_type
       FROM organizations
       WHERE created_by = :uid
-        AND (LOWER(COALESCE(status,'')) IN ('active','approved') OR COALESCE(status,'') = '')
+        AND EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = organizations.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
       ORDER BY org_name ASC, id ASC
-    ");
-    $st->execute([':uid' => $uid]);
+    ";
+    
+    $params = [':uid' => $uid, ':term_id' => $currentTermId];
+    
+    error_log("Reviewer SQL: " . $sql);
+    error_log("Reviewer Params: " . print_r($params, true));
+    
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    
     $out = [];
     while ($r = $st->fetch()) {
       $out[] = [
@@ -485,12 +607,14 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
         'label' => trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : '')),
       ];
     }
+    
+    error_log("Reviewer results: " . count($out) . " organizations found");
     return $out;
   }
 
   $union = [];
 
-  // ✅ officer orgs (SY-based) with fallback match
+  // ✅ officer orgs (SY-based) with fallback match - only accredited
   $union[] = "
     SELECT DISTINCT o.id, o.org_name, o.abbreviation, COALESCE(o.org_type,'') AS org_type
     FROM organization_officers oo
@@ -499,8 +623,15 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
     WHERE " . officer_match_where('oo') . "
       AND oo.status = 'Active'
       AND t.school_year = :sy_off
+      AND EXISTS (
+        SELECT 1 FROM accreditation_requests ar 
+        WHERE ar.org_id = o.id 
+          AND ar.academic_term_id = :term_id 
+          AND ar.status = 'Active'
+      )
   ";
 
+  // ✅ membership orgs - only accredited
   $union[] = "
     SELECT DISTINCT o.id, o.org_name, o.abbreviation, COALESCE(o.org_type,'') AS org_type
     FROM organization_memberships om
@@ -508,8 +639,15 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
     INNER JOIN organizations o ON o.id = om.org_id
     WHERE om.student_user_id = :u_mem
       AND t.school_year = :sy_mem
+      AND EXISTS (
+        SELECT 1 FROM accreditation_requests ar 
+        WHERE ar.org_id = o.id 
+          AND ar.academic_term_id = :term_id 
+          AND ar.status = 'Active'
+      )
   ";
 
+  // ✅ program-based orgs - only accredited
   if ($hasOrgProgram && $userProgAbbr !== null) {
     $union[] = "
       SELECT DISTINCT o.id, o.org_name, o.abbreviation, COALESCE(o.org_type,'') AS org_type
@@ -517,23 +655,47 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
       INNER JOIN programs p ON p.id = o.program_id
       WHERE p.abbreviation = :u_prog_abbr
         AND LOWER(COALESCE(o.org_type,'')) <> 'club'
+        AND EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = o.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
     ";
   }
 
-  // ✅ include ALL GENERAL (public) NON-CLUB organizations
+  // ✅ general orgs - only accredited
   if ($hasScope && $hasOrgType) {
     $union[] = "
       SELECT DISTINCT o.id, o.org_name, o.abbreviation, COALESCE(o.org_type,'') AS org_type
       FROM organizations o
       WHERE LOWER(COALESCE(o.org_type,'')) <> 'club'
         AND LOWER(COALESCE(o.scope,'')) = 'general'
+        AND EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = o.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
     ";
   } elseif ($hasScope) {
     $union[] = "
       SELECT DISTINCT o.id, o.org_name, o.abbreviation, '' AS org_type
       FROM organizations o
       WHERE LOWER(COALESCE(o.scope,'')) = 'general'
+        AND EXISTS (
+          SELECT 1 FROM accreditation_requests ar 
+          WHERE ar.org_id = o.id 
+            AND ar.academic_term_id = :term_id 
+            AND ar.status = 'Active'
+        )
     ";
+  }
+
+  // Only proceed if we have any union queries
+  if (empty($union)) {
+    error_log("No union queries generated");
+    return [];
   }
 
   $sql = "
@@ -541,21 +703,26 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
     FROM (
       " . implode("\nUNION\n", $union) . "
     ) x
-    INNER JOIN organizations o2 ON o2.id = x.id
-    WHERE (LOWER(COALESCE(o2.status,'')) IN ('active','approved') OR COALESCE(o2.status,'') = '')
     ORDER BY x.org_name ASC, x.id ASC
   ";
 
-  $st = $pdo->prepare($sql);
   $params = [
     ':uid' => $uid,
     ':uname' => $uname,
     ':sy_off' => $sy,
     ':u_mem' => $uid,
     ':sy_mem' => $sy,
+    ':term_id' => $currentTermId,
   ];
-  if ($hasOrgProgram && $userProgAbbr !== null) $params[':u_prog_abbr'] = $userProgAbbr;
+  
+  if ($hasOrgProgram && $userProgAbbr !== null) {
+    $params[':u_prog_abbr'] = $userProgAbbr;
+  }
 
+  error_log("Union SQL: " . $sql);
+  error_log("Union Params: " . print_r($params, true));
+
+  $st = $pdo->prepare($sql);
   $st->execute($params);
 
   $out = [];
@@ -568,9 +735,10 @@ function fetch_visible_orgs_for_active_term(PDO $pdo, int $uid, string $role): a
       'label' => trim((string)$r['org_name'] . (!empty($r['abbreviation']) ? ' (' . (string)$r['abbreviation'] . ')' : '')),
     ];
   }
+  
+  error_log("Union results: " . count($out) . " organizations found");
   return $out;
 }
-
 /**
  * Fetch passbook entries for a specific event (treasurer's manual entries only)
  */
@@ -1607,36 +1775,62 @@ function recompute_event_passbook_balances(PDO $pdo, int $eventId): void {
    Proposed Expenses Helpers
    ========================= */
 function fetch_proposed_expenses(PDO $pdo, int $eventId): array {
-  $st = $pdo->prepare("
-    SELECT id, description, quantity, estimated_cost, 
-           (quantity * estimated_cost) AS total
-    FROM event_proposed_expenses
-    WHERE event_id = :eid
-    ORDER BY id ASC
-  ");
-  $st->execute([':eid' => $eventId]);
-  
-  $rows = [];
-  while ($r = $st->fetch()) {
-    $rows[] = [
-      'id' => (int)$r['id'],
-      'description' => (string)$r['description'],
-      'quantity' => (int)$r['quantity'],
-      'estimated_cost' => (float)$r['estimated_cost'],
-      'total' => (float)$r['total'],
-    ];
-  }
-  return $rows;
+    $st = $pdo->prepare("
+        SELECT id, description, quantity, estimated_cost, notes,
+               (quantity * estimated_cost) AS total
+        FROM event_proposed_expenses
+        WHERE event_id = :eid
+        ORDER BY id ASC
+    ");
+    $st->execute([':eid' => $eventId]);
+    
+    $rows = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+        $rows[] = [
+            'id' => (int)$r['id'],
+            'description' => (string)$r['description'],
+            'quantity' => (int)$r['quantity'],
+            'estimated_cost' => (float)$r['estimated_cost'],
+            'total' => (float)$r['total'],
+            'notes' => (string)($r['notes'] ?? ''),
+        ];
+    }
+    return $rows;
+}
+
+function fetch_proposed_credits(PDO $pdo, int $eventId): array {
+    $st = $pdo->prepare("
+        SELECT id, description, amount, notes
+        FROM event_proposed_credits
+        WHERE event_id = :eid
+        ORDER BY id ASC
+    ");
+    $st->execute([':eid' => $eventId]);
+    
+    $rows = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+        $rows[] = [
+            'id' => (int)$r['id'],
+            'description' => (string)$r['description'],
+            'amount' => (float)$r['amount'],
+            'notes' => (string)($r['notes'] ?? ''),
+        ];
+    }
+    return $rows;
 }
 
 function calculate_proposed_total(PDO $pdo, int $eventId): float {
-  $st = $pdo->prepare("
-    SELECT COALESCE(SUM(quantity * estimated_cost), 0) AS total
-    FROM event_proposed_expenses
-    WHERE event_id = :eid
-  ");
-  $st->execute([':eid' => $eventId]);
-  return (float)$st->fetchColumn();
+    // Get credits total
+    $stCredit = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_proposed_credits WHERE event_id = :eid");
+    $stCredit->execute([':eid' => $eventId]);
+    $creditsTotal = (float)$stCredit->fetchColumn();
+    
+    // Get expenses total
+    $stExpense = $pdo->prepare("SELECT COALESCE(SUM(quantity * estimated_cost), 0) FROM event_proposed_expenses WHERE event_id = :eid");
+    $stExpense->execute([':eid' => $eventId]);
+    $expensesTotal = (float)$stExpense->fetchColumn();
+    
+    return $creditsTotal - $expensesTotal;
 }
 
 
@@ -1787,7 +1981,7 @@ try {
 
         if ($ooHasFullName) {
           // loose name match (helps if officer rows were imported w/ string names)
-          $matchParts[] = "(
+          $matchParts[] = "( 
             oo.user_id IS NULL
             AND TRIM(COALESCE(oo.full_name,'')) <> ''
             AND UPPER(TRIM(oo.full_name)) LIKE UPPER(:uname_like)
@@ -1803,6 +1997,16 @@ try {
             // accept common variants
             $ooWhere .= " AND (oo.status = 'Active' OR oo.status = 'ACTIVE' OR oo.status = 'active')";
           }
+
+          // ✅ ADD ACCREDITATION CHECK - Only show orgs with ACTIVE accreditation in ANY term of this school year
+          $ooWhere .= " AND EXISTS (
+            SELECT 1 FROM accreditation_requests ar 
+            INNER JOIN academic_terms at2 ON at2.id = ar.academic_term_id
+            WHERE ar.org_id = o.id 
+              AND at2.school_year = :school_year_accred
+              AND ar.status = 'Active'
+          )";
+          $bind[':school_year_accred'] = $schoolYearForTerm;
 
           $stMy = $pdo->prepare("
             SELECT DISTINCT
@@ -2240,197 +2444,200 @@ try {
   }
   
   if ($action === 'get_event') {
-  require_login();
+      require_login();
 
-  $eventId = i($in, ['event_id'], 0);
-  if ($eventId <= 0) fail('Missing event_id.', 400);
+      $eventId = i($in, ['event_id'], 0);
+      if ($eventId <= 0) fail('Missing event_id.', 400);
 
-  $e = fetch_event($pdo, $eventId);
-  if (!$e) fail('Event not found.', 404);
+      $e = fetch_event($pdo, $eventId);
+      if (!$e) fail('Event not found.', 404);
 
-  $uid = current_user_id();
-  $role = current_role();
-  if (!can_view_event($pdo, $e, $uid, $role)) {
-    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-  }
+      $uid = current_user_id();
+      $role = current_role();
+      if (!can_view_event($pdo, $e, $uid, $role)) {
+          fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+      }
 
-  $sy  = "{$e['start_year']}-{$e['end_year']}";
-  $sem = active_year_to_semester((int)$e['active_year']);
+      $sy = "{$e['start_year']}-{$e['end_year']}";
+      $sem = active_year_to_semester((int)$e['active_year']);
 
-  // Get event totals
-  $tot = event_totals($pdo, $eventId);
+      $tot = event_totals($pdo, $eventId);
 
-  $orgName = null;
-  if (!empty($e['org_id'])) {
-    $stO = $pdo->prepare("SELECT org_name, abbreviation FROM organizations WHERE id=:id LIMIT 1");
-    $stO->execute([':id' => (int)$e['org_id']]);
-    $o = $stO->fetch();
-    if ($o) $orgName = trim((string)$o['org_name'] . (!empty($o['abbreviation']) ? ' (' . (string)$o['abbreviation'] . ')' : ''));
-  }
+      $orgName = null;
+      if (!empty($e['org_id'])) {
+          $stO = $pdo->prepare("SELECT org_name, abbreviation FROM organizations WHERE id=:id LIMIT 1");
+          $stO->execute([':id' => (int)$e['org_id']]);
+          $o = $stO->fetch();
+          if ($o) $orgName = trim((string)$o['org_name'] . (!empty($o['abbreviation']) ? ' (' . (string)$o['abbreviation'] . ')' : ''));
+      }
 
-  $isOfficer = can_officer_manage_org($pdo, (int)($e['org_id'] ?? 0) ?: null, $uid, $role);
-  $readOnly  = !is_active_filter($pdo, $sy, $sem);
+      $isOfficer = can_officer_manage_org($pdo, (int)($e['org_id'] ?? 0) ?: null, $uid, $role);
+      $readOnly = !is_active_filter($pdo, $sy, $sem);
 
-  $status = (string)($e['status'] ?? '');
-  $cs     = (string)($e['accomplishment_status'] ?? '');
+      $status = (string)($e['status'] ?? '');
+      $cs = (string)($e['accomplishment_status'] ?? '');
 
-  $proposalApproved = ($status === 'Approved');
-  $accompApproved   = ($cs === 'Approved');
+      $proposalApproved = ($status === 'Approved');
+      $accompApproved = ($cs === 'Approved');
+      $isLocked = $accompApproved;
+      
+      $canAddEntries = false;
+      if (!$isLocked && !$readOnly && $proposalApproved && $isOfficer) {
+          $canAddEntries = true;
+      }
 
-  // 🔒 FIXED PERMISSIONS:
-  // When accomplishment is approved, EVERYTHING is locked
-  $isLocked = $accompApproved;
-  
-  // Credits/Debits can be added ONLY when:
-  // 1. NOT locked (accomplishment not approved)
-  // 2. Proposal is APPROVED
-  // 3. User is officer
-  // 4. Not in read-only mode
-  $canAddEntries = false;
-  if (!$isLocked && !$readOnly && $proposalApproved && $isOfficer) {
-    $canAddEntries = true;
-  }
+      $canManagePassbook = (!$isLocked && !$readOnly && $proposalApproved && $isOfficer);
+      $canSubmitForApproval = (!$isLocked && !$readOnly && $isOfficer && in_array($status, ['Draft', 'Declined'], true));
+      $canDelete = !$isLocked && !$readOnly && $canAddEntries;
+      $canReview = (!$readOnly && can_review_events_role($role));
 
-  // Passbook follows same rules
-  $canManagePassbook = (!$isLocked && !$readOnly && $proposalApproved && $isOfficer);
+      $orgId = (int)($e['org_id'] ?? 0);
+      $isCoordinator = false;
+      if ($orgId > 0) {
+          $coordinator = get_org_coordinator($pdo, $orgId);
+          if ($coordinator && !empty($coordinator['id']) && $coordinator['id'] == $uid) {
+              $isCoordinator = true;
+          }
+      }
 
-  // Submit for approval button - only shows in DRAFT or DECLINED (and not locked)
-  $canSubmitForApproval = (!$isLocked && !$readOnly && $isOfficer && in_array($status, ['Draft', 'Declined'], true));
+      $canSubmitAccomplishment = (!$isLocked && !$readOnly && $isOfficer && $proposalApproved && in_array($cs, ['Draft','Declined'], true));
+      $canApproveAccomplishment = (!$isLocked && !$readOnly && ($canReview || $isCoordinator) && ($cs === 'Submitted'));
+      $canDeclineAccomplishment = $canApproveAccomplishment;
 
-  // Delete permissions - only allowed when NOT locked
-  $canDelete = !$isLocked && !$readOnly && $canAddEntries;
+      // ==================== FETCH PROPOSED CREDITS ====================
+      $proposedCredits = [];
+      $proposedCreditsTotal = 0.00;
+      
+      $stCreditCheck = $pdo->query("SHOW TABLES LIKE 'event_proposed_credits'");
+      if ($stCreditCheck && $stCreditCheck->rowCount() > 0) {
+          $proposedCredits = fetch_proposed_credits($pdo, $eventId);
+          $proposedCreditsTotal = array_sum(array_column($proposedCredits, 'amount'));
+      }
 
-  // Review permissions (for faculty_admin, etc.)
-  $canReview = (!$readOnly && can_review_events_role($role));
+      // ==================== FETCH PROPOSED EXPENSES ====================
+      $proposedExpenses = [];
+      $proposedExpensesTotal = 0.00;
+      
+      $stExpenseCheck = $pdo->query("SHOW TABLES LIKE 'event_proposed_expenses'");
+      if ($stExpenseCheck && $stExpenseCheck->rowCount() > 0) {
+          $proposedExpenses = fetch_proposed_expenses($pdo, $eventId);
+          $proposedExpensesTotal = array_sum(array_column($proposedExpenses, 'total'));
+      }
 
-  // Check if current user is the org coordinator
-  $orgId = (int)($e['org_id'] ?? 0);
-  $isCoordinator = false;
-  if ($orgId > 0) {
-    $coordinator = get_org_coordinator($pdo, $orgId);
-    if ($coordinator && !empty($coordinator['id']) && $coordinator['id'] == $uid) {
-      $isCoordinator = true;
-    }
-  }
+      $proposedBalance = $proposedCreditsTotal - $proposedExpensesTotal;
 
-  // Accomplishment permissions - also locked when accomplishment approved
-  $canSubmitAccomplishment = (!$isLocked && !$readOnly && $isOfficer && $proposalApproved && in_array($cs, ['Draft','Declined'], true));
-  $canApproveAccomplishment = (!$isLocked && !$readOnly && ($canReview || $isCoordinator) && ($cs === 'Submitted'));
-  $canDeclineAccomplishment = $canApproveAccomplishment;
+      // Calculate variance
+      $actualCredits = $tot['credits'];
+      $actualDebits = $tot['debits'];
+      $actualBalance = $actualCredits - $actualDebits;
+      $netVariance = $actualBalance - $proposedBalance;
+      $creditVariance = $actualCredits - $proposedCreditsTotal;
+      $debitVariance = $actualDebits - $proposedExpensesTotal;
 
-  // Debug logging
-  error_log("Event ID: $eventId, Status: $status, Proposal Approved: " . ($proposalApproved ? 'yes' : 'no') . 
-            ", Accomplishment Approved: " . ($accompApproved ? 'yes' : 'no') . 
-            ", Is Locked: " . ($isLocked ? 'yes' : 'no') . 
-            ", Is Officer: " . ($isOfficer ? 'yes' : 'no') . 
-            ", Read Only: " . ($readOnly ? 'yes' : 'no') . 
-            ", Can Add Entries: " . ($canAddEntries ? 'yes' : 'no'));
+      // ==================== FETCH ACCOMPLISHMENT DATA ====================
+      $accomplishmentData = null;
+      $stAccCheck = $pdo->query("SHOW TABLES LIKE 'event_accomplishments'");
+      if ($stAccCheck && $stAccCheck->rowCount() > 0) {
+          $stAcc = $pdo->prepare("
+              SELECT objectives, outcomes, challenges, status, 
+                    submitted_by, submitted_at, 
+                    approved_by, approved_at, 
+                    declined_reason, generated_pdf
+              FROM event_accomplishments
+              WHERE event_id = :eid
+              LIMIT 1
+          ");
+          $stAcc->execute([':eid' => $eventId]);
+          $accRow = $stAcc->fetch(PDO::FETCH_ASSOC);
+          
+          if ($accRow) {
+              $accomplishmentData = [
+                  'objectives' => (string)($accRow['objectives'] ?? ''),
+                  'outcomes' => (string)($accRow['outcomes'] ?? ''),
+                  'challenges' => (string)($accRow['challenges'] ?? ''),
+                  'status' => (string)($accRow['status'] ?? 'Draft'),
+                  'submitted_by' => (int)($accRow['submitted_by'] ?? 0),
+                  'submitted_at' => $accRow['submitted_at'] ?? null,
+                  'approved_by' => (int)($accRow['approved_by'] ?? 0),
+                  'approved_at' => $accRow['approved_at'] ?? null,
+                  'declined_reason' => (string)($accRow['declined_reason'] ?? ''),
+                  'generated_pdf' => $accRow['generated_pdf'] ?? null
+              ];
+          }
+      }
 
-  // FETCH PROPOSED EXPENSES
-  $proposedItems = [];
-  $proposedTotal = 0.00;
-  
-  $stCheck = $pdo->query("SHOW TABLES LIKE 'event_proposed_expenses'");
-  if ($stCheck && $stCheck->rowCount() > 0) {
-    $proposedItems = fetch_proposed_expenses($pdo, $eventId);
-    $proposedTotal = calculate_proposed_total($pdo, $eventId);
-  }
+      // ==================== FETCH LEDGER (credits and debits only) ====================
+      $ledger = fetch_ledger($pdo, $eventId);
 
-  // FETCH ACCOMPLISHMENT DATA
-  $accomplishmentData = null;
-  $stAccCheck = $pdo->query("SHOW TABLES LIKE 'event_accomplishments'");
-  if ($stAccCheck && $stAccCheck->rowCount() > 0) {
-    $stAcc = $pdo->prepare("
-      SELECT objectives, outcomes, challenges, status, 
-             submitted_by, submitted_at, 
-             approved_by, approved_at, 
-             declined_reason, generated_pdf
-      FROM event_accomplishments
-      WHERE event_id = :eid
-      LIMIT 1
-    ");
-    $stAcc->execute([':eid' => $eventId]);
-    $accRow = $stAcc->fetch(PDO::FETCH_ASSOC);
-    
-    if ($accRow) {
-      $accomplishmentData = [
-        'objectives' => (string)($accRow['objectives'] ?? ''),
-        'outcomes' => (string)($accRow['outcomes'] ?? ''),
-        'challenges' => (string)($accRow['challenges'] ?? ''),
-        'status' => (string)($accRow['status'] ?? 'Draft'),
-        'submitted_by' => (int)($accRow['submitted_by'] ?? 0),
-        'submitted_at' => $accRow['submitted_at'] ?? null,
-        'approved_by' => (int)($accRow['approved_by'] ?? 0),
-        'approved_at' => $accRow['approved_at'] ?? null,
-        'declined_reason' => (string)($accRow['declined_reason'] ?? ''),
-        'generated_pdf' => $accRow['generated_pdf'] ?? null
-      ];
-    }
-  }
+      // ==================== FETCH PASSBOOK ====================
+      $passbook = fetch_passbook_for_event($pdo, $eventId);
 
-  // FETCH LEDGER (credits and debits only)
-  $ledger = fetch_ledger($pdo, $eventId);
+      // ==================== FETCH CREDITS AND DEBITS for display ====================
+      $credits = fetch_credits($pdo, $eventId);
+      $debits = fetch_debits($pdo, $eventId);
 
-  // FETCH PASSBOOK
-  $passbook = fetch_passbook_for_event($pdo, $eventId);
-
-  // FETCH CREDITS AND DEBITS for display
-  $credits = fetch_credits($pdo, $eventId);
-  $debits = fetch_debits($pdo, $eventId);
-
-  ok([
-    'event' => [
-      'id' => (int)$e['id'],
-      'org_id' => $e['org_id'],
-      'org_name' => $orgName,
-      'org_label' => $orgName,
-      'title' => (string)($e['title'] ?? ''),
-      'location' => (string)($e['location'] ?? ''),
-      'scope' => (string)($e['scope'] ?? ''),
-      'school_year' => $sy,
-      'semester' => $sem,
-      'status' => $status,
-      'accomplishment_status' => $cs,
-      'event_date' => (string)($e['event_date'] ?? ''),
-      'description' => (string)($e['description'] ?? ''),
-      'total_credits' => (float)$tot['credits'],
-      'total_debits' => (float)$tot['debits'],
-      'accomplishment_file_url' => public_url($e['accomplishment_file'] ?? null),
-      'accomplishment_notes' => (string)($e['accomplishment_notes'] ?? ''),
-    ],
-    'totals' => $tot,
-    'gates' => [
-      'proposal_approved' => $proposalApproved,
-      'accomplishment_approved' => $accompApproved,
-    ],
-    'permissions' => [
-      'user_id' => $uid,
-      'role' => $role,
-      'can_view' => true,
-      'is_readonly' => $readOnly,
-      'is_locked' => $isLocked,
-      'can_add_event' => (!$readOnly && $isOfficer),
-      'can_add_credit' => $canAddEntries,
-      'can_add_debit' => $canAddEntries,
-      'can_manage_passbook' => $canManagePassbook,
-      'can_delete' => $canDelete,
-      'can_submit_for_approval' => $canSubmitForApproval,
-      'passbook_locked' => $isLocked,
-      'can_review_event' => $canReview,
-      'can_submit_accomplishment' => $canSubmitAccomplishment,
-      'can_approve_accomplishment' => $canApproveAccomplishment,
-      'can_decline_accomplishment' => $canDeclineAccomplishment,
-      'can_print_accomplishment' => true,
-    ],
-    'credits' => $credits,
-    'debits' => $debits,
-    'ledger' => $ledger,
-    'passbook' => $passbook,
-    'proposed_expenses' => $proposedItems,
-    'proposed_total' => $proposedTotal,
-    'accomplishment' => $accomplishmentData,
-    'filter' => ['school_year' => $sy, 'semester' => $sem],
-  ]);
+      // ==================== RESPONSE ====================
+      ok([
+          'event' => [
+              'id' => (int)$e['id'],
+              'org_id' => $e['org_id'],
+              'org_name' => $orgName,
+              'org_label' => $orgName,
+              'title' => (string)($e['title'] ?? ''),
+              'location' => (string)($e['location'] ?? ''),
+              'scope' => (string)($e['scope'] ?? ''),
+              'school_year' => $sy,
+              'semester' => $sem,
+              'status' => $status,
+              'accomplishment_status' => $cs,
+              'event_date' => (string)($e['event_date'] ?? ''),
+              'description' => (string)($e['description'] ?? ''),
+              'total_credits' => (float)$tot['credits'],
+              'total_debits' => (float)$tot['debits'],
+              'accomplishment_file_url' => public_url($e['accomplishment_file'] ?? null),
+              'accomplishment_notes' => (string)($e['accomplishment_notes'] ?? ''),
+          ],
+          'totals' => $tot,
+          'gates' => [
+              'proposal_approved' => $proposalApproved,
+              'accomplishment_approved' => $accompApproved,
+          ],
+          'permissions' => [
+              'user_id' => $uid,
+              'role' => $role,
+              'can_view' => true,
+              'is_readonly' => $readOnly,
+              'is_locked' => $isLocked,
+              'can_add_event' => (!$readOnly && $isOfficer),
+              'can_add_credit' => $canAddEntries,
+              'can_add_debit' => $canAddEntries,
+              'can_manage_passbook' => $canManagePassbook,
+              'can_delete' => $canDelete,
+              'can_submit_for_approval' => $canSubmitForApproval,
+              'passbook_locked' => $isLocked,
+              'can_review_event' => $canReview,
+              'can_submit_accomplishment' => $canSubmitAccomplishment,
+              'can_approve_accomplishment' => $canApproveAccomplishment,
+              'can_decline_accomplishment' => $canDeclineAccomplishment,
+              'can_print_accomplishment' => true,
+          ],
+          'credits' => $credits,
+          'debits' => $debits,
+          'ledger' => $ledger,
+          'passbook' => $passbook,
+          'proposed_credits' => $proposedCredits,
+          'proposed_credits_total' => $proposedCreditsTotal,
+          'proposed_expenses' => $proposedExpenses,
+          'proposed_expenses_total' => $proposedExpensesTotal,
+          'proposed_balance' => $proposedBalance,
+          'variance' => [
+              'credits' => $creditVariance,
+              'debits' => $debitVariance,
+              'net' => $netVariance
+          ],
+          'accomplishment' => $accomplishmentData,
+          'filter' => ['school_year' => $sy, 'semester' => $sem],
+      ]);
   }
 
   if ($action === 'get_passbook') {
@@ -2472,6 +2679,10 @@ try {
 
   if ($action === 'add_event') {
     require_login();
+    
+    error_log("========== ADD_EVENT START ==========");
+    error_log("POST data: " . print_r($_POST, true));
+    error_log("Mode: " . ($in['mode'] ?? 'not set'));
 
     $title = s($in, ['title', 'event_name', 'name'], '');
     $location = s($in, ['location'], '');
@@ -2487,33 +2698,35 @@ try {
     $mode = strtolower(trim((string)($in['mode'] ?? $in['save_mode'] ?? $in['status_mode'] ?? 'draft')));
     if (!in_array($mode, ['draft','submit'], true)) $mode = 'draft';
 
+    error_log("Parsed values: title=$title, location=$location, scope=$scope, orgId=$orgId");
+    error_log("School year: $schoolYear, Semester: $semester, Mode: $mode");
 
     $active = get_active_term($pdo);
     if ($schoolYear === '' || $semester === '') {
-      if (!$active) fail('No active academic term found.', 400);
-      $schoolYear = $active['school_year'];
-      $semester = $active['semester'];
+        if (!$active) fail('No active academic term found.', 400);
+        $schoolYear = $active['school_year'];
+        $semester = $active['semester'];
     }
 
     if (!can_mutate_in_filter($pdo, $schoolYear, $semester)) {
-      fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+        fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
     }
 
     if ($title === '' || $location === '') fail('Missing title/location.', 400);
     if (!in_array($scope, ['general', 'organization'], true)) fail('Invalid scope.', 400);
 
     if ($scope === 'organization') {
-      if ($orgId <= 0) fail('Missing org_id for organization scope.', 400);
-      if (!org_exists($pdo, $orgId)) fail('Organization not found.', 404);
+        if ($orgId <= 0) fail('Missing org_id for organization scope.', 400);
+        if (!org_exists($pdo, $orgId)) fail('Organization not found.', 404);
     } else {
-      $orgId = 0;
+        $orgId = 0;
     }
 
     $uid = current_user_id();
     $role = current_role();
 
     if (!can_officer_manage_org($pdo, $orgId > 0 ? $orgId : null, $uid, $role)) {
-      fail('Forbidden.', 403);
+        fail('Forbidden.', 403);
     }
 
     [$syStart, $syEnd] = parse_school_year($schoolYear);
@@ -2525,342 +2738,400 @@ try {
     $hasDesc = has_column($pdo, 'event_events', 'description');
 
     if ($hasEventDate) {
-      if ($eventDate === '') $eventDate = date('Y-m-d');
-      if (!is_valid_ymd($eventDate)) fail('Invalid event_date (expected YYYY-MM-DD).', 400);
+        if ($eventDate === '') $eventDate = date('Y-m-d');
+        if (!is_valid_ymd($eventDate)) fail('Invalid event_date (expected YYYY-MM-DD).', 400);
     }
 
     $rid = idem_key_from_input($in);
     if ($rid !== '') {
-      $existing = idem_get('idem_add_event', $uid, $rid);
-      if ($existing) {
-        ok([
-          'message' => 'Event already added.',
-          'event_id' => (int)$existing,
-          'deduped' => true,
-          'request_id' => $rid,
-        ]);
-      }
+        $existing = idem_get('idem_add_event', $uid, $rid);
+        if ($existing) {
+            ok([
+                'message' => 'Event already added.',
+                'event_id' => (int)$existing,
+                'deduped' => true,
+                'request_id' => $rid,
+            ]);
+        }
     }
 
     $dupParams = [
-      ':uid' => $uid,
-      ':scope' => $scope,
-      ':org' => (int)$orgId,
-      ':title' => $title,
-      ':location' => $location,
-      ':sy1' => $syStart,
-      ':sy2' => $syEnd,
-      ':ay' => $ay,
+        ':uid' => $uid,
+        ':scope' => $scope,
+        ':org' => (int)$orgId,
+        ':title' => $title,
+        ':location' => $location,
+        ':sy1' => $syStart,
+        ':sy2' => $syEnd,
+        ':ay' => $ay,
     ];
 
     $dupSql = "
-      SELECT id
-      FROM event_events
-      WHERE author_user_id = :uid
-        AND scope = :scope
-        AND COALESCE(org_id,0) = :org
-        AND title = :title
-        AND location = :location
-        AND start_year = :sy1
-        AND end_year = :sy2
-        AND active_year = :ay
-        AND created_at >= (NOW() - INTERVAL 20 SECOND)
-      ORDER BY id DESC
-      LIMIT 1
+        SELECT id
+        FROM event_events
+        WHERE author_user_id = :uid
+            AND scope = :scope
+            AND COALESCE(org_id,0) = :org
+            AND title = :title
+            AND location = :location
+            AND start_year = :sy1
+            AND end_year = :sy2
+            AND active_year = :ay
+            AND created_at >= (NOW() - INTERVAL 20 SECOND)
+        ORDER BY id DESC
+        LIMIT 1
     ";
     $stDup = $pdo->prepare($dupSql);
     $stDup->execute($dupParams);
     $dupId = (int)($stDup->fetchColumn() ?: 0);
     if ($dupId > 0) {
-      if ($rid !== '') idem_set('idem_add_event', $uid, $rid, $dupId);
-      ok([
-        'message' => 'Event already added.',
-        'event_id' => $dupId,
-        'deduped' => true,
-        'request_id' => ($rid !== '' ? $rid : null),
-      ]);
+        if ($rid !== '') idem_set('idem_add_event', $uid, $rid, $dupId);
+        ok([
+            'message' => 'Event already added.',
+            'event_id' => $dupId,
+            'deduped' => true,
+            'request_id' => ($rid !== '' ? $rid : null),
+        ]);
     }
 
-    $cols = "(org_id, title, location, scope, active_year, start_year, end_year, status, author_user_id, accomplishment_status";
-    $status = ($mode === 'submit') ? 'Submitted' : 'Draft';
-
-    $vals = "(:org_id, :title, :location, :scope, :ay, :sy1, :sy2, '{$status}', :uid, 'Locked'";
-    $params = [
-      ':org_id' => ($orgId > 0 ? $orgId : null),
-      ':title' => $title,
-      ':location' => $location,
-      ':scope' => $scope,
-      ':ay' => $ay,
-      ':sy1' => $syStart,
-      ':sy2' => $syEnd,
-      ':uid' => $uid,
-    ];
-
-    if ($hasEventDate) {
-      $cols .= ", event_date";
-      $vals .= ", :event_date";
-      $params[':event_date'] = $eventDate;
+    // ==================== PARSE PROPOSED CREDITS ====================
+    $proposedCredits = isset($in['proposed_credits']) ? json_decode($in['proposed_credits'], true) : [];
+    if (empty($proposedCredits) && isset($_POST['proposed_credits']) && is_array($_POST['proposed_credits'])) {
+        $proposedCredits = $_POST['proposed_credits'];
     }
-    if ($hasDesc) {
-      $cols .= ", description";
-      $vals .= ", :descr";
-      $params[':descr'] = ($description !== '' ? $description : null);
+    
+    error_log("Proposed credits parsed: " . count($proposedCredits) . " items");
+    
+    // ==================== PARSE PROPOSED EXPENSES ====================
+    $proposedExpenses = isset($in['proposed_expenses']) ? json_decode($in['proposed_expenses'], true) : [];
+    if (empty($proposedExpenses) && isset($_POST['proposed_expenses']) && is_array($_POST['proposed_expenses'])) {
+        $proposedExpenses = $_POST['proposed_expenses'];
+    }
+    
+    error_log("Proposed expenses parsed: " . count($proposedExpenses) . " items");
+    
+    // Validate - at least one item
+    if (empty($proposedCredits) && empty($proposedExpenses)) {
+        fail('Please add at least one proposed credit or expense item.', 400);
+    }
+    
+    // Validate credits
+    foreach ($proposedCredits as $index => $credit) {
+        $errors = [];
+        if (empty($credit['description'])) $errors[] = "description";
+        if (empty($credit['amount']) || $credit['amount'] <= 0) $errors[] = "amount";
+        
+        if (!empty($errors)) {
+            fail("Credit item #" . ($index + 1) . " missing required fields: " . implode(", ", $errors), 400);
+        }
+    }
+    
+    // Validate expenses
+    foreach ($proposedExpenses as $index => $expense) {
+        $errors = [];
+        if (empty($expense['description'])) $errors[] = "description";
+        if (empty($expense['quantity']) || $expense['quantity'] < 1) $errors[] = "quantity";
+        if (empty($expense['estimated_cost']) || $expense['estimated_cost'] <= 0) $errors[] = "estimated cost";
+        
+        if (!empty($errors)) {
+            fail("Expense item #" . ($index + 1) . " missing required fields: " . implode(", ", $errors), 400);
+        }
     }
 
+    $pdo->beginTransaction();
+    error_log("Transaction started");
 
-    // optional submitted tracking fields
-    if ($mode === 'submit') {
-      if (has_column($pdo, 'event_events', 'submitted_at')) {
-        $cols .= ", submitted_at";
-        $vals .= ", NOW()";
-      }
-      if (has_column($pdo, 'event_events', 'submitted_by')) {
-        $cols .= ", submitted_by";
-        $vals .= ", :uid";
-      }
-      if (has_column($pdo, 'event_events', 'submitted_by_user_id')) {
-        $cols .= ", submitted_by_user_id";
-        $vals .= ", :uid";
-      }
+    try {
+        // Insert event with DRAFT status
+        $cols = "(org_id, title, location, scope, active_year, start_year, end_year, status, author_user_id, accomplishment_status";
+        $initialStatus = 'Draft';
+
+        $vals = "(:org_id, :title, :location, :scope, :ay, :sy1, :sy2, '{$initialStatus}', :uid, 'Locked'";
+        $params = [
+            ':org_id' => ($orgId > 0 ? $orgId : null),
+            ':title' => $title,
+            ':location' => $location,
+            ':scope' => $scope,
+            ':ay' => $ay,
+            ':sy1' => $syStart,
+            ':sy2' => $syEnd,
+            ':uid' => $uid,
+        ];
+
+        if ($hasEventDate) {
+            $cols .= ", event_date";
+            $vals .= ", :event_date";
+            $params[':event_date'] = $eventDate;
+        }
+        if ($hasDesc) {
+            $cols .= ", description";
+            $vals .= ", :descr";
+            $params[':descr'] = ($description !== '' ? $description : null);
+        }
+
+        $cols .= ")";
+        $vals .= ")";
+
+        $sql = "INSERT INTO event_events {$cols} VALUES {$vals}";
+        error_log("Insert event SQL: $sql");
+        
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+
+        $newId = (int)$pdo->lastInsertId();
+        error_log("Event created with ID: {$newId}, initial status: Draft");
+
+        // ==================== STORE PROPOSED CREDITS ====================
+        if (!empty($proposedCredits)) {
+            $creditSt = $pdo->prepare("
+                INSERT INTO event_proposed_credits (event_id, description, amount, notes)
+                VALUES (:eid, :desc, :amount, :notes)
+            ");
+            
+            foreach ($proposedCredits as $credit) {
+                $desc = trim($credit['description'] ?? '');
+                $amount = (float)($credit['amount'] ?? 0);
+                $notes = trim($credit['notes'] ?? '');
+                
+                error_log("Inserting proposed credit: desc=$desc, amount=$amount");
+                
+                $creditSt->execute([
+                    ':eid' => $newId,
+                    ':desc' => $desc,
+                    ':amount' => $amount,
+                    ':notes' => $notes !== '' ? $notes : null
+                ]);
+            }
+        }
+
+        // ==================== STORE PROPOSED EXPENSES ====================
+        if (!empty($proposedExpenses)) {
+            $expenseSt = $pdo->prepare("
+                INSERT INTO event_proposed_expenses (event_id, description, quantity, estimated_cost, notes)
+                VALUES (:eid, :desc, :qty, :cost, :notes)
+            ");
+            
+            foreach ($proposedExpenses as $expense) {
+                $desc = trim($expense['description'] ?? '');
+                $qty = (int)($expense['quantity'] ?? 1);
+                $cost = (float)($expense['estimated_cost'] ?? 0);
+                $notes = trim($expense['notes'] ?? '');
+                
+                error_log("Inserting proposed expense: desc=$desc, qty=$qty, cost=$cost");
+                
+                $expenseSt->execute([
+                    ':eid' => $newId,
+                    ':desc' => $desc,
+                    ':qty' => $qty,
+                    ':cost' => $cost,
+                    ':notes' => $notes !== '' ? $notes : null
+                ]);
+            }
+        }
+
+        if ($mode === 'submit') {
+            error_log("Updating event status to Submitted");
+            $updateSql = "UPDATE event_events SET status = 'Submitted'";
+            
+            if (has_column($pdo, 'event_events', 'submitted_at')) {
+                $updateSql .= ", submitted_at = NOW()";
+            }
+            if (has_column($pdo, 'event_events', 'submitted_by')) {
+                $updateSql .= ", submitted_by = :uid";
+            }
+            
+            $updateSql .= " WHERE id = :id LIMIT 1";
+            
+            $updateSt = $pdo->prepare($updateSql);
+            $updateParams = [':id' => $newId];
+            if (strpos($updateSql, ':uid') !== false) {
+                $updateParams[':uid'] = $uid;
+            }
+            $updateSt->execute($updateParams);
+            
+            error_log("Event {$newId} status updated to Submitted");
+        }
+
+        $pdo->commit();
+        error_log("Transaction committed successfully");
+
+        if ($rid !== '') idem_set('idem_add_event', $uid, $rid, $newId);
+
+        ok([
+            'message' => 'Event created with proposed budget successfully.',
+            'event_id' => $newId,
+            'request_id' => ($rid !== '' ? $rid : null),
+        ]);
+
+    } catch (\Throwable $e) {
+        $pdo->rollBack();
+        error_log("ERROR: Add event failed: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        fail('Failed to add event: ' . $e->getMessage(), 500);
     }
-
-    $cols .= ")";
-    $vals .= ")";
-
-    $st = $pdo->prepare("INSERT INTO event_events {$cols} VALUES {$vals}");
-    $st->execute($params);
-
-    $newId = (int)$pdo->lastInsertId();
-    if ($rid !== '') idem_set('idem_add_event', $uid, $rid, $newId);
-
-    ok([
-      'message' => 'Event added.',
-      'event_id' => $newId,
-      'request_id' => ($rid !== '' ? $rid : null),
-    ]);
   }
-
-  
-  if ($action === 'submit_event_for_approval') {
-    require_login();
-
-    $eventId = i($in, ['event_id'], 0);
-    if ($eventId <= 0) fail('Missing event_id.', 400);
-
-    $e = fetch_event($pdo, $eventId);
-    if (!$e) fail('Event not found.', 404);
-
-    $uid = current_user_id();
-    $role = current_role();
-
-    if (!can_view_event($pdo, $e, $uid, $role)) {
-      fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-    }
-
-    $eventOrgId = (int)($e['org_id'] ?? 0);
-    if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
-      fail('Forbidden.', 403);
-    }
-
-    $sy = "{$e['start_year']}-{$e['end_year']}";
-    $sem = active_year_to_semester((int)$e['active_year']);
-    if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-      fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-    }
-
-    $curStatus = (string)($e['status'] ?? '');
-    if ($curStatus !== 'Draft' && $curStatus !== 'Declined') {
-      fail('Only Draft/Declined events can be submitted.', 400, ['status' => $curStatus]);
-    }
-
-    $set = "status='Submitted'";
-    if (has_column($pdo, 'event_events', 'submitted_at')) $set .= ", submitted_at=NOW()";
-    if (has_column($pdo, 'event_events', 'submitted_by')) $set .= ", submitted_by=:uid";
-    if (has_column($pdo, 'event_events', 'submitted_by_user_id')) $set .= ", submitted_by_user_id=:uid";
-
-    $st = $pdo->prepare("UPDATE event_events SET {$set} WHERE id=:id LIMIT 1");
-    $params = [':id' => $eventId];
-    if (strpos($set, ':uid') !== false) $params[':uid'] = $uid;
-    $st->execute($params);
-ok(['message' => 'Event submitted for approval.']);
-  }
-
 
   if ($action === 'add_credit') {
-  require_login();
+      require_login();
 
-  $eventId = i($in, ['event_id'], 0);
-  $date = s($in, ['date'], '');
-  $source = s($in, ['source'], '');
-  $notes = s($in, ['notes', 'description'], '');
-  $amount = f($in, ['amount'], 0.0);
+      $eventId = i($in, ['event_id'], 0);
+      $date = s($in, ['date'], '');
+      $source = s($in, ['source'], '');
+      $notes = s($in, ['notes', 'description'], '');
+      $amount = f($in, ['amount'], 0.0);
 
-  if ($eventId <= 0) fail('Missing event_id.', 400);
-  if ($date === '') fail('Missing date.', 400);
-  if ($source === '') fail('Missing source.', 400);
-  if ($amount <= 0) fail('Invalid amount.', 400);
+      if ($eventId <= 0) fail('Missing event_id.', 400);
+      if ($date === '') fail('Missing date.', 400);
+      if ($source === '') fail('Missing source.', 400);
+      if ($amount <= 0) fail('Invalid amount.', 400);
 
-  $e = fetch_event($pdo, $eventId);
-  if (!$e) fail('Event not found.', 404);
+      $e = fetch_event($pdo, $eventId);
+      if (!$e) fail('Event not found.', 404);
 
-  $uid = current_user_id();
-  $role = current_role();
-  if (!can_view_event($pdo, $e, $uid, $role)) {
-    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-  }
+      $uid = current_user_id();
+      $role = current_role();
+      if (!can_view_event($pdo, $e, $uid, $role)) {
+          fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+      }
 
-  $eventOrgId = (int)($e['org_id'] ?? 0);
-  if ($eventOrgId <= 0) {
-    fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
-  }
+      $eventOrgId = (int)($e['org_id'] ?? 0);
+      if ($eventOrgId <= 0) {
+          fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
+      }
 
-  $sy = "{$e['start_year']}-{$e['end_year']}";
-  $sem = active_year_to_semester((int)$e['active_year']);
-  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-  }
+      $sy = "{$e['start_year']}-{$e['end_year']}";
+      $sem = active_year_to_semester((int)$e['active_year']);
+      if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+          fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+      }
 
-  require_officer_for_expenses($pdo, $eventOrgId);
-  must_be_officer_for_event($pdo, $e);
+      require_officer_for_expenses($pdo, $eventOrgId);
+      must_be_officer_for_event($pdo, $e);
 
-  if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
-    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-  }
+      if (((string)($e['status'] ?? '')) !== 'Approved') {
+          fail('Proposal must be approved before adding actual credits.', 403, ['reason' => 'proposal_not_approved']);
+      }
 
-  if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
+      if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
+          fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+      }
 
-  // ✅ INSERT ONLY INTO event_credits - NO PASSBOOK AUTO-INSERT
-  $st = $pdo->prepare("
-    INSERT INTO event_credits (event_id, credit_date, source, notes, amount, recorded_by_user_id)
-    VALUES (:eid, :d, :src, :n, :amt, :uid)
-  ");
-  $st->execute([
-    ':eid' => $eventId,
-    ':d' => $date,
-    ':src' => $source,
-    ':n' => ($notes !== '' ? $notes : null),
-    ':amt' => $amount,
-    ':uid' => $uid,
-  ]);
+      if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
 
-  $creditId = (int)$pdo->lastInsertId();
+      $st = $pdo->prepare("
+          INSERT INTO event_credits (event_id, credit_date, source, notes, amount, recorded_by_user_id)
+          VALUES (:eid, :d, :src, :n, :amt, :uid)
+      ");
+      $st->execute([
+          ':eid' => $eventId,
+          ':d' => $date,
+          ':src' => $source,
+          ':n' => ($notes !== '' ? $notes : null),
+          ':amt' => $amount,
+          ':uid' => $uid,
+      ]);
 
-  ok(['message' => 'Credit added.', 'credit_id' => $creditId]);
+      $creditId = (int)$pdo->lastInsertId();
+
+      ok(['message' => 'Actual credit added successfully.', 'credit_id' => $creditId]);
   }
 
   if ($action === 'add_debit') {
-  require_login();
+      require_login();
 
-  $eventId = i($in, ['event_id'], 0);
-  $date = s($in, ['date'], '');
-  $category = s($in, ['category'], '');
-  $notes = s($in, ['notes'], '');
+      $eventId = i($in, ['event_id'], 0);
+      $date = s($in, ['date'], '');
+      $category = s($in, ['category'], '');
+      $notes = s($in, ['notes'], '');
 
-  $quantity = i($in, ['qty', 'quantity'], 1);
-  if ($quantity < 1) $quantity = 1;
+      $quantity = i($in, ['qty', 'quantity'], 1);
+      if ($quantity < 1) $quantity = 1;
 
-  $unitPriceRaw = pick($in, ['unit_price', 'unitPrice'], null);
-  $unitPriceF = null;
-  if ($unitPriceRaw !== null && $unitPriceRaw !== '' && is_numeric($unitPriceRaw)) {
-    $unitPriceF = (float)$unitPriceRaw;
-    if ($unitPriceF < 0) $unitPriceF = 0.0;
-  }
+      $unitPriceRaw = pick($in, ['unit_price', 'unitPrice'], null);
+      $unitPriceF = null;
+      if ($unitPriceRaw !== null && $unitPriceRaw !== '' && is_numeric($unitPriceRaw)) {
+          $unitPriceF = (float)$unitPriceRaw;
+          if ($unitPriceF < 0) $unitPriceF = 0.0;
+      }
 
-  $amount = f($in, ['amount'], 0.0);
-  if ($unitPriceF !== null && $amount <= 0) $amount = $unitPriceF * $quantity;
+      $amount = f($in, ['amount'], 0.0);
+      if ($unitPriceF !== null && $amount <= 0) $amount = $unitPriceF * $quantity;
 
-  $receiptNumber = s($in, ['receipt_no', 'receipt_number'], '');
+      $receiptNumber = s($in, ['receipt_no', 'receipt_number'], '');
 
-  if ($eventId <= 0) fail('Missing event_id.', 400);
-  if ($date === '') fail('Missing date.', 400);
-  if ($category === '') fail('Missing category.', 400);
-  if ($amount <= 0) fail('Invalid amount.', 400);
+      if ($eventId <= 0) fail('Missing event_id.', 400);
+      if ($date === '') fail('Missing date.', 400);
+      if ($category === '') fail('Missing category.', 400);
+      if ($amount <= 0) fail('Invalid amount.', 400);
 
-  $e = fetch_event($pdo, $eventId);
-  if (!$e) fail('Event not found.', 404);
+      $e = fetch_event($pdo, $eventId);
+      if (!$e) fail('Event not found.', 404);
 
-  $uid = current_user_id();
-  $role = current_role();
-  if (!can_view_event($pdo, $e, $uid, $role)) {
-    fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
-  }
+      $uid = current_user_id();
+      $role = current_role();
+      if (!can_view_event($pdo, $e, $uid, $role)) {
+          fail('Forbidden.', 403, ['reason' => 'not_allowed_to_view_event']);
+      }
 
-  $eventOrgId = (int)($e['org_id'] ?? 0);
-  if ($eventOrgId <= 0) {
-    fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
-  }
+      $eventOrgId = (int)($e['org_id'] ?? 0);
+      if ($eventOrgId <= 0) {
+          fail('This event is not tied to an organization.', 400, ['reason' => 'missing_org_id']);
+      }
 
-  $sy = "{$e['start_year']}-{$e['end_year']}";
-  $sem = active_year_to_semester((int)$e['active_year']);
-  if (!can_mutate_in_filter($pdo, $sy, $sem)) {
-    fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
-  }
+      $sy = "{$e['start_year']}-{$e['end_year']}";
+      $sem = active_year_to_semester((int)$e['active_year']);
+      if (!can_mutate_in_filter($pdo, $sy, $sem)) {
+          fail('Read-only mode for this term.', 403, ['reason' => 'read_only_term']);
+      }
 
-  require_officer_for_expenses($pdo, $eventOrgId);
-  must_be_officer_for_event($pdo, $e);
+      require_officer_for_expenses($pdo, $eventOrgId);
+      must_be_officer_for_event($pdo, $e);
 
-  if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
-    fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
-  }
+      if (((string)($e['status'] ?? '')) !== 'Approved') {
+          fail('Proposal must be approved before adding actual expenses.', 403, ['reason' => 'proposal_not_approved']);
+      }
 
-  // Optional: Check for sufficient funds (remove if you don't want this validation)
-  $stCredits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_credits WHERE event_id = :eid");
-  $stCredits->execute([':eid' => $eventId]);
-  $totalCredits = (float)$stCredits->fetchColumn();
-  
-  $stDebits = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM event_debits WHERE event_id = :eid");
-  $stDebits->execute([':eid' => $eventId]);
-  $totalDebits = (float)$stDebits->fetchColumn();
-  
-  $currentBalance = $totalCredits - $totalDebits;
-  
-  if ($amount > $currentBalance) {
-    // You can either block or just warn - uncomment to block
-    // fail("Insufficient funds. Current balance: ₱" . number_format($currentBalance, 2) . 
-    //      ", Attempted expense: ₱" . number_format($amount, 2), 400);
-    
-    // Or just log a warning
-    error_log("WARNING: Expense of ₱$amount exceeds current balance of ₱$currentBalance for event $eventId");
-  }
+      if (((string)($e['accomplishment_status'] ?? '')) === 'Approved') {
+          fail('Locked: event expenses already approved.', 403, ['reason' => 'locked_after_approval']);
+      }
 
-  if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
+      if (!is_valid_ymd($date)) fail('Invalid date (expected YYYY-MM-DD).', 400);
 
-  $fileKey = isset($_FILES['receipt_file']) ? 'receipt_file' : 'receipt';
+      $fileKey = isset($_FILES['receipt_file']) ? 'receipt_file' : 'receipt';
 
-  $receiptRel = save_uploaded_file(
-    $fileKey,
-    EE_RECEIPTS_DIR,
-    ['png','jpg','jpeg','webp','pdf'],
-    8 * 1024 * 1024
-  );
+      $receiptRel = save_uploaded_file(
+          $fileKey,
+          EE_RECEIPTS_DIR,
+          ['png','jpg','jpeg','webp','pdf'],
+          8 * 1024 * 1024
+      );
 
-  // ✅ INSERT ONLY INTO event_debits - NO PASSBOOK AUTO-INSERT
-  $st = $pdo->prepare("
-    INSERT INTO event_debits
-      (event_id, debit_date, category, notes, amount, unit_price, quantity, receipt_path, receipt_number, recorded_by_user_id)
-    VALUES
-      (:eid, :d, :cat, :n, :amt, :up, :qty, :rp, :rn, :uid)
-  ");
-  $st->execute([
-    ':eid' => $eventId,
-    ':d' => $date,
-    ':cat' => $category,
-    ':n' => ($notes !== '' ? $notes : null),
-    ':amt' => $amount,
-    ':up' => $unitPriceF,
-    ':qty' => $quantity,
-    ':rp' => $receiptRel,
-    ':rn' => ($receiptNumber !== '' ? $receiptNumber : null),
-    ':uid' => $uid,
-  ]);
+      $st = $pdo->prepare("
+          INSERT INTO event_debits
+              (event_id, debit_date, category, notes, amount, unit_price, quantity, receipt_path, receipt_number, recorded_by_user_id)
+          VALUES
+              (:eid, :d, :cat, :n, :amt, :up, :qty, :rp, :rn, :uid)
+      ");
+      $st->execute([
+          ':eid' => $eventId,
+          ':d' => $date,
+          ':cat' => $category,
+          ':n' => ($notes !== '' ? $notes : null),
+          ':amt' => $amount,
+          ':up' => $unitPriceF,
+          ':qty' => $quantity,
+          ':rp' => $receiptRel,
+          ':rn' => ($receiptNumber !== '' ? $receiptNumber : null),
+          ':uid' => $uid,
+      ]);
 
-  $debitId = (int)$pdo->lastInsertId();
+      $debitId = (int)$pdo->lastInsertId();
 
-  ok([
-    'message' => 'Expense added.',
-    'debit_id' => $debitId,
-    'receipt_url' => public_url($receiptRel),
-  ]);
+      ok([
+          'message' => 'Actual expense added successfully.',
+          'debit_id' => $debitId,
+          'receipt_url' => public_url($receiptRel),
+      ]);
   }
 
   if ($action === 'submit_accomplishment') {
@@ -2979,6 +3250,41 @@ ok(['message' => 'Event submitted for approval.']);
 
       ok(['message' => 'Proposal declined.']);
     }
+  }
+
+  if ($action === 'get_accomplishment_data') {
+  require_login();
+  
+  $eventId = i($in, ['event_id'], 0);
+  if ($eventId <= 0) fail('Missing event_id.', 400);
+  
+  $e = fetch_event($pdo, $eventId);
+  if (!$e) fail('Event not found.', 404);
+  
+  $uid = current_user_id();
+  $role = current_role();
+  
+  if (!can_view_event($pdo, $e, $uid, $role)) {
+    fail('Forbidden.', 403);
+  }
+  
+  $accomplishment = null;
+  $stCheck = $pdo->query("SHOW TABLES LIKE 'event_accomplishments'");
+  if ($stCheck && $stCheck->rowCount() > 0) {
+    $st = $pdo->prepare("
+      SELECT objectives, outcomes, challenges, status,
+             submitted_by, submitted_at,
+             approved_by, approved_at,
+             declined_reason
+      FROM event_accomplishments
+      WHERE event_id = :eid
+      LIMIT 1
+    ");
+    $st->execute([':eid' => $eventId]);
+    $accomplishment = $st->fetch(PDO::FETCH_ASSOC);
+  }
+  
+  ok(['accomplishment' => $accomplishment]);
   }
 
   if ($action === 'approve_accomplishment' || $action === 'decline_accomplishment') {
@@ -3425,67 +3731,98 @@ ok(['message' => 'Event submitted for approval.']);
   }
 
   if ($action === 'save_proposed_expenses') {
-  require_login();
-  
-  $eventId = i($in, ['event_id'], 0);
-  $items = $in['items'] ?? [];
-  
-  if ($eventId <= 0) fail('Missing event_id.', 400);
-  if (!is_array($items)) fail('Invalid items format.', 400);
-  
-  $e = fetch_event($pdo, $eventId);
-  if (!$e) fail('Event not found.', 404);
-  
-  $uid = current_user_id();
-  $role = current_role();
-  
-  // Check permissions
-  $eventOrgId = (int)($e['org_id'] ?? 0);
-  if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
-    fail('Forbidden.', 403);
-  }
-  
-  // Check if event is editable
-  $status = (string)($e['status'] ?? '');
-  if (!in_array($status, ['Draft', 'Submitted'], true)) {
-    fail('Cannot modify proposed expenses at this stage.', 403);
-  }
-  
-  // Begin transaction
-  $pdo->beginTransaction();
-  
-  try {
-    // Delete existing proposed expenses
-    $stDel = $pdo->prepare("DELETE FROM event_proposed_expenses WHERE event_id = :eid");
-    $stDel->execute([':eid' => $eventId]);
+    require_login();
     
-    // Insert new items
-    $stIns = $pdo->prepare("
-      INSERT INTO event_proposed_expenses (event_id, description, quantity, estimated_cost)
-      VALUES (:eid, :desc, :qty, :cost)
-    ");
+    $eventId = i($in, ['event_id'], 0);
+    $credits = $in['credits'] ?? [];
+    $expenses = $in['expenses'] ?? [];
     
-    foreach ($items as $item) {
-      $desc = trim($item['description'] ?? '');
-      $qty = (int)($item['quantity'] ?? 1);
-      $cost = (float)($item['estimated_cost'] ?? 0);
-      
-      if ($desc === '' || $qty < 1 || $cost <= 0) continue;
-      
-      $stIns->execute([
-        ':eid' => $eventId,
-        ':desc' => $desc,
-        ':qty' => $qty,
-        ':cost' => $cost,
-      ]);
+    if ($eventId <= 0) fail('Missing event_id.', 400);
+    
+    $e = fetch_event($pdo, $eventId);
+    if (!$e) fail('Event not found.', 404);
+    
+    $uid = current_user_id();
+    $role = current_role();
+    
+    $eventOrgId = (int)($e['org_id'] ?? 0);
+    if (!can_officer_manage_org($pdo, $eventOrgId > 0 ? $eventOrgId : null, $uid, $role)) {
+        fail('Forbidden.', 403);
     }
     
-    $pdo->commit();
-    ok(['message' => 'Proposed expenses saved.', 'total' => calculate_proposed_total($pdo, $eventId)]);
-  } catch (\Throwable $e) {
-    $pdo->rollBack();
-    fail('Failed to save proposed expenses: ' . $e->getMessage(), 500);
-  }
+    $status = (string)($e['status'] ?? '');
+    if (!in_array($status, ['Draft', 'Submitted'], true)) {
+        fail('Cannot modify proposed budget at this stage.', 403);
+    }
+    
+    $pdo->beginTransaction();
+    
+    try {
+        // Delete existing proposed credits
+        $stDelCredits = $pdo->prepare("DELETE FROM event_proposed_credits WHERE event_id = :eid");
+        $stDelCredits->execute([':eid' => $eventId]);
+        
+        // Delete existing proposed expenses
+        $stDelExpenses = $pdo->prepare("DELETE FROM event_proposed_expenses WHERE event_id = :eid");
+        $stDelExpenses->execute([':eid' => $eventId]);
+        
+        // Insert new credits
+        if (!empty($credits)) {
+            $stInsCredit = $pdo->prepare("
+                INSERT INTO event_proposed_credits (event_id, description, amount, notes)
+                VALUES (:eid, :desc, :amount, :notes)
+            ");
+            
+            foreach ($credits as $credit) {
+                $desc = trim($credit['description'] ?? '');
+                $amount = (float)($credit['amount'] ?? 0);
+                $notes = trim($credit['notes'] ?? '');
+                
+                if ($desc !== '' && $amount > 0) {
+                    $stInsCredit->execute([
+                        ':eid' => $eventId,
+                        ':desc' => $desc,
+                        ':amount' => $amount,
+                        ':notes' => $notes !== '' ? $notes : null
+                    ]);
+                }
+            }
+        }
+        
+        // Insert new expenses
+        if (!empty($expenses)) {
+            $stInsExpense = $pdo->prepare("
+                INSERT INTO event_proposed_expenses (event_id, description, quantity, estimated_cost, notes)
+                VALUES (:eid, :desc, :qty, :cost, :notes)
+            ");
+            
+            foreach ($expenses as $expense) {
+                $desc = trim($expense['description'] ?? '');
+                $qty = (int)($expense['quantity'] ?? 1);
+                $cost = (float)($expense['estimated_cost'] ?? 0);
+                $notes = trim($expense['notes'] ?? '');
+                
+                if ($desc !== '' && $qty > 0 && $cost > 0) {
+                    $stInsExpense->execute([
+                        ':eid' => $eventId,
+                        ':desc' => $desc,
+                        ':qty' => $qty,
+                        ':cost' => $cost,
+                        ':notes' => $notes !== '' ? $notes : null
+                    ]);
+                }
+            }
+        }
+        
+        $pdo->commit();
+        
+        $total = calculate_proposed_total($pdo, $eventId);
+        ok(['message' => 'Proposed budget saved.', 'total' => $total]);
+        
+    } catch (\Throwable $e) {
+        $pdo->rollBack();
+        fail('Failed to save proposed budget: ' . $e->getMessage(), 500);
+    }
 }
 
 if ($action === 'get_proposed_expenses') {

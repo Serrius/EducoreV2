@@ -90,74 +90,75 @@ if ($secondTerm && isset($secondTerm['id'])) {
 }
 
 /* =========================
-   Find the organization handled by this faculty_admin
-   ASSUMPTION (based on your schema): organizations.created_by = faculty_admin
-   If you have a different mapping table, tell me and I'll swap it.
+   Find ALL organizations handled by this faculty_admin
    ========================= */
 $stmt = $pdo->prepare("
   SELECT id, org_name, abbreviation, org_type, scope, program_id, membership_fee, fee_required, status
   FROM organizations
   WHERE created_by = ?
     AND status <> 'Archived'
-  ORDER BY id DESC
-  LIMIT 1
+  ORDER BY org_name ASC
 ");
 $stmt->execute([$userId]);
-$org = $stmt->fetch(PDO::FETCH_ASSOC);
+$orgs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-if (!$org) {
+/* Parse school year range once */
+$startYear = 0;
+$endYear   = 0;
+if (preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $m)) {
+  $startYear = (int)$m[1];
+  $endYear   = (int)$m[2];
+}
+
+if (empty($orgs)) {
   ok([
-    'user' => ['id' => $userId, 'role' => $role],
+    'user' => [
+      'id' => $userId,
+      'role' => $role,
+      'name' => trim((string)($_SESSION['first_name'] ?? '') . ' ' . (string)($_SESSION['last_name'] ?? '')) ?: 'Faculty Admin'
+    ],
     'term' => [
       'id' => $termId,
       'school_year' => $schoolYear,
       'semester' => $semester,
       'status' => (string)$term['status'],
+      'start_year' => $startYear ?: null,
+      'end_year' => $endYear ?: null,
     ],
     'canonical_term' => [
       'id' => $canonicalTermId,
       'school_year' => $schoolYear,
       'semester' => $canonicalSemester,
     ],
-    'organization' => null,
-    'kpis' => [
-      'org_fees_total' => 0,
-      'event_credits' => 0,
-      'event_debits' => 0,
-    ],
+    'organizations' => [],
+    'kpis' => ['org_fees_total' => 0, 'event_credits' => 0, 'event_debits' => 0],
     'charts' => [
       'org_fees' => ['labels' => [], 'values' => []],
       'event_funds' => ['labels' => [], 'credits' => [], 'debits' => []],
     ],
     'top_events' => [],
-    'note' => 'No organization assigned/created by this faculty_admin.',
+    'note' => 'No organizations assigned/created by this faculty_admin.',
   ]);
 }
 
-$orgId = (int)$org['id'];
+$orgIds       = array_map(fn($o) => (int)$o['id'], $orgs);
+$placeholders = implode(',', array_fill(0, count($orgIds), '?'));
 
 /* =========================
-   KPI: Total Org Fees collected (Canonical term) for THIS org
+   KPI: Total Org Fees across ALL handled orgs (Canonical term)
    ========================= */
 $stmt = $pdo->prepare("
   SELECT COALESCE(SUM(amount),0)
   FROM organization_fee_payments
   WHERE academic_term_id = ?
-    AND org_id = ?
+    AND org_id IN ($placeholders)
 ");
-$stmt->execute([$canonicalTermId, $orgId]);
+$stmt->execute(array_merge([$canonicalTermId], $orgIds));
 $kpiOrgFeesTotal = (float)$stmt->fetchColumn();
 
 /* =========================
-   Events totals (THIS org only) within school_year range
+   KPI: Event totals across ALL handled orgs within school_year range
    ========================= */
-$startYear = 0;
-$endYear = 0;
-if (preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $m)) {
-  $startYear = (int)$m[1];
-  $endYear = (int)$m[2];
-}
-
 $kpiEventCredits = 0.0;
 $kpiEventDebits  = 0.0;
 
@@ -166,38 +167,49 @@ if ($startYear && $endYear) {
     SELECT COALESCE(SUM(ec.amount),0)
     FROM event_credits ec
     JOIN event_events e ON e.id = ec.event_id
-    WHERE e.org_id = ?
+    WHERE e.org_id IN ($placeholders)
       AND e.start_year = ?
       AND e.end_year = ?
   ");
-  $stmt->execute([$orgId, $startYear, $endYear]);
+  $stmt->execute(array_merge($orgIds, [$startYear, $endYear]));
   $kpiEventCredits = (float)$stmt->fetchColumn();
 
   $stmt = $pdo->prepare("
     SELECT COALESCE(SUM(ed.amount),0)
     FROM event_debits ed
     JOIN event_events e ON e.id = ed.event_id
-    WHERE e.org_id = ?
+    WHERE e.org_id IN ($placeholders)
       AND e.start_year = ?
       AND e.end_year = ?
   ");
-  $stmt->execute([$orgId, $startYear, $endYear]);
+  $stmt->execute(array_merge($orgIds, [$startYear, $endYear]));
   $kpiEventDebits = (float)$stmt->fetchColumn();
 }
 
 /* =========================
-   Chart A: Org fees (single org bar)
+   Chart A: Org fees per org (one bar per org)
    ========================= */
-$orgFeeLabels = [(string)$org['org_name']];
-$orgFeeValues = [$kpiOrgFeesTotal];
+$orgFeeLabels = [];
+$orgFeeValues = [];
+
+foreach ($orgIds as $i => $oid) {
+  $stmt = $pdo->prepare("
+    SELECT COALESCE(SUM(amount),0)
+    FROM organization_fee_payments
+    WHERE academic_term_id = ? AND org_id = ?
+  ");
+  $stmt->execute([$canonicalTermId, $oid]);
+  $orgFeeLabels[] = (string)$orgs[$i]['org_name'];
+  $orgFeeValues[] = (float)$stmt->fetchColumn();
+}
 
 /* =========================
-   Chart B + Top list: top events by activity (credits + debits) - THIS org only
+   Chart B + Top list: top events across ALL handled orgs
    ========================= */
-$topEvents = [];
+$topEvents   = [];
 $eventLabels = [];
 $eventCredits = [];
-$eventDebits = [];
+$eventDebits  = [];
 
 if ($startYear && $endYear) {
   $stmt = $pdo->prepare("
@@ -211,7 +223,7 @@ if ($startYear && $endYear) {
     FROM event_events e
     LEFT JOIN event_credits ec ON ec.event_id = e.id
     LEFT JOIN event_debits  ed ON ed.event_id = e.id
-    WHERE e.org_id = ?
+    WHERE e.org_id IN ($placeholders)
       AND e.start_year = ?
       AND e.end_year = ?
     GROUP BY e.id
@@ -219,65 +231,66 @@ if ($startYear && $endYear) {
     ORDER BY activity DESC, e.event_date DESC, e.id DESC
     LIMIT 8
   ");
-  $stmt->execute([$orgId, $startYear, $endYear]);
+  $stmt->execute(array_merge($orgIds, [$startYear, $endYear]));
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   foreach ($rows as $r) {
-    $title = (string)$r['title'];
-    $eventLabels[] = $title;
+    $title          = (string)$r['title'];
+    $eventLabels[]  = $title;
     $eventCredits[] = (float)$r['total_credits'];
     $eventDebits[]  = (float)$r['total_debits'];
-
-    $topEvents[] = [
-      'id' => (int)$r['id'],
-      'title' => $title,
+    $topEvents[]    = [
+      'id'         => (int)$r['id'],
+      'title'      => $title,
       'event_date' => (string)$r['event_date'],
-      'credits' => (float)$r['total_credits'],
-      'debits' => (float)$r['total_debits'],
+      'credits'    => (float)$r['total_credits'],
+      'debits'     => (float)$r['total_debits'],
     ];
   }
 }
 
+/* Build organizations array for response */
+$organizationsOut = array_map(fn($o) => [
+  'id'          => (int)$o['id'],
+  'org_name'    => (string)$o['org_name'],
+  'abbreviation'=> (string)($o['abbreviation'] ?? ''),
+  'org_type'    => (string)($o['org_type'] ?? ''),
+  'scope'       => (string)($o['scope'] ?? ''),
+  'status'      => (string)($o['status'] ?? ''),
+], $orgs);
+
 ok([
   'user' => [
-    'id' => $userId,
+    'id'   => $userId,
     'role' => $role,
-    // if you store names in session, nice; otherwise JS will show "—"
     'name' => trim((string)($_SESSION['first_name'] ?? '') . ' ' . (string)($_SESSION['last_name'] ?? '')) ?: 'Faculty Admin'
   ],
 
   'term' => [
-    'id' => $termId,
-    'school_year' => $schoolYear,
-    'semester' => $semester,
-    'status' => (string)$term['status'],
+    'id'         => $termId,
+    'school_year'=> $schoolYear,
+    'semester'   => $semester,
+    'status'     => (string)$term['status'],
     'start_year' => $startYear ?: null,
-    'end_year' => $endYear ?: null,
+    'end_year'   => $endYear ?: null,
   ],
 
   'canonical_term' => [
-    'id' => $canonicalTermId,
-    'school_year' => $schoolYear,
-    'semester' => $canonicalSemester,
+    'id'         => $canonicalTermId,
+    'school_year'=> $schoolYear,
+    'semester'   => $canonicalSemester,
   ],
 
-  'organization' => [
-    'id' => $orgId,
-    'org_name' => (string)$org['org_name'],
-    'abbreviation' => (string)($org['abbreviation'] ?? ''),
-    'org_type' => (string)($org['org_type'] ?? ''),
-    'scope' => (string)($org['scope'] ?? ''),
-    'status' => (string)($org['status'] ?? ''),
-  ],
+  'organizations' => $organizationsOut,
 
   'kpis' => [
     'org_fees_total' => $kpiOrgFeesTotal,
-    'event_credits' => $kpiEventCredits,
-    'event_debits' => $kpiEventDebits,
+    'event_credits'  => $kpiEventCredits,
+    'event_debits'   => $kpiEventDebits,
   ],
 
   'charts' => [
-    'org_fees' => ['labels' => $orgFeeLabels, 'values' => $orgFeeValues],
+    'org_fees'    => ['labels' => $orgFeeLabels, 'values' => $orgFeeValues],
     'event_funds' => ['labels' => $eventLabels, 'credits' => $eventCredits, 'debits' => $eventDebits],
   ],
 

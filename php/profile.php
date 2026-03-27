@@ -56,8 +56,8 @@ if ($userId <= 0) {
 function roleLabel(string $role): string {
   $map = [
     'overseer' => 'Overseer',
-    'super_admin' => 'Super Admin',
-    'special_admin' => 'Special Admin',
+    'super_admin' => 'OSA', // Changed from 'Super Admin' to 'OSA'
+    'special_admin' => 'SDC', // Changed from 'Special Admin' to 'SDC'
     'faculty_admin' => 'Faculty Admin',
     'moderator' => 'Moderator',
     'org_president' => 'Org President',
@@ -133,25 +133,77 @@ try {
 
   if ($action === 'update') {
     $email = trim((string)($in['email'] ?? ''));
+    $first_name = trim((string)($in['first_name'] ?? ''));
+    $middle_name = trim((string)($in['middle_name'] ?? ''));
+    $last_name = trim((string)($in['last_name'] ?? ''));
+    $suffix = trim((string)($in['suffix'] ?? ''));
 
+    // Validation
     if ($email === '') fail('Email is required.', 422);
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Please enter a valid email address.', 422);
+    
+    if ($first_name === '') fail('First name is required.', 422);
+    if ($last_name === '') fail('Last name is required.', 422);
 
-    // Check uniqueness (users.email is UNIQUE)
+    // Check email uniqueness (users.email is UNIQUE)
     $st = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1");
     $st->execute([$email, $userId]);
     if ($st->fetch()) {
       fail('That email is already in use.', 409);
     }
 
-    $st = $pdo->prepare("UPDATE users SET email = ? WHERE id = ? LIMIT 1");
-    $st->execute([$email, $userId]);
+    $st = $pdo->prepare("
+      UPDATE users 
+      SET email = ?, first_name = ?, middle_name = ?, last_name = ?, suffix = ?
+      WHERE id = ? 
+      LIMIT 1
+    ");
+    $st->execute([$email, $first_name, $middle_name, $last_name, $suffix, $userId]);
 
     $profile = loadProfile($pdo, $userId);
     ok([
       'message' => 'Profile updated successfully.',
       'profile' => $profile
     ]);
+  }
+
+  if ($action === 'change_password') {
+    $current_password = $in['current_password'] ?? '';
+    $new_password = $in['new_password'] ?? '';
+    $confirm_password = $in['confirm_password'] ?? '';
+
+    if ($current_password === '' || $new_password === '' || $confirm_password === '') {
+      fail('All password fields are required.', 422);
+    }
+
+    if ($new_password !== $confirm_password) {
+      fail('New password and confirm password do not match.', 422);
+    }
+
+    if (strlen($new_password) < 8) {
+      fail('Password must be at least 8 characters long.', 422);
+    }
+
+    // Get current password hash
+    $st = $pdo->prepare("SELECT password_hash FROM users WHERE id = ? LIMIT 1");
+    $st->execute([$userId]);
+    $user = $st->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+      fail('User not found.', 404);
+    }
+
+    // Verify current password
+    if (!password_verify($current_password, $user['password_hash'])) {
+      fail('Current password is incorrect.', 401);
+    }
+
+    // Update password
+    $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
+    $st = $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ? LIMIT 1");
+    $st->execute([$new_hash, $userId]);
+
+    ok(['message' => 'Password changed successfully.']);
   }
 
   fail('Invalid action.', 400);

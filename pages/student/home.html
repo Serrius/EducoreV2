@@ -8,31 +8,211 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
-    .handled-org-card {
-      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+    /* Academic Year Card - matching super-admin style */
+    .academicYear {
+      background-color: #211E56;
+      border-left: 10px solid #F5AA1C;
+    }
+
+    /* ENHANCED: Organizations You Handle Card */
+    .handled-orgs-card {
+      background: linear-gradient(145deg, #1a2639, #0d1b2a);
       color: #fff;
-      border-left: 10px solid #211E56;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      border: none;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+
+    .handled-orgs-header {
+      background: rgba(255,255,255,0.1);
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .handled-orgs-header i {
+      font-size: 1.5rem;
+      color: #ffd700;
+    }
+
+    .handled-orgs-header h5 {
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .handled-orgs-header .badge-count {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border-radius: 20px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      margin-left: auto;
+    }
+
+    .handled-orgs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      padding: 1.25rem;
+    }
+
+    .handled-org-item {
+      background: rgba(255,255,255,0.08);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(5px);
+    }
+
+    .handled-org-item:hover {
+      background: rgba(255,255,255,0.15);
+      transform: translateY(-3px);
+      border-color: rgba(255,215,0,0.3);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+    }
+
+    .handled-org-type {
+      display: inline-block;
+      padding: 0.2rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.75rem;
+    }
+
+    .type-organization {
+      background: linear-gradient(135deg, #0d6efd, #5a9bff);
+      color: white;
+    }
+
+    .type-club {
+      background: linear-gradient(135deg, #198754, #32c875);
+      color: white;
     }
 
     .handled-org-name {
-      font-size: 1.3rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      line-height: 1.15;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
+    .handled-org-abbr {
+      background: rgba(255,255,255,0.15);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    .handled-org-scope {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    .scope-general {
+      background: rgba(108, 117, 125, 0.3);
+      color: #e9ecef;
+    }
+
+    .scope-exclusive {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+    }
+
+    .handled-org-stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .handled-org-fee {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .fee-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+
+    .fee-value {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #ffd700;
+    }
+
+    .handled-org-status {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .status-badge {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-active {
+      background-color: #28a745;
+      box-shadow: 0 0 8px #28a745;
+    }
+
+    .status-inactive {
+      background-color: #dc3545;
+    }
+
+    /* Account Mode Indicator */
+    .account-mode-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 0.25rem 1rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-left: 1rem;
+    }
+
+    .account-mode-badge i {
+      margin-right: 0.25rem;
+    }
+
+    /* Rest of your existing styles remain the same */
     .dashboard-kpi-card {
       border: none;
       border-radius: 0.5rem;
       color: #fff;
       box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      height: 140px;
     }
 
-    .kpi-card-fees {
+    .kpi-card-org-fees {
       background: linear-gradient(135deg, #0d6efd, #5a9bff);
     }
-    .kpi-card-credits {
+    .kpi-card-club-fees {
       background: linear-gradient(135deg, #198754, #32c875);
+    }
+    .kpi-card-credits {
+      background: linear-gradient(135deg, #20c997, #6feba9);
     }
     .kpi-card-debits {
       background: linear-gradient(135deg, #dc3545, #f46b7b);
@@ -54,7 +234,7 @@
     /* Charts */
     .chart-wrapper {
       position: relative;
-      height: 170px;
+      height: 180px;
       max-height: 220px;
     }
     .chart-wrapper canvas {
@@ -94,41 +274,106 @@
       letter-spacing: 0.08em;
       font-size: 1.6rem;
     }
+
+    .list-group-item {
+      transition: background-color 0.2s;
+    }
+    .list-group-item:hover {
+      background-color: #f8f9fa;
+    }
+
+    /* Empty state styling */
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #6c757d;
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    /* Top row stretch */
+    .top-row-stretch {
+      align-items: stretch;
+    }
+
+    .top-left-stack {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .top-left-stack .card {
+      flex: 1 1 0;
+    }
+
+    .top-left-stack .welcome-card {
+      margin-bottom: 0.75rem;
+    }
   </style>
 </head>
 
 <div id="homePage" class="container-fluid">
-  <h1 class="mb-3">HOME</h1>
+  <div class="d-flex align-items-center mb-3">
+    <h1 class="mb-0">HOME</h1>
+    <div id="accountModeIndicator" class="account-mode-badge ms-3" style="display: none;">
+      <i class="bi bi-person" style="display: none;"></i> Student Mode
+    </div>
+  </div>
   <hr class="mt-0 mb-3">
 
-  <!-- Top row: Welcome + Handled Organization (left) and Calendar (right) -->
-  <div class="row g-3 mb-3">
-    <!-- Left side: stacked cards -->
-    <div class="col-lg-8">
-      <!-- Welcome -->
-      <div class="card welcome-card mb-3">
-        <div class="card-body">
-          <h4 class="mb-1">
-            Welcome back, <span id="welcomeUsername">Student</span>!
-          </h4>
-          <p class="text-muted mb-0">
-            <i class="bi bi-calendar me-1"></i>
-            Today: <span id="welcomeToday">—</span>
-          </p>
+  <!-- Top row: Welcome + Academic Year (left) and Calendar (right) -->
+  <div class="row g-3 mb-3 top-row-stretch">
+    <!-- Left: Welcome + AY stacked, same total height as calendar -->
+    <div class="col-lg-8 d-flex">
+      <div class="w-100 top-left-stack">
+        <!-- Welcome message -->
+        <div class="card welcome-card">
+          <div class="card-body">
+            <h4 class="mb-1">
+              <i class="bi bi-star-fill text-warning me-2"></i>
+              Welcome back, <span id="welcomeUsername">Student</span>!
+            </h4>
+            <p class="text-muted mb-1">
+              <i class="bi bi-calendar me-1"></i> Today: 
+              <span id="welcomeToday">—</span>
+            </p>
+            <p class="small text-muted mb-0">
+              Stay updated with your organizations and clubs.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <!-- Handled Organization Info (OFFICER ONLY) -->
-      <div id="handledOrgWrap" class="card handled-org-card shadow-sm">
-        <div class="card-body">
-          <div class="small text-uppercase">You are handling</div>
-          <div class="handled-org-name" id="handledOrgName">—</div>
-          <div class="small mt-1" id="handledOrgScope">—</div>
+        <!-- Current Academic Year highlight -->
+        <div id="currentAcademicYearDisplay">
+          <div class="card academicYear shadow-sm border-0 h-100">
+            <div class="card-body d-flex justify-content-between align-items-center text-white academicYear">
+              <!-- Left side (text) -->
+              <div>
+                <h6 class="mb-1 text-uppercase fw-bold" style="color: #F5AA1C;">
+                  Current Academic Year
+                </h6>
+                <h3 class="mb-2" id="displayAcademicYear">0000 - 0000</h3>
+                <div class="small text-white-50 mt-1">
+                  <span id="displaySemesterLabel">—</span>
+                </div>
+              </div>
+
+              <!-- Right side (image) -->
+              <div>
+                <img src="assets/images/academic-year.png" alt="Academic Year"
+                     style="height: 80px; object-fit: contain; margin-right: 30px;">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Right side: Calendar -->
+    <!-- Right: Calendar -->
     <div class="col-lg-4 d-flex">
       <div class="card shadow-sm h-100 w-100">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -154,109 +399,197 @@
     </div>
   </div>
 
-  <!-- KPIs (OFFICER ONLY) -->
-  <div id="kpiRow" class="row g-3 mb-4">
-    <div class="col-md-4">
-      <div class="card dashboard-kpi-card kpi-card-fees">
-        <div class="card-body">
-          <div class="dashboard-kpi-title">Total Org Fees</div>
-          <div class="dashboard-kpi-value" id="kpiOrgFeesTotal">₱0.00</div>
-          <div class="small text-white-50 mt-1">Collected for your org</div>
+  <!-- OFFICER SECTION: Organizations Handled - ENHANCED DESIGN -->
+  <div id="officerWrap">
+    <div class="handled-orgs-card shadow-sm mb-4">
+      <div class="handled-orgs-header">
+        <i class="bi bi-building-fill-gear"></i>
+        <h5>Organizations You Handle</h5>
+        <span class="badge-count" id="orgCountBadge">0</span>
+      </div>
+      
+      <div id="organizationsList" class="handled-orgs-grid">
+        <!-- Will be populated by JavaScript -->
+        <div class="empty-state">
+          <i class="bi bi-building-slash"></i>
+          <p>Loading organizations...</p>
         </div>
       </div>
     </div>
 
-    <div class="col-md-4">
-      <div class="card dashboard-kpi-card kpi-card-credits">
-        <div class="card-body">
-          <div class="dashboard-kpi-title">Event Credits</div>
-          <div class="dashboard-kpi-value" id="kpiEventCredits">₱0.00</div>
-          <div class="small text-white-50 mt-1">Funds received (AY)</div>
+    <!-- KPIs -->
+    <div id="kpiRow" class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card dashboard-kpi-card kpi-card-org-fees">
+          <div class="card-body">
+            <div class="dashboard-kpi-title">
+              <i class="bi bi-building me-1"></i> Organization Fees
+            </div>
+            <div class="dashboard-kpi-value" id="kpiOrgFeesTotal">₱0.00</div>
+            <div class="small text-white-50 mt-1">Total collected across all orgs</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card dashboard-kpi-card kpi-card-club-fees">
+          <div class="card-body">
+            <div class="dashboard-kpi-title">
+              <i class="bi bi-trophy me-1"></i> Club Fees
+            </div>
+            <div class="dashboard-kpi-value" id="kpiClubFeesTotal">₱0.00</div>
+            <div class="small text-white-50 mt-1">Total membership fees</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card dashboard-kpi-card kpi-card-credits">
+          <div class="card-body">
+            <div class="dashboard-kpi-title">
+              <i class="bi bi-cash-stack me-1"></i> Event Credits
+            </div>
+            <div class="dashboard-kpi-value" id="kpiEventCredits">₱0.00</div>
+            <div class="small text-white-50 mt-1">Funds received</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card dashboard-kpi-card kpi-card-debits">
+          <div class="card-body">
+            <div class="dashboard-kpi-title">
+              <i class="bi bi-cart me-1"></i> Event Expenses
+            </div>
+            <div class="dashboard-kpi-value" id="kpiEventDebits">₱0.00</div>
+            <div class="small text-white-50 mt-1">Expenses recorded</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="col-md-4">
-      <div class="card dashboard-kpi-card kpi-card-debits">
-        <div class="card-body">
-          <div class="dashboard-kpi-title">Event Expenses</div>
-          <div class="dashboard-kpi-value" id="kpiEventDebits">₱0.00</div>
-          <div class="small text-white-50 mt-1">Expenses recorded (AY)</div>
+    <!-- Charts -->
+    <div id="chartsRow" class="row g-3 mb-4">
+      <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-light">
+            <i class="bi bi-building me-1 text-primary"></i> Organization Fees Breakdown
+          </div>
+          <div class="card-body">
+            <div class="chart-wrapper">
+              <canvas id="orgFeesChart"></canvas>
+            </div>
+            <div class="small text-muted mt-2 text-center">
+              Fees collected per organization
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-light">
+            <i class="bi bi-trophy me-1 text-success"></i> Club Fees Breakdown
+          </div>
+          <div class="card-body">
+            <div class="chart-wrapper">
+              <canvas id="clubFeesChart"></canvas>
+            </div>
+            <div class="small text-muted mt-2 text-center">
+              Membership fees collected per club
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-light">
+            <i class="bi bi-receipt-cutoff me-1 text-info"></i> Event Funds Overview
+          </div>
+          <div class="card-body">
+            <div class="chart-wrapper">
+              <canvas id="eventFundsChart"></canvas>
+            </div>
+            <div class="small text-muted mt-2 text-center">
+              Credits vs Expenses (top events)
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Charts (OFFICER ONLY) -->
-  <div id="chartsRow" class="row g-3 mb-4">
-    <div class="col-lg-6">
-      <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span><i class="bi bi-people-fill me-1"></i> Organization Fees Overview</span>
-          <span class="small text-muted">Your organization</span>
-        </div>
-        <div class="card-body">
-          <div class="chart-wrapper">
-            <canvas id="orgFeesChart"></canvas>
-          </div>
-          <div class="small text-muted mt-2">
-            Total confirmed collection for your organization (canonical term).
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-lg-6">
-      <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span><i class="bi bi-receipt-cutoff me-1"></i> Event Funds Overview</span>
-          <span class="small text-muted">Credits vs Expenses</span>
-        </div>
-        <div class="card-body">
-          <div class="chart-wrapper">
-            <canvas id="eventFundsChart"></canvas>
-          </div>
-          <div class="small text-muted mt-2">
-            Top events for your organization based on recorded credits/expenses.
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Student lists (ALWAYS VISIBLE) -->
+  <!-- Student Lists: Organization Fees -->
   <div class="row g-3 mb-3">
     <div class="col-lg-6">
-      <div class="card shadow-sm">
-        <div class="card-header">
-          <i class="bi bi-x-circle me-1 text-danger"></i> Unpaid Organizations
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-danger bg-opacity-10 border-0">
+          <i class="bi bi-x-circle me-1 text-danger"></i> 
+          <span class="fw-semibold">Unpaid Organization Fees</span>
+          <span class="badge bg-danger ms-2" id="unpaidOrgCount">0</span>
         </div>
         <ul class="list-group list-group-flush" id="unpaidOrgList">
-          <li class="list-group-item text-muted">—</li>
+          <li class="list-group-item text-muted">Loading...</li>
         </ul>
       </div>
     </div>
 
     <div class="col-lg-6">
-      <div class="card shadow-sm">
-        <div class="card-header">
-          <i class="bi bi-check-circle me-1 text-success"></i> Paid Organizations
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-success bg-opacity-10 border-0">
+          <i class="bi bi-check-circle me-1 text-success"></i> 
+          <span class="fw-semibold">Paid Organization Fees</span>
+          <span class="badge bg-success ms-2" id="paidOrgCount">0</span>
         </div>
         <ul class="list-group list-group-flush" id="paidOrgList">
-          <li class="list-group-item text-muted">—</li>
+          <li class="list-group-item text-muted">Loading...</li>
         </ul>
       </div>
     </div>
   </div>
 
+  <!-- Student Lists: Club Membership Fees -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-danger bg-opacity-10 border-0">
+          <i class="bi bi-x-circle me-1 text-danger"></i> 
+          <span class="fw-semibold">Unpaid Club Fees</span>
+          <span class="badge bg-danger ms-2" id="unpaidClubCount">0</span>
+        </div>
+        <ul class="list-group list-group-flush" id="unpaidClubList">
+          <li class="list-group-item text-muted">Loading...</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-success bg-opacity-10 border-0">
+          <i class="bi bi-check-circle me-1 text-success"></i> 
+          <span class="fw-semibold">Paid Club Fees</span>
+          <span class="badge bg-success ms-2" id="paidClubCount">0</span>
+        </div>
+        <ul class="list-group list-group-flush" id="paidClubList">
+          <li class="list-group-item text-muted">Loading...</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clubs Joined -->
   <div class="row g-3">
     <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header">
-          <i class="bi bi-people-fill me-1"></i> Clubs Joined (AY-wide)
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary bg-opacity-10 border-0">
+          <i class="bi bi-people-fill me-1 text-primary"></i> 
+          <span class="fw-semibold">Clubs Joined</span>
+          <span class="badge bg-primary ms-2" id="clubsCount">0</span>
+          <span class="small text-muted ms-2">(Academic Year)</span>
         </div>
         <ul class="list-group list-group-flush" id="clubsList">
-          <li class="list-group-item text-muted">—</li>
+          <li class="list-group-item text-muted">Loading...</li>
         </ul>
       </div>
     </div>

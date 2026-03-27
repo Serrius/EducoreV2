@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 08, 2026 at 01:14 PM
+-- Generation Time: Mar 21, 2026 at 07:21 AM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.0.30
 
@@ -70,11 +70,13 @@ CREATE TABLE `accreditation_requests` (
 --
 
 INSERT INTO `accreditation_requests` (`id`, `org_id`, `academic_term_id`, `coordinator_user_id`, `moderator_user_id`, `status`, `submitted_at`, `updated_at`, `special_admin_notes`, `super_admin_notes`, `is_renewal`, `previous_request_id`) VALUES
-(1, 1, 1, 24, 25, 'Pending', '2026-02-06 05:38:35', '2026-02-07 09:37:11', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/1/Interfaces-Revise_20260207_072412_63566161.pdf', NULL, 0, NULL),
-(6, 1, 2, 24, 25, 'Active', '2026-02-07 07:20:41', '2026-03-08 12:10:35', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/6/recommendation_6_20260308_131018_a66ceee6.pdf\n[2026-03-08 12:04:53 user_id=39] adasdasd\n[2026-03-08 12:28:33 user_id=39] RECOMMEND\n[2026-03-08 13:00:50 user_id=39] RECOMMEND\n[2026-03-08 13:05:11 user_id=39] RECOMMEND\n[2026-03-08 13:10:18 user_id=39] RECOMMEND', 'Activated by Super Admin (user_id=4) on 2026-02-09 15:16:12\nActivated by Super Admin (user_id=4) on 2026-02-09 15:31:37\nActivated by Super Admin (user_id=4) on 2026-02-09 18:33:34\nActivated by Super Admin (user_id=4) on 2026-02-09 22:50:21\nActivated by Super Admin (user_id=4) on 2026-02-11 04:38:29\n[2026-03-04 03:37:02 user_id=4] goodjob steve jobs\nActivated by Super Admin (user_id=4) on 2026-03-04 03:48:36\n[2026-03-04 04:04:40 user_id=4] goodjob\nActivated by Super Admin (user_id=4) on 2026-03-08 12:05:33\nActivated by Super Admin (user_id=4) on 2026-03-08 12:29:10\nActivated by Super Admin (user_id=4) on 2026-03-08 13:01:08\nActivated by Super Admin (user_id=4) on 2026-03-08 13:05:38\nActivated by Super Admin (user_id=4) on 2026-03-08 13:10:35', 1, 1),
-(7, 2, 2, 28, 29, 'Active', '2026-02-10 01:52:46', '2026-02-10 02:02:09', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/7/recommendation_7_20260210_030052_07d0f92a.pdf\ngood to go', 'Activated by Super Admin (user_id=4) on 2026-02-10 03:02:09', 0, NULL),
-(8, 3, 2, 36, NULL, 'Active', '2026-02-14 11:38:49', '2026-03-08 11:13:38', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/8/recommendation_8_20260303_072555_65077c80.pdf\nasdasdas', '[2026-02-26 02:23:01 user_id=4] approve na kasamok\nActivated by Super Admin (user_id=4) on 2026-03-08 12:13:38', 0, NULL),
-(9, 4, 4, 37, NULL, 'Pending', '2026-03-06 07:04:56', '2026-03-06 07:09:20', NULL, NULL, 0, NULL);
+(1, 1, 1, 24, 24, 'Pending', '2026-02-06 05:38:35', '2026-03-15 09:15:01', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/1/Interfaces-Revise_20260207_072412_63566161.pdf', NULL, 0, NULL),
+(6, 1, 2, 24, 24, 'Active', '2026-02-07 07:20:41', '2026-03-15 09:15:01', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/6/recommendation_6_20260315_091217_2643903d.pdf', 'Activated by Super Admin (user_id=4) on 2026-02-09 15:16:12\nActivated by Super Admin (user_id=4) on 2026-02-09 15:31:37\nActivated by Super Admin (user_id=4) on 2026-02-09 18:33:34\nActivated by Super Admin (user_id=4) on 2026-02-09 22:50:21\nActivated by Super Admin (user_id=4) on 2026-02-11 04:38:29\n[2026-03-04 03:37:02 user_id=4] goodjob steve jobs\nActivated by Super Admin (user_id=4) on 2026-03-04 03:48:36\n[2026-03-04 04:04:40 user_id=4] goodjob\nActivated by Super Admin (user_id=4) on 2026-03-08 12:05:33\nActivated by Super Admin (user_id=4) on 2026-03-08 12:29:10\nActivated by Super Admin (user_id=4) on 2026-03-08 13:01:08\nActivated by Super Admin (user_id=4) on 2026-03-08 13:05:38\nActivated by Super Admin (user_id=4) on 2026-03-08 13:10:35\n[2026-03-15 09:13:52 user_id=4] ACTIVATE', 1, 1),
+(7, 2, 2, 24, 7, 'Active', '2026-02-10 01:52:46', '2026-03-18 02:01:39', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/7/recommendation_7_20260315_094938_63003290.pdf', 'Activated by Super Admin (user_id=4) on 2026-02-10 03:02:09\n[2026-03-15 09:50:01 user_id=4] ACTIVATE', 0, NULL),
+(8, 3, 2, 36, 36, 'Active', '2026-02-14 11:38:49', '2026-03-15 09:15:00', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/8/recommendation_8_20260303_072555_65077c80.pdf\nasdasdas', '[2026-02-26 02:23:01 user_id=4] approve na kasamok\nActivated by Super Admin (user_id=4) on 2026-03-08 12:13:38', 0, NULL),
+(9, 4, 4, 37, 37, 'Pending', '2026-03-06 07:04:56', '2026-03-15 09:15:00', NULL, NULL, 0, NULL),
+(12, 7, 4, 41, NULL, 'Pending', '2026-03-09 07:25:52', '2026-03-09 07:25:52', NULL, NULL, 0, NULL),
+(13, 8, 4, 24, 7, 'Active', '2026-03-15 07:31:09', '2026-03-18 03:35:07', 'RECOMMENDATION_FILE=assets/uploads/accreditation/recommendations/13/recommendation_13_20260318_043442_ab087957.pdf', '[2026-03-15 09:09:58 user_id=4] ACTIVATE\nActivated by Super Admin (user_id=4) on 2026-03-18 04:35:07', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -103,16 +105,24 @@ CREATE TABLE `accreditation_request_documents` (
 INSERT INTO `accreditation_request_documents` (`id`, `request_id`, `requirement_id`, `file_path`, `file_name`, `status`, `reviewed_by`, `reviewed_at`, `return_reason`, `uploaded_at`, `copied_from_doc_id`) VALUES
 (1, 1, 1, 'assets/uploads/accreditation/1/req_1/replace_req1_20260207_050326_f0130c3a_GENERAL-COMMENTS.pdf', 'GENERAL-COMMENTS.pdf', 'Accepted', 3, '2026-02-07 04:37:59', NULL, '2026-02-07 04:03:26', NULL),
 (6, 6, 1, 'assets/uploads/accreditation/6/req_1/req1_20260304_040308_34d0c97c_MaEase_Final.pdf', 'MaEase_Final.pdf', 'Accepted', 3, '2026-03-04 03:03:46', NULL, '2026-03-04 03:03:08', 1),
-(7, 6, 2, 'assets/uploads/accreditation/6/req_2/req2_20260308_130448_0f65f163_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-08 12:04:48', NULL),
-(8, 7, 1, 'assets/uploads/accreditation/7/req_1/req1_20260210_025246_976b7f7f_Interfaces-Revise.pdf', 'Interfaces-Revise.pdf', 'Accepted', 3, '2026-02-10 02:00:44', NULL, '2026-02-10 01:52:46', NULL),
-(9, 7, 2, 'assets/uploads/accreditation/7/req_2/req2_20260210_025246_ac566f2b_GENERAL-COMMENTS.pdf', 'GENERAL-COMMENTS.pdf', 'Accepted', 3, '2026-02-10 02:00:44', NULL, '2026-02-10 01:52:46', NULL),
+(7, 6, 2, 'assets/uploads/accreditation/6/req_2/req2_20260308_130448_0f65f163_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Accepted', 39, '2026-03-13 02:02:16', NULL, '2026-03-08 12:04:48', NULL),
+(8, 7, 1, 'assets/uploads/accreditation/7/req_1/req1_20260210_025246_976b7f7f_Interfaces-Revise.pdf', 'Interfaces-Revise.pdf', 'Accepted', 39, '2026-03-15 08:49:34', NULL, '2026-02-10 01:52:46', NULL),
+(9, 7, 2, 'assets/uploads/accreditation/7/req_2/req2_20260315_080252_7eeb87a1_Untitled _16_.pdf', 'Untitled (16).pdf', 'Accepted', 39, '2026-03-15 08:49:34', NULL, '2026-03-15 07:02:52', NULL),
 (10, 8, 1, 'assets/uploads/accreditation/8/req_1/req1_20260214_123849_5aebd8f6_Interfaces-Revise.pdf', 'Interfaces-Revise.pdf', 'Accepted', 3, '2026-02-25 08:07:09', NULL, '2026-02-14 11:38:49', NULL),
 (11, 8, 2, 'assets/uploads/accreditation/8/req_2/req2_20260214_123849_b107989b_GENERAL-COMMENTS.pdf', 'GENERAL-COMMENTS.pdf', 'Accepted', 3, '2026-02-25 08:07:09', NULL, '2026-02-14 11:38:49', NULL),
-(12, 6, 3, 'assets/uploads/accreditation/6/req_3/req3_20260308_130448_3c72b731_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-08 12:04:48', NULL),
+(12, 6, 3, 'assets/uploads/accreditation/6/req_3/req3_20260308_130448_3c72b731_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Accepted', 39, '2026-03-15 08:12:06', NULL, '2026-03-08 12:04:48', NULL),
 (13, 9, 5, 'assets/uploads/accreditation/9/req_5/req5_20260306_080920_d8006257_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-06 07:09:20', NULL),
 (14, 9, 2, 'assets/uploads/accreditation/9/req_2/req2_20260306_080920_f4b4c3fb_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-06 07:09:20', NULL),
 (15, 9, 3, 'assets/uploads/accreditation/9/req_3/req3_20260306_080920_096e2adb_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-06 07:09:20', NULL),
-(16, 6, 5, 'assets/uploads/accreditation/6/req_5/req5_20260308_130448_2c5e605e_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Submitted', NULL, NULL, NULL, '2026-03-08 12:04:48', NULL);
+(16, 6, 5, 'assets/uploads/accreditation/6/req_5/req5_20260308_130448_2c5e605e_accomplishment-report _1_.pdf', 'accomplishment-report (1).pdf', 'Accepted', 39, '2026-03-13 02:02:12', NULL, '2026-03-08 12:04:48', NULL),
+(20, 12, 5, 'assets/uploads/accreditation/12/req_5/req5_20260309_082552_dd2a4867_March 3.pdf', 'March 3.pdf', 'Accepted', 39, '2026-03-13 01:26:06', NULL, '2026-03-09 07:25:52', NULL),
+(21, 12, 2, 'assets/uploads/accreditation/12/req_2/req2_20260309_082552_7a3673ad_March 3.pdf', 'March 3.pdf', 'Accepted', 39, '2026-03-13 01:26:10', NULL, '2026-03-09 07:25:52', NULL),
+(22, 12, 3, 'assets/uploads/accreditation/12/req_3/req3_20260309_082552_76cebd4a_March 3.pdf', 'March 3.pdf', 'Accepted', 39, '2026-03-13 01:26:15', NULL, '2026-03-09 07:25:52', NULL),
+(23, 7, 5, 'assets/uploads/accreditation/7/req_5/req5_20260315_080252_57a37b47_Untitled _16_.pdf', 'Untitled (16).pdf', 'Accepted', 39, '2026-03-15 08:49:34', NULL, '2026-03-15 07:02:52', NULL),
+(24, 7, 3, 'assets/uploads/accreditation/7/req_3/req3_20260315_080252_8d79d63b_ISO.pdf', 'ISO.pdf', 'Accepted', 39, '2026-03-15 08:49:34', NULL, '2026-03-15 07:02:52', NULL),
+(25, 13, 5, 'assets/uploads/accreditation/13/req_5/req5_20260315_083109_0423dd43_ISO.pdf', 'ISO.pdf', 'Accepted', 39, '2026-03-15 08:09:30', NULL, '2026-03-15 07:31:09', NULL),
+(26, 13, 2, 'assets/uploads/accreditation/13/req_2/req2_20260315_083109_85006af3_ISO.pdf', 'ISO.pdf', 'Accepted', 39, '2026-03-15 08:09:33', NULL, '2026-03-15 07:31:09', NULL),
+(27, 13, 3, 'assets/uploads/accreditation/13/req_3/req3_20260315_083109_d232d99c_ISO.pdf', 'ISO.pdf', 'Accepted', 39, '2026-03-15 08:09:35', NULL, '2026-03-15 07:31:09', NULL);
 
 -- --------------------------------------------------------
 
@@ -217,6 +227,7 @@ CREATE TABLE `announcements` (
   `org_id` int(10) UNSIGNED DEFAULT NULL,
   `academic_term_id` int(10) UNSIGNED NOT NULL,
   `target_user_id` int(10) UNSIGNED DEFAULT NULL,
+  `target_program` varchar(50) DEFAULT NULL,
   `title` varchar(255) NOT NULL,
   `body` text NOT NULL,
   `status` enum('Pending','Active','Declined','Archived') NOT NULL DEFAULT 'Pending',
@@ -232,12 +243,16 @@ CREATE TABLE `announcements` (
 -- Dumping data for table `announcements`
 --
 
-INSERT INTO `announcements` (`id`, `org_id`, `academic_term_id`, `target_user_id`, `title`, `body`, `status`, `created_by`, `reviewed_by`, `reviewed_at`, `review_note`, `created_at`, `updated_at`) VALUES
-(1, 1, 2, 7, 'Testing Testing this should be so interesting', 'Test', 'Archived', 24, 24, '2026-02-21 16:40:33', NULL, '2026-02-21 06:14:25', '2026-02-21 08:40:33'),
-(2, NULL, 4, 4, 'test', 'test', 'Active', 4, NULL, NULL, NULL, '2026-02-26 02:03:14', NULL),
-(3, 1, 4, NULL, 'balls', 'aksjdlaksjdlaksjdlaksd', 'Archived', 24, 24, '2026-02-26 10:46:31', NULL, '2026-02-26 02:28:54', '2026-02-26 02:46:31'),
-(4, 1, 4, NULL, 'ww2', 'test', 'Archived', 31, 24, '2026-03-08 18:50:05', NULL, '2026-03-06 06:37:58', '2026-03-08 10:50:05'),
-(5, 1, 4, NULL, '22', 'www', 'Archived', 31, 24, '2026-03-07 18:58:45', NULL, '2026-03-06 06:46:31', '2026-03-07 10:58:45');
+INSERT INTO `announcements` (`id`, `org_id`, `academic_term_id`, `target_user_id`, `target_program`, `title`, `body`, `status`, `created_by`, `reviewed_by`, `reviewed_at`, `review_note`, `created_at`, `updated_at`) VALUES
+(1, 1, 2, 7, NULL, 'Testing Testing this should be so interesting', 'Test', 'Archived', 24, 24, '2026-02-21 16:40:33', NULL, '2026-02-21 06:14:25', '2026-02-21 08:40:33'),
+(2, NULL, 4, 4, NULL, 'test', 'test', 'Active', 4, NULL, NULL, NULL, '2026-02-26 02:03:14', NULL),
+(3, 1, 4, NULL, NULL, 'balls', 'aksjdlaksjdlaksjdlaksd', 'Archived', 24, 24, '2026-02-26 10:46:31', NULL, '2026-02-26 02:28:54', '2026-02-26 02:46:31'),
+(4, 1, 4, NULL, NULL, 'ww2', 'test', 'Archived', 31, 24, '2026-03-08 18:50:05', NULL, '2026-03-06 06:37:58', '2026-03-08 10:50:05'),
+(5, 1, 4, NULL, NULL, '22', 'www', 'Archived', 31, 24, '2026-03-07 18:58:45', NULL, '2026-03-06 06:46:31', '2026-03-07 10:58:45'),
+(6, 1, 4, NULL, NULL, 'asdas', 'asdasda', 'Active', 31, 24, '2026-03-13 10:21:48', NULL, '2026-03-08 13:45:58', '2026-03-13 02:21:48'),
+(7, 1, 4, NULL, NULL, 'test', 'test', 'Active', 24, 24, '2026-03-13 10:21:51', NULL, '2026-03-13 02:21:46', '2026-03-13 02:21:51'),
+(8, 1, 4, NULL, NULL, 'testing again', 'teste', 'Active', 31, 4, '2026-03-15 06:59:05', NULL, '2026-03-13 02:50:54', '2026-03-14 22:59:05'),
+(9, NULL, 4, 7, NULL, 'this is a targeted announcement', 'targeted announcement to Karl: Notice this is a targeted announcement the person being targeted in question is Karl', 'Active', 4, NULL, NULL, NULL, '2026-03-15 04:46:32', NULL);
 
 -- --------------------------------------------------------
 
@@ -264,19 +279,6 @@ CREATE TABLE `event_accomplishments` (
   `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `event_accomplishments`
---
-
-INSERT INTO `event_accomplishments` (`id`, `event_id`, `objectives`, `outcomes`, `challenges`, `status`, `submitted_by`, `submitted_at`, `approved_by`, `approved_at`, `declined_reason`, `finalized_by`, `finalized_at`, `generated_pdf`, `created_at`, `updated_at`) VALUES
-(1, 13, 'uhh objectives got achieved for some reason', 'testtt', 'adasdasdadasd', 'Draft', NULL, NULL, NULL, NULL, NULL, 31, '2026-03-06 07:32:58', NULL, '2026-03-06 07:32:58', NULL),
-(2, 10, 'adasd', 'asdasd', 'asdasd', 'Submitted', 31, '2026-03-06 09:46:08', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 09:46:08', NULL),
-(3, 12, 'objectives achieved', 'outcomes accomplished', 'uhhh di nalang mag events siguro', 'Submitted', 31, '2026-03-06 10:07:33', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 10:07:33', NULL),
-(4, 6, 'adasd', 'asdasd', 'asdasdasd', 'Submitted', 31, '2026-03-06 11:10:30', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 11:10:30', NULL),
-(5, 14, 'lorem ipsum', 'lorem ipsum', 'lorem ipsum', 'Submitted', 31, '2026-03-06 11:44:16', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 11:44:16', NULL),
-(6, 4, 'lorem ipsum', 'lorem ipsum', 'lorem ipsum', 'Submitted', 31, '2026-03-06 11:45:28', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 11:45:28', NULL),
-(7, 15, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.', 'Submitted', 31, '2026-03-06 11:59:26', NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-06 11:59:26', NULL);
-
 -- --------------------------------------------------------
 
 --
@@ -294,59 +296,6 @@ CREATE TABLE `event_credits` (
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `event_credits`
---
-
-INSERT INTO `event_credits` (`id`, `event_id`, `credit_date`, `source`, `notes`, `amount`, `recorded_by_user_id`, `created_at`, `updated_at`) VALUES
-(5, 8, '2026-02-28', 'sponsorship', 'asdasd', 500.00, 31, '2026-02-28 12:06:51', NULL),
-(6, 11, '2026-03-05', 'sponsorship', NULL, 500.00, 31, '2026-03-05 11:35:07', NULL),
-(7, 15, '2026-03-06', 'sponsorship', NULL, 20000.00, 31, '2026-03-06 11:47:57', NULL);
-
---
--- Triggers `event_credits`
---
-DELIMITER $$
-CREATE TRIGGER `trg_event_credits_to_passbook` AFTER INSERT ON `event_credits` FOR EACH ROW BEGIN
-  DECLARE v_org_id INT(10) UNSIGNED;
-  DECLARE v_prev_balance DECIMAL(12,2) DEFAULT 0.00;
-
-  SELECT org_id INTO v_org_id
-  FROM event_events
-  WHERE id = NEW.event_id
-  LIMIT 1;
-
-  
-  IF v_org_id IS NOT NULL
-     AND v_org_id > 0
-     AND EXISTS (SELECT 1 FROM organizations WHERE id = v_org_id)
-  THEN
-    SELECT COALESCE(balance_after, 0.00) INTO v_prev_balance
-    FROM passbook_logs
-    WHERE org_id = v_org_id
-    ORDER BY txn_date DESC, id DESC
-    LIMIT 1;
-
-    SET v_prev_balance = COALESCE(v_prev_balance, 0.00);
-
-    INSERT INTO passbook_logs (
-      org_id, event_id, txn_date, txn_type,
-      title, notes,
-      amount_in, amount_out, balance_after,
-      ref_table, ref_id,
-      recorded_by_user_id
-    ) VALUES (
-      v_org_id, NEW.event_id, NEW.credit_date, 'credit',
-      NEW.source, NEW.notes,
-      NEW.amount, 0.00, (v_prev_balance + NEW.amount),
-      'event_credits', NEW.id,
-      NEW.recorded_by_user_id
-    );
-  END IF;
-END
-$$
-DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -369,61 +318,6 @@ CREATE TABLE `event_debits` (
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `event_debits`
---
-
-INSERT INTO `event_debits` (`id`, `event_id`, `debit_date`, `category`, `notes`, `amount`, `unit_price`, `quantity`, `receipt_path`, `receipt_number`, `recorded_by_user_id`, `created_at`, `updated_at`) VALUES
-(4, 8, '2026-02-28', 'food', 'asdasdasd', 50.00, 50.00, 1, 'assets/uploads/event-expenses/receipts/pngegg_3__20260228_050715_177b0488.png', '67', 31, '2026-02-28 12:07:15', NULL),
-(5, 8, '2026-03-04', 'food', 'pizza', 200.00, 100.00, 2, 'assets/uploads/event-expenses/receipts/pngegg_3__20260304_030118_1a2cd832.png', '69', 7, '2026-03-04 10:01:18', NULL),
-(6, 8, '2026-03-04', 'food', 'pizza', 200.00, 100.00, 2, 'assets/uploads/event-expenses/receipts/pngegg_3__20260304_030118_7b4e1753.png', '69', 7, '2026-03-04 10:01:18', NULL),
-(7, 15, '2026-03-06', 'food', 'Jollibee Chicken Joy', 0.20, 0.20, 1, 'assets/uploads/event-expenses/receipts/pngegg_3__20260306_044940_c7712c11.png', '99', 31, '2026-03-06 11:49:40', NULL),
-(8, 15, '2026-03-06', 'food', 'Jollibee Chicken Joy', 99.00, 99.00, 1, 'assets/uploads/event-expenses/receipts/pngegg_3__20260306_045031_1cb8057b.png', '99', 31, '2026-03-06 11:50:31', NULL),
-(9, 16, '2026-03-06', 'food', 'Jollibee Chicken Joy', 9900.00, 99.00, 100, 'assets/uploads/event-expenses/receipts/9ab1f51a-7302-447e-8706-f98522df2cf4_20260306_084140_b0350623.jpg', '99', 31, '2026-03-06 15:41:40', NULL);
-
---
--- Triggers `event_debits`
---
-DELIMITER $$
-CREATE TRIGGER `trg_event_debits_to_passbook` AFTER INSERT ON `event_debits` FOR EACH ROW BEGIN
-  DECLARE v_org_id INT(10) UNSIGNED;
-  DECLARE v_prev_balance DECIMAL(12,2) DEFAULT 0.00;
-
-  SELECT org_id INTO v_org_id
-  FROM event_events
-  WHERE id = NEW.event_id
-  LIMIT 1;
-
-  IF v_org_id IS NOT NULL
-     AND v_org_id > 0
-     AND EXISTS (SELECT 1 FROM organizations WHERE id = v_org_id)
-  THEN
-    SELECT COALESCE(balance_after, 0.00) INTO v_prev_balance
-    FROM passbook_logs
-    WHERE org_id = v_org_id
-    ORDER BY txn_date DESC, id DESC
-    LIMIT 1;
-
-    SET v_prev_balance = COALESCE(v_prev_balance, 0.00);
-
-    INSERT INTO passbook_logs (
-      org_id, event_id, txn_date, txn_type,
-      title, notes,
-      amount_in, amount_out, balance_after,
-      ref_table, ref_id,
-      recorded_by_user_id
-    ) VALUES (
-      v_org_id, NEW.event_id, NEW.debit_date, 'debit',
-      NEW.category, NEW.notes,
-      0.00, NEW.amount, (v_prev_balance - NEW.amount),
-      'event_debits', NEW.id,
-      NEW.recorded_by_user_id
-    );
-  END IF;
-END
-$$
-DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -463,23 +357,32 @@ CREATE TABLE `event_events` (
 --
 
 INSERT INTO `event_events` (`id`, `org_id`, `title`, `event_date`, `location`, `scope`, `description`, `proposed_grand_total`, `proposed_breakdown_notes`, `active_year`, `start_year`, `end_year`, `status`, `author_user_id`, `created_at`, `updated_at`, `proposal_approved_at`, `proposal_approved_by`, `accomplishment_status`, `accomplishment_file`, `accomplishment_notes`, `accomplishment_submitted_at`, `accomplishment_approved_at`, `accomplishment_approved_by`) VALUES
-(1, 1, 'ambot lang', '2026-02-17', 'USTP JASAAN', 'organization', NULL, 0.00, NULL, 1, 2026, 2027, 'Approved', 31, '2026-02-17 11:54:20', '2026-02-17 21:55:35', '2026-02-17 21:55:35', 24, 'Draft', NULL, NULL, NULL, NULL, NULL),
-(2, 1, 'test', '2026-02-17', 'USTP JASAAN', 'organization', NULL, 0.00, NULL, 1, 2026, 2027, 'Draft', 31, '2026-02-17 13:44:29', NULL, NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
-(3, 1, 'test utro', '2026-02-17', 'USTP JASAAN', 'organization', NULL, 0.00, NULL, 1, 2026, 2027, 'Draft', 31, '2026-02-17 13:56:16', NULL, NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
-(4, 1, 'ambot lang', '2026-02-28', 'USTP JASAAN', 'organization', NULL, 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-02-28 09:59:01', '2026-03-06 11:45:28', '2026-03-06 11:39:19', 24, 'Submitted', NULL, NULL, NULL, NULL, NULL),
-(5, 1, 'ambot lang', '2026-02-28', 'USTP JASAAN', 'organization', 'asdasdasdasd', 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-02-28 09:59:01', '2026-03-06 10:50:30', NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
-(6, 1, 'test', '2026-02-28', 'USTP JASAAN', 'organization', NULL, 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-02-28 09:59:20', '2026-03-06 11:10:30', '2026-03-06 10:24:51', 24, 'Submitted', NULL, NULL, NULL, NULL, NULL),
-(7, 1, 'test', '2026-02-28', 'USTP JASAAN', 'organization', 'asdasd', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-02-28 09:59:20', '2026-03-06 10:25:00', '2026-03-06 10:25:00', 24, 'Draft', NULL, NULL, NULL, NULL, NULL),
-(8, 1, 'last test', '2026-02-28', 'USTP JASAAN', 'organization', 'asdasdasd', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-02-28 10:49:54', '2026-02-28 14:30:28', '2026-02-28 10:50:27', 24, 'Approved', NULL, NULL, NULL, '2026-02-28 14:30:28', 24),
-(9, 2, 'Ball clubs', '2026-03-03', 'USTP JASAAN', 'organization', 'ball clubs', 0.00, NULL, 2, 2026, 2027, 'Draft', 7, '2026-03-03 21:35:43', NULL, NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
-(10, 1, 'testing na sad', '2026-03-04', 'testing', 'organization', 'asdasdasd', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-04 14:27:01', '2026-03-06 10:00:15', '2026-03-05 12:45:31', 24, 'Approved', NULL, NULL, NULL, '2026-03-06 10:00:15', 24),
-(11, 1, 'ambot lang', '2026-03-04', 'adadasd', 'organization', 'asdasdasd', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-04 14:27:47', '2026-03-06 09:47:55', '2026-03-05 12:49:08', 24, 'Approved', 'assets/uploads/event-expenses/accomplishments/MaEase_Final_20260305_062116_a104d043.pdf', NULL, '2026-03-05 13:21:16', '2026-03-06 09:47:55', 24),
-(12, 1, 'final testing', '2026-03-04', 'USTP JASAAN', 'organization', 'test', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-04 16:01:24', '2026-03-06 10:08:52', '2026-03-06 10:06:14', 24, 'Approved', NULL, NULL, NULL, '2026-03-06 10:08:52', 24),
-(13, 1, 'proposed breakdown vs actual expense', '2026-03-05', 'ustp jasaan', 'organization', NULL, 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-05 20:56:23', '2026-03-06 07:32:58', '2026-03-06 03:31:22', 24, 'Approved', NULL, NULL, NULL, '2026-03-06 07:32:58', 31),
-(14, 1, 'thesis expenses', '2026-03-06', 'USTP JASAAN', 'organization', 'description', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-06 11:43:10', '2026-03-06 11:44:16', '2026-03-06 11:43:53', 24, 'Submitted', NULL, NULL, NULL, NULL, NULL),
-(15, 1, 'IT Days', '2026-03-06', 'USTP JASAAN', 'organization', 'it days', 0.00, NULL, 2, 2026, 2027, 'Approved', 31, '2026-03-06 11:46:48', '2026-03-06 12:00:00', '2026-03-06 11:51:25', 24, 'Approved', NULL, NULL, NULL, '2026-03-06 12:00:00', 24),
-(16, 1, 'Jollibeez', '2026-03-06', 'Jollibee Villanueva', 'organization', NULL, 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-03-06 15:37:49', NULL, NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
-(17, 1, 'testing', '2026-03-06', 'USTP JASAAN', 'organization', 'balls', 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-03-06 15:53:03', NULL, NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL);
+(39, 1, 'chachoy', '2026-03-21', 'USTP JASAAN', 'organization', 'asdasd', 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-03-21 13:32:22', '2026-03-21 13:32:22', NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
+(40, 1, 'asda', '2026-03-21', 'asdasd', 'organization', 'asdasdasd', 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-03-21 14:10:44', '2026-03-21 14:10:44', NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL),
+(41, 1, 'asdasd', '2026-03-21', 'asdasd', 'organization', 'asdasdas', 0.00, NULL, 2, 2026, 2027, 'Submitted', 31, '2026-03-21 14:16:19', '2026-03-21 14:16:19', NULL, NULL, 'Locked', NULL, NULL, NULL, NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `event_proposed_credits`
+--
+
+CREATE TABLE `event_proposed_credits` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `event_id` int(10) UNSIGNED NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `event_proposed_credits`
+--
+
+INSERT INTO `event_proposed_credits` (`id`, `event_id`, `description`, `amount`, `notes`, `created_at`) VALUES
+(1, 39, 'ballsack', 5000.00, 'asdasd', '2026-03-21 13:32:22'),
+(2, 41, 'asd', 5000.00, 'asda', '2026-03-21 14:16:19');
 
 -- --------------------------------------------------------
 
@@ -495,19 +398,18 @@ CREATE TABLE `event_proposed_expenses` (
   `estimated_cost` decimal(10,2) NOT NULL DEFAULT 0.00,
   `total` decimal(10,2) GENERATED ALWAYS AS (`quantity` * `estimated_cost`) STORED,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp()
+  `updated_at` datetime DEFAULT NULL ON UPDATE current_timestamp(),
+  `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `event_proposed_expenses`
 --
 
-INSERT INTO `event_proposed_expenses` (`id`, `event_id`, `description`, `quantity`, `estimated_cost`, `created_at`, `updated_at`) VALUES
-(1, 13, 'food', 1, 500.00, '2026-03-05 20:56:23', NULL),
-(2, 14, 'food', 1, 500.00, '2026-03-06 11:43:10', NULL),
-(3, 15, 'Jollibee Chicken Joy', 20, 99.00, '2026-03-06 11:46:48', NULL),
-(4, 16, 'fried chicken with rice', 10, 99.00, '2026-03-06 15:37:49', NULL),
-(5, 17, 'Item Description', 2, 1000.00, '2026-03-06 15:53:03', NULL);
+INSERT INTO `event_proposed_expenses` (`id`, `event_id`, `description`, `quantity`, `estimated_cost`, `created_at`, `updated_at`, `notes`) VALUES
+(2, 39, 'asdasd', 2, 500.00, '2026-03-21 13:32:22', NULL, 'asdasd'),
+(3, 40, 'asdasd', 2, 500.00, '2026-03-21 14:10:44', NULL, NULL),
+(4, 41, 'asdasdasd', 1, 5000.00, '2026-03-21 14:16:19', NULL, 'asdasdasd');
 
 -- --------------------------------------------------------
 
@@ -533,7 +435,8 @@ INSERT INTO `e_signatures` (`id`, `user_id`, `signature_file`, `status`, `update
 (6, 29, 'assets/uploads/e-signatures/29/signature_20260210_094937_7a2a6833.png', 'Active', '2026-02-10 08:49:37'),
 (7, 31, 'assets/uploads/e-signatures/31/signature_20260211_071332_108b07cd.png', 'Active', '2026-02-11 06:13:32'),
 (8, 35, 'assets/uploads/e-signatures/35/signature_20260214_080323_62556260.png', 'Active', '2026-02-14 07:03:23'),
-(9, 39, 'assets/uploads/e-signatures/39/signature_20260308_120445_cf4033dc.png', 'Active', '2026-03-08 11:04:45');
+(9, 39, 'assets/uploads/e-signatures/39/signature_20260308_120445_cf4033dc.png', 'Active', '2026-03-08 11:04:45'),
+(10, 24, 'assets/uploads/e-signatures/24/signature_20260312_062713_c78aeeb5.png', 'Active', '2026-03-12 05:27:13');
 
 -- --------------------------------------------------------
 
@@ -718,7 +621,7 @@ INSERT INTO `notifications` (`id`, `recipient_id`, `actor_id`, `title`, `message
 (164, 25, 4, 'Accreditation Activated', 'Accreditation for \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'unread', 6, '2026-03-08 11:05:33'),
 (165, 39, 4, 'Accreditation Activated', 'Accreditation for \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'unread', 6, '2026-03-08 11:05:33'),
 (166, 36, 4, 'Accreditation Activated', 'Your accreditation request for organization \'The Cache\' has been activated and is now officially recognized.', 'accreditation', 'unread', 8, '2026-03-08 11:13:38'),
-(167, 39, 4, 'Accreditation Activated', 'Accreditation for \'The Cache\' is now Active.', 'accreditation', 'unread', 8, '2026-03-08 11:13:38'),
+(167, 39, 4, 'Accreditation Activated', 'Accreditation for \'The Cache\' is now Active.', 'accreditation', 'read', 8, '2026-03-08 11:13:38'),
 (168, 39, 24, 'Organization Updated', 'Organization \'Society of Computer Enthusiast\' updated by tester tester.', 'reaccreditation', 'read', 6, '2026-03-08 11:26:29'),
 (169, 24, 24, 'Organization Updated', 'Your organization \'Society of Computer Enthusiast\' has been updated successfully.', 'reaccreditation', 'unread', 6, '2026-03-08 11:26:29'),
 (170, 24, 39, 'Documents Accepted', 'Your submitted documents for organization \'Society of Computer Enthusiast\' have been accepted.', 'accreditation', 'unread', 6, '2026-03-08 11:28:26'),
@@ -745,7 +648,57 @@ INSERT INTO `notifications` (`id`, `recipient_id`, `actor_id`, `title`, `message
 (191, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'Society of Computer Enthusiast\' (2026-2027 • 1st). Request #6 is now Recommended and pending your activation.', 'accreditation', 'read', 6, '2026-03-08 12:10:20'),
 (192, 24, 4, 'Accreditation Activated', 'Your accreditation request for organization \'Society of Computer Enthusiast\' has been activated and is now officially recognized.', 'accreditation', 'unread', 6, '2026-03-08 12:10:35'),
 (193, 25, 4, 'Accreditation Activated', 'Accreditation for \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'unread', 6, '2026-03-08 12:10:35'),
-(194, 39, 4, 'Accreditation Activated', 'Accreditation for \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'unread', 6, '2026-03-08 12:10:35');
+(194, 39, 4, 'Accreditation Activated', 'Accreditation for \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'read', 6, '2026-03-08 12:10:35'),
+(195, 39, 41, 'New Accreditation Request Submitted', 'A new accreditation request for organization \'test\' has been submitted by tester1 tester2.', 'accreditation', 'read', 11, '2026-03-09 07:05:09'),
+(196, 41, 41, 'Accreditation Request Submitted', 'Your accreditation request for \'test\' has been submitted successfully and is now pending review.', 'accreditation', 'read', 11, '2026-03-09 07:05:09'),
+(197, 39, 41, 'Organization Updated', 'Organization \'test\' updated by tester1 tester2.', 'reaccreditation', 'unread', 11, '2026-03-09 07:08:09'),
+(198, 41, 41, 'Organization Updated', 'Your organization \'test\' has been updated successfully.', 'reaccreditation', 'read', 11, '2026-03-09 07:08:09'),
+(199, 39, 41, 'New Accreditation Request Submitted', 'A new accreditation request for organization \'tester\' has been submitted by tester1 tester2.', 'accreditation', 'read', 12, '2026-03-09 07:25:52'),
+(200, 41, 41, 'Accreditation Request Submitted', 'Your accreditation request for \'tester\' has been submitted successfully and is now pending review.', 'accreditation', 'read', 12, '2026-03-09 07:25:52'),
+(201, 24, 31, 'Accomplishment Report Submitted', 'Accomplishment report for event \'relogic test\' has been submitted for review by lorem ipsum.', 'accomplishment', 'unread', 1, '2026-03-12 05:24:08'),
+(202, 24, 31, 'Accomplishment Report Submitted', 'Accomplishment report for event \'final relogic test\' has been submitted for review by lorem ipsum.', 'accomplishment', 'unread', 2, '2026-03-12 05:51:36'),
+(203, 41, 39, 'Document Accepted', 'Your document for requirement \'sample 1\' in organization \'tester\' has been accepted.', 'accreditation', 'read', 12, '2026-03-13 01:25:54'),
+(204, 41, 39, 'Document Accepted', 'Your document for requirement \'sample 1\' in organization \'tester\' has been accepted.', 'accreditation', 'read', 12, '2026-03-13 01:26:06'),
+(205, 41, 39, 'Document Accepted', 'Your document for requirement \'sample 2\' in organization \'tester\' has been accepted.', 'accreditation', 'read', 12, '2026-03-13 01:26:10'),
+(206, 41, 39, 'Document Accepted', 'Your document for requirement \'sample 3\' in organization \'tester\' has been accepted.', 'accreditation', 'read', 12, '2026-03-13 01:26:15'),
+(207, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 1\' in organization \'Society of Computer Enthusiast\' has been accepted.', 'accreditation', 'unread', 6, '2026-03-13 02:02:12'),
+(208, 24, 39, 'Documents Accepted', 'Your submitted documents for organization \'Society of Computer Enthusiast\' have been accepted.', 'accreditation', 'unread', 6, '2026-03-13 02:02:16'),
+(209, 7, 4, 'this is a targeted announcement', 'targeted announcement to Karl: Notice this is a targeted announcement the person being targeted in question is Karl', 'announcement', 'read', 9, '2026-03-15 04:46:32'),
+(210, 39, 7, 'Organization Updated', 'Organization \'Ball Club\' updated by Karl Isiah Poloyapoy.', 'reaccreditation', 'unread', 7, '2026-03-15 07:02:52'),
+(211, 24, 7, 'Organization Updated', 'Organization \'Ball Club\' has been updated by the organization president.', 'reaccreditation', 'unread', 7, '2026-03-15 07:02:52'),
+(212, 7, 7, 'Organization Updated', 'Your organization \'Ball Club\' has been updated successfully.', 'reaccreditation', 'read', 7, '2026-03-15 07:02:52'),
+(213, 39, 7, 'New Accreditation Request Submitted', 'A new accreditation request for organization \'test2\' has been submitted by Karl Isiah Poloyapoy.', 'accreditation', 'read', 13, '2026-03-15 07:31:09'),
+(214, 24, 7, 'Accreditation Request Submitted', 'A new accreditation request for \'test2\' has been submitted and assigned to you as coordinator.', 'accreditation', 'unread', 13, '2026-03-15 07:31:09'),
+(215, 7, 7, 'Accreditation Request Submitted', 'Your accreditation request for \'test2\' has been submitted successfully and is now pending review.', 'accreditation', 'read', 13, '2026-03-15 07:31:09'),
+(216, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 1\' in organization \'test2\' has been accepted.', 'accreditation', 'unread', 13, '2026-03-15 08:09:30'),
+(217, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 2\' in organization \'test2\' has been accepted.', 'accreditation', 'unread', 13, '2026-03-15 08:09:33'),
+(218, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 3\' in organization \'test2\' has been accepted.', 'accreditation', 'unread', 13, '2026-03-15 08:09:35'),
+(219, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'test2\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 13, '2026-03-15 08:09:40'),
+(220, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'test2\' (2026-2027 • 2nd). Request #13 is now Recommended and pending your activation.', 'accreditation', 'read', 13, '2026-03-15 08:09:40'),
+(221, 24, 4, 'Accreditation Activated', 'Your accreditation request for organization \'test2\' is now Active.', 'accreditation', 'unread', 13, '2026-03-15 08:09:58'),
+(222, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 3\' in organization \'Society of Computer Enthusiast\' has been accepted by the Special Admin.', 'accreditation', 'unread', 6, '2026-03-15 08:12:06'),
+(223, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'Society of Computer Enthusiast\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 6, '2026-03-15 08:12:17'),
+(224, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'Society of Computer Enthusiast\' (2026-2027). Request #6 is now Recommended and pending your activation.', 'accreditation', 'unread', 6, '2026-03-15 08:12:17'),
+(225, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'Society of Computer Enthusiast\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 6, '2026-03-15 08:12:19'),
+(226, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'Society of Computer Enthusiast\' (2026-2027). Request #6 is now Recommended and pending your activation.', 'accreditation', 'read', 6, '2026-03-15 08:12:19'),
+(227, 24, 4, 'Accreditation Activated', 'Your accreditation request for organization \'Society of Computer Enthusiast\' is now Active.', 'accreditation', 'unread', 6, '2026-03-15 08:13:52'),
+(228, 24, 39, 'Document Accepted', 'Your document for requirement \'sample 1\' in organization \'Ball Club\' has been accepted by the Special Admin.', 'accreditation', 'unread', 7, '2026-03-15 08:49:27'),
+(229, 24, 39, 'Documents Accepted', '4 of your documents for organization \'Ball Club\' have been accepted by the Special Admin.', 'accreditation', 'unread', 7, '2026-03-15 08:49:34'),
+(230, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'Ball Club\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 7, '2026-03-15 08:49:38'),
+(231, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'Ball Club\' (2026-2027). Request #7 is now Recommended and pending your activation.', 'accreditation', 'read', 7, '2026-03-15 08:49:38'),
+(232, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'Ball Club\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 7, '2026-03-15 08:49:40'),
+(233, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'Ball Club\' (2026-2027). Request #7 is now Recommended and pending your activation.', 'accreditation', 'read', 7, '2026-03-15 08:49:40'),
+(234, 24, 4, 'Accreditation Activated', 'Your accreditation request for organization \'Ball Club\' is now Active.', 'accreditation', 'unread', 7, '2026-03-15 08:50:01'),
+(235, 39, 7, 'Organization Updated', 'Organization \'test2\' updated by Karl Isiah Poloyapoy.', 'reaccreditation', 'unread', 13, '2026-03-15 09:08:06'),
+(236, 24, 7, 'Organization Updated', 'Organization \'test2\' has been updated by the organization president.', 'reaccreditation', 'unread', 13, '2026-03-15 09:08:06'),
+(237, 7, 7, 'Organization Updated', 'Your organization \'test2\' has been updated successfully.', 'reaccreditation', 'read', 13, '2026-03-15 09:08:06'),
+(238, 24, 31, 'Accomplishment Report Submitted', 'Accomplishment report for event \'ambot lang\' has been submitted for review by lorem ipsum.', 'accomplishment', 'unread', 3, '2026-03-17 08:49:08'),
+(239, 24, 39, 'Recommendation Submitted', 'A recommendation letter for \'test2\' has been generated and your request is now marked as Recommended.', 'accreditation', 'unread', 13, '2026-03-18 03:34:45'),
+(240, 4, 39, 'Accreditation Ready for Activation', 'Recommendation submitted for \'test2\' (2026-2027). Request #13 is now Recommended and pending your activation.', 'accreditation', 'unread', 13, '2026-03-18 03:34:45'),
+(241, 24, 4, 'Accreditation Activated', 'Your accreditation request for organization \'test2\' has been activated and is now officially recognized.', 'accreditation', 'unread', 13, '2026-03-18 03:35:07'),
+(242, 7, 4, 'Accreditation Activated', 'Accreditation for \'test2\' is now Active.', 'accreditation', 'unread', 13, '2026-03-18 03:35:07'),
+(243, 39, 4, 'Accreditation Activated', 'Accreditation for \'test2\' is now Active.', 'accreditation', 'unread', 13, '2026-03-18 03:35:07'),
+(244, 24, 31, 'Accomplishment Report Submitted', 'Accomplishment report for event \'test\' has been submitted for review by lorem ipsum.', 'accomplishment', 'unread', 16, '2026-03-18 03:48:47');
 
 -- --------------------------------------------------------
 
@@ -779,9 +732,11 @@ CREATE TABLE `organizations` (
 
 INSERT INTO `organizations` (`id`, `org_type`, `org_name`, `abbreviation`, `logo_path`, `description`, `mission`, `vision`, `objectives`, `advocacy`, `scope`, `program_id`, `membership_fee`, `fee_required`, `status`, `created_by`, `created_at`) VALUES
 (1, 'Organization', 'Society of Computer Enthusiast', 'SOCE', 'assets/uploads/org-logos/org_20260304_040308_a7fcadfb.jpg', 'Society of Computer Enthusiast', 'Our Mission is Lorem ipsum I miss you so much', 'Our Vision is Lorem ipsum', 'Our Objectives are Lorem ipsum', 'We advocate Lorem ipsum', 'Exclusive', 1, 0.00, 100.00, 'Active', 24, '2026-02-06 05:38:35'),
-(2, 'Club', 'Ball Club', 'BC', NULL, NULL, 'we ballin', 'we rollin', 'we dribblin', 'Dear Basketball,\r\n\r\nFrom the moment\r\nI started rolling my dad’s tube socks\r\nAnd shooting imaginary\r\nGame-winning shots\r\nIn the Great Western Forum\r\nI knew one thing was real:\r\n\r\nI fell in love with you.\r\n\r\nA love so deep I gave you my all —\r\nFrom my mind & body\r\nTo my spirit & soul.\r\n\r\nAs a six-year-old boy\r\nDeeply in love with you\r\nI never saw the end of the tunnel.\r\nI only saw myself\r\nRunning out of one.\r\n\r\nAnd so I ran.\r\nI ran up and down every court\r\nAfter every loose ball for you.\r\nYou asked for my hustle\r\nI gave you my heart\r\nBecause it came with so much more.\r\n\r\nI played through the sweat and hurt\r\nNot because challenge called me\r\nBut because YOU called me.\r\nI did everything for YOU\r\nBecause that’s what you do\r\nWhen someone makes you feel as\r\nAlive as you’ve made me feel.\r\n\r\nYou gave a six-year-old boy his Laker dream\r\nAnd I’ll always love you for it.\r\nBut I can’t love you obsessively for much longer.\r\nThis season is all I have left to give.\r\nMy heart can take the pounding\r\nMy mind can handle the grind\r\nBut my body knows it’s time to say goodbye.\r\n\r\nAnd that’s OK.\r\nI’m ready to let you go.\r\nI want you to know now\r\nSo we both can savor every moment we have left together.\r\nThe good and the bad.\r\nWe have given each other\r\nAll that we have.\r\n\r\nAnd we both know, no matter what I do next\r\nI’ll always be that kid\r\nWith the rolled up socks\r\nGarbage can in the corner\r\n:05 seconds on the clock\r\nBall in my hands.\r\n5 … 4 … 3 … 2 … 1\r\n\r\nLove you always,\r\nKobe', 'General', NULL, 50.00, 0.00, 'Active', 28, '2026-02-10 01:52:46'),
+(2, 'Club', 'Ball Club', 'BC', NULL, 'ballin', 'we ballin', 'we rollin', 'we dribblin', 'Dear Basketball,\r\n\r\nFrom the moment\r\nI started rolling my dad’s tube socks\r\nAnd shooting imaginary\r\nGame-winning shots\r\nIn the Great Western Forum\r\nI knew one thing was real:\r\n\r\nI fell in love with you.\r\n\r\nA love so deep I gave you my all —\r\nFrom my mind & body\r\nTo my spirit & soul.\r\n\r\nAs a six-year-old boy\r\nDeeply in love with you\r\nI never saw the end of the tunnel.\r\nI only saw myself\r\nRunning out of one.\r\n\r\nAnd so I ran.\r\nI ran up and down every court\r\nAfter every loose ball for you.\r\nYou asked for my hustle\r\nI gave you my heart\r\nBecause it came with so much more.\r\n\r\nI played through the sweat and hurt\r\nNot because challenge called me\r\nBut because YOU called me.\r\nI did everything for YOU\r\nBecause that’s what you do\r\nWhen someone makes you feel as\r\nAlive as you’ve made me feel.\r\n\r\nYou gave a six-year-old boy his Laker dream\r\nAnd I’ll always love you for it.\r\nBut I can’t love you obsessively for much longer.\r\nThis season is all I have left to give.\r\nMy heart can take the pounding\r\nMy mind can handle the grind\r\nBut my body knows it’s time to say goodbye.\r\n\r\nAnd that’s OK.\r\nI’m ready to let you go.\r\nI want you to know now\r\nSo we both can savor every moment we have left together.\r\nThe good and the bad.\r\nWe have given each other\r\nAll that we have.\r\n\r\nAnd we both know, no matter what I do next\r\nI’ll always be that kid\r\nWith the rolled up socks\r\nGarbage can in the corner\r\n:05 seconds on the clock\r\nBall in my hands.\r\n5 … 4 … 3 … 2 … 1\r\n\r\nLove you always,\r\nKobe', 'General', NULL, 50.00, 0.00, 'Active', 7, '2026-02-10 01:52:46'),
 (3, 'Organization', 'The Cache', 'TC', NULL, NULL, 'lorem ipsum', 'lorem ipsum dems', 'bruhms', 'dums', 'General', NULL, 0.00, 100.00, 'Active', 36, '2026-02-14 11:38:49'),
-(4, 'Club', 'Rotaract', 'Rotaract', NULL, 'rotaract', 'Rotaract', 'Rotaract', 'Rotaract', 'Rotaract', 'General', NULL, 50.00, 0.00, 'Active', 37, '2026-03-06 07:04:56');
+(4, 'Club', 'Rotaract', 'Rotaract', NULL, 'rotaract', 'Rotaract', 'Rotaract', 'Rotaract', 'Rotaract', 'General', NULL, 50.00, 0.00, 'Active', 37, '2026-03-06 07:04:56'),
+(7, 'Organization', 'tester', 'test', NULL, 'asdasd', 'asdasd', 'asdasd', 'asdasd', 'asdasd', 'General', NULL, 0.00, 100.00, 'Active', 41, '2026-03-09 07:25:52'),
+(8, 'Organization', 'test2', 'test2', NULL, 'test', 'test', 'test', 'test', 'test', 'General', NULL, 0.00, 50.00, 'Active', 7, '2026-03-15 07:31:09');
 
 -- --------------------------------------------------------
 
@@ -940,7 +895,18 @@ INSERT INTO `organization_officers` (`id`, `org_id`, `academic_term_id`, `user_i
 (40, 1, 2, 32, 'Vice President', 'lorem ipsum2', 'BSIT 1st Year', 'Active', '2026-02-11 03:37:34'),
 (41, 1, 2, 33, 'Secretary', 'lorem ipsum3', 'BSIT 1st Year', 'Active', '2026-02-11 03:37:34'),
 (42, 1, 2, 34, 'Treasurer', 'lorem ipsum4', 'BSIT 1st Year', 'Active', '2026-02-11 03:37:34'),
-(43, 1, 2, 35, 'Auditor', 'lorem ipsum5', 'BSIT 1st Year', 'Active', '2026-02-11 03:37:34');
+(43, 1, 2, 35, 'Auditor', 'lorem ipsum5', 'BSIT 1st Year', 'Active', '2026-02-11 03:37:34'),
+(58, 7, 4, 43, 'President / Chairperson', 'bad b b', 'BSIT 1st Year', 'Active', '2026-03-09 07:25:52'),
+(59, 7, 4, 42, 'Vice President', 'asdasd asdasd asdasd', 'BSIT 1st Year', 'Active', '2026-03-09 07:25:52'),
+(60, 7, 4, 46, 'Secretary', 'def d d', 'BSIT 1st Year', 'Active', '2026-03-09 07:25:52'),
+(61, 7, 4, 45, 'Treasurer', 'defs d d', 'BSIT 1st Year', 'Active', '2026-03-09 07:25:52'),
+(62, 7, 4, 30, 'Auditor', 'placeholder student', 'BSIT Irregular', 'Active', '2026-03-09 07:25:52'),
+(63, 8, 4, 7, 'President / Chairperson', 'Karl Isiah Poloyapoy', 'BSIT 4th Year', 'Active', '2026-03-15 07:31:09'),
+(64, 8, 4, 27, 'Vice President', 'Edkarmel G. Piscos', 'BSIT 4th Year', 'Active', '2026-03-15 07:31:09'),
+(65, 8, 4, 26, 'Secretary', 'Rhadz Joseph R. Ganzan', 'BSIT 4th Year', 'Active', '2026-03-15 07:31:09'),
+(66, 8, 4, 31, 'Treasurer', 'lorem ipsum', 'BSIT 1st Year', 'Active', '2026-03-15 07:31:09'),
+(67, 8, 4, 38, 'Auditor', 'Balls Balls', 'BSIT 2nd Year', 'Active', '2026-03-15 07:31:09'),
+(68, 8, 4, 33, 'PIO', 'lorem ipsum3', 'BSIT 1st Year', 'Active', '2026-03-15 07:31:09');
 
 -- --------------------------------------------------------
 
@@ -964,23 +930,6 @@ CREATE TABLE `passbook_logs` (
   `recorded_by_user_id` int(10) UNSIGNED NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `passbook_logs`
---
-
-INSERT INTO `passbook_logs` (`id`, `org_id`, `event_id`, `txn_date`, `txn_type`, `title`, `notes`, `amount_in`, `amount_out`, `balance_after`, `ref_table`, `ref_id`, `recorded_by_user_id`, `created_at`) VALUES
-(5, 1, 8, '2026-02-28', 'credit', 'sponsorship', 'asdasd', 500.00, 0.00, 500.00, 'event_credits', 5, 31, '2026-02-28 12:06:51'),
-(6, 1, 8, '2026-02-28', 'debit', 'food', 'asdasdasd', 0.00, 50.00, 450.00, 'event_debits', 4, 31, '2026-02-28 12:07:15'),
-(7, 1, 8, '2026-03-04', 'debit', 'food', 'pizza', 0.00, 200.00, 250.00, 'event_debits', 5, 7, '2026-03-04 10:01:18'),
-(8, 1, 8, '2026-03-04', 'debit', 'food', 'pizza', 0.00, 200.00, 50.00, 'event_debits', 6, 7, '2026-03-04 10:01:18'),
-(9, 1, 10, '2026-03-05', 'debit', 'Bank Withdrawal', 'ambot lang', 0.00, 500.00, -500.00, 'manual', 0, 31, '2026-03-05 10:14:44'),
-(11, 1, 11, '2026-03-05', 'credit', 'sponsorship', NULL, 500.00, 0.00, 0.00, 'event_credits', 6, 31, '2026-03-05 11:35:07'),
-(12, 1, 11, '2026-03-05', 'debit', 'Bank Withdrawal', 'ambot lang', 0.00, 500.00, -500.00, 'manual', 0, 31, '2026-03-05 11:35:41'),
-(13, 1, 15, '2026-03-06', 'credit', 'sponsorship', NULL, 20000.00, 0.00, 20000.00, 'event_credits', 7, 31, '2026-03-06 11:47:57'),
-(14, 1, 15, '2026-03-06', 'debit', 'food', 'Jollibee Chicken Joy', 0.00, 0.20, 19999.80, 'event_debits', 7, 31, '2026-03-06 11:49:40'),
-(15, 1, 15, '2026-03-06', 'debit', 'food', 'Jollibee Chicken Joy', 0.00, 99.00, 19900.80, 'event_debits', 8, 31, '2026-03-06 11:50:31'),
-(18, 1, 16, '2026-03-06', 'debit', 'food', 'Jollibee Chicken Joy', 0.00, 9900.00, -9900.00, 'event_debits', 9, 31, '2026-03-06 15:41:40');
 
 -- --------------------------------------------------------
 
@@ -1033,36 +982,46 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `id_number`, `first_name`, `middle_name`, `last_name`, `suffix`, `email`, `program`, `year_level`, `school_year`, `password_hash`, `role`, `status`, `created_at`, `last_login_at`) VALUES
-(1, '08132004', 'Overseer', NULL, 'Council', NULL, NULL, NULL, NULL, NULL, '$2y$10$ANYKm5EC4yax9RpEg/O/w.6s47LonBgX1StGlY1xLkADeTTxaC1fe', 'overseer', 'Active', '2026-01-14 20:51:45', '2026-03-05 16:52:44'),
+(1, '08132004', 'Overseer', NULL, 'Council', NULL, NULL, NULL, NULL, NULL, '$2y$10$ANYKm5EC4yax9RpEg/O/w.6s47LonBgX1StGlY1xLkADeTTxaC1fe', 'overseer', 'Active', '2026-01-14 20:51:45', '2026-03-15 17:28:50'),
 (2, '0000', 'Karl Isiah', 'B.', 'Poloyapoy', NULL, NULL, NULL, NULL, NULL, '$2y$10$ByWAM4pvRkEhZezqAcCKROvVG7c0WE2YGMZZwGg6c9P4xf3A8DJhS', 'super_admin', 'Inactive', '2026-01-14 21:02:40', NULL),
 (3, '2025303899', 'Special', NULL, 'Admin', NULL, 'special.admin@example.com', NULL, NULL, '2025-2026', '$2y$10$ZdhSrrvn0IZpC2KYhd1w5ejtyeCNn/16xTAG5EgB5oO//5WXU5fD2', 'special_admin', 'Inactive', '2026-01-14 21:02:51', '2026-03-04 16:36:34'),
-(4, '11111', 'Super', NULL, 'Admin', NULL, NULL, NULL, NULL, NULL, '$2y$10$5lulslarNJc6jX3ANagwHuJnJFMXZnieADuL1QRrHMnYMPlSEruXy', 'super_admin', 'Active', '2026-01-17 13:59:23', '2026-03-08 20:10:25'),
+(4, '11111', 'Super', NULL, 'Admin', NULL, NULL, NULL, NULL, NULL, '$2y$10$5lulslarNJc6jX3ANagwHuJnJFMXZnieADuL1QRrHMnYMPlSEruXy', 'super_admin', 'Active', '2026-01-17 13:59:23', '2026-03-18 11:34:59'),
 (5, '2222', 'Tester', NULL, 'Tester', NULL, NULL, NULL, NULL, NULL, '$2y$10$LxP4FATT4ltW.dCzlT61N.hXpeFL7miPijeSbdzB/3dwXhx8eYoxe', 'super_admin', 'Inactive', '2026-01-17 15:30:41', NULL),
 (6, '1231233', 'this', 'is', 'just a test', NULL, NULL, NULL, NULL, NULL, '$2y$10$GT/xohCTfI3m8rrejTioG.y6CVkUoQ1rioSzf/HfNAx/UYy3JY1b2', 'special_admin', 'Inactive', '2026-01-18 08:06:45', NULL),
-(7, '2022303890', 'Karl Isiah', 'Bagaipo', 'Poloyapoy', NULL, 'poloyapoykarlisiah17@gmail.com', 'BSIT', '4th Year', '2025-2026', '$2y$10$2iUt2IXtnN1pxP6CrmbS6exAP/PJ4XDLrQdTEk4q9igS8EG2w2qjO', 'student', 'Active', '2026-01-20 19:04:36', '2026-03-08 18:48:44'),
+(7, '2022303890', 'Karl Isiah', 'Bagaipo', 'Poloyapoy', '', 'poloyapoykarlisiah17@gmail.com', 'BSIT', '4th Year', '2025-2026', '$2y$10$w0WZfTHGmeG8iUnT1EBRlezr8P6/ToAI.dI.E12PqVPqVAK3lE1Ri', 'org_president', 'Active', '2026-01-20 19:04:36', '2026-03-18 11:47:49'),
 (8, '2022303891', 'testing', 'as', 'tester', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$ob1yPcLLUNiHBd/w7NMyM.aWKf05NBsdGjURtkdbqQiZa9LGeP5ou', 'student', 'Active', '2026-01-20 19:07:24', NULL),
 (9, '1234567890', 'testing', 'test', 'test', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$CPirpmiZ.BTDuGQd1fmQTuHKYygBiEgSBrfLXMCecdqc2ffU507au', 'student', 'Active', '2026-01-21 07:32:27', NULL),
 (10, '2022303892', 'testing', 'test', 'test', NULL, 'example@gmail.com', 'BSIT', '1st Year', '2025-2026', '$2y$10$7cuTRyuFQwUuyRt4e7xme.2qQ3tTLbvYknzHJEA75nC04Gr1cxX4a', 'student', 'Active', '2026-01-23 19:00:00', NULL),
 (19, '2022303894', 'testier', 'test', 'test', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$xjqeEbzuBlGM2VNd1pm8Z.g16uqC3ppMdia0lI2j.Bg4qKvikMO7O', 'student', 'Active', '2026-01-23 19:30:08', NULL),
-(22, '2022303895', 'final test', 'test', 'test', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$psFxPhy28olE2B4x9jsCr.GggZ8Q/XgCrJF2DsTsOF70B7XL.r3/a', 'student', 'Active', '2026-01-23 21:06:41', '2026-03-06 13:24:19'),
+(22, '2022303895', 'final test', 'test', 'test', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$psFxPhy28olE2B4x9jsCr.GggZ8Q/XgCrJF2DsTsOF70B7XL.r3/a', 'student', 'Active', '2026-01-23 21:06:41', '2026-03-15 21:51:44'),
 (23, '2022303896', 'test', NULL, 'test', NULL, NULL, 'BSIT', '1st Year', '2025-2026', '$2y$10$rpOuXMmlWkHPxnrY7j4FpuiRXrm4hjkRQrDtjybf1XZS12hw8.DDi', 'student', 'Active', '2026-01-24 07:49:53', NULL),
-(24, '2022313890', 'tester', 'test', 'tester', NULL, 'testing@gmail.com', 'BSIT', NULL, NULL, '$2y$10$uLxSSeRHx0xnoRJw9n0Skebu6CLtIDJDGbNGhozcTRFs1qWrPoiKq', 'faculty_admin', 'Active', '2026-01-24 11:49:14', '2026-03-08 20:05:20'),
+(24, '2022313890', 'tester', 'test', 'tester', NULL, 'testing@gmail.com', 'BSIT', NULL, NULL, '$2y$10$uLxSSeRHx0xnoRJw9n0Skebu6CLtIDJDGbNGhozcTRFs1qWrPoiKq', 'faculty_admin', 'Active', '2026-01-24 11:49:14', '2026-03-18 11:49:03'),
 (25, '2024123456', 'testing', NULL, 'tester', NULL, NULL, NULL, NULL, NULL, '$2y$10$g9zEyD9FO8re61XQILgwsuXzLQDMWzqKeZESD5HHChLqv/4R66aMG', 'moderator', 'Active', '2026-01-24 13:11:31', NULL),
 (26, '2022303202', 'Rhadz Joseph', 'R.', 'Ganzan', NULL, NULL, 'BSIT', '4th Year', '2025-2026', '$2y$10$3Q/.A/4Ooxyc2IgPN52QXu4QnRNU6wFClsLAXdWYgmQTzmB42kODm', 'student', 'Active', '2026-02-06 13:35:24', '2026-03-04 16:34:58'),
 (27, '2022303123', 'Edkarmel', 'G.', 'Piscos', NULL, NULL, 'BSIT', '4th Year', '2025-2026', '$2y$10$PllYQ2WyBxoRkhJU1rjPOOF.RymI1I1.AaOIPBz8t91g.nGJ3mIfO', 'student', 'Active', '2026-02-06 13:36:03', NULL),
 (28, '2004', 'buns', NULL, 'buns', NULL, NULL, NULL, NULL, NULL, '$2y$10$q.JeoGpF6/XP/r9Jf5Jfwu0ZoLCwKcb1pN.4xX3XaYLEwxjvl1iT.', 'faculty_admin', 'Active', '2026-02-10 09:49:13', '2026-02-10 19:13:17'),
 (29, '2005', 'mods', NULL, 'mods', NULL, NULL, NULL, NULL, NULL, '$2y$10$v8PjKSe6SpKksdOO2eOveOHW3ef7PgJSxnLGSwnW0ZsLKZGk7l1l.', 'moderator', 'Active', '2026-02-10 09:49:45', '2026-02-10 16:44:03'),
-(30, '2022123456', 'placeholder', NULL, 'student', NULL, NULL, 'BSIT', 'Irregular', '2026-2027', '$2y$10$Y/Uzjeut/E9zb4r1wpTuBe3a2xnajhfLpdLACAZPdHzRPP85407zy', 'student', 'Active', '2026-02-10 12:42:52', '2026-03-04 16:40:02'),
-(31, '1234', 'lorem', NULL, 'ipsum', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$CM8tLK4kxSkyV5iJzR9E/OTbKGE6Lymevr.hinesoUAYRDovnmR6i', 'student', 'Active', '2026-02-11 11:28:02', '2026-03-08 18:48:58'),
-(32, '123', 'lorem', NULL, 'ipsum2', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$E5P7APdlKWKNfNSH1DpzrOyn95HZ5RUFQhqNn1sA9unL6LYzCiYcW', 'student', 'Active', '2026-02-11 11:28:38', '2026-03-04 20:54:46'),
+(30, '2022123456', 'placeholder', NULL, 'student', NULL, NULL, 'BSIT', 'Irregular', '2026-2027', '$2y$10$Y/Uzjeut/E9zb4r1wpTuBe3a2xnajhfLpdLACAZPdHzRPP85407zy', 'student', 'Active', '2026-02-10 12:42:52', '2026-03-13 10:17:51'),
+(31, '1234', 'lorem', NULL, 'ipsum', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$CM8tLK4kxSkyV5iJzR9E/OTbKGE6Lymevr.hinesoUAYRDovnmR6i', 'student', 'Active', '2026-02-11 11:28:02', '2026-03-21 11:16:20'),
+(32, '123', 'lorem', NULL, 'ipsum2', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$E5P7APdlKWKNfNSH1DpzrOyn95HZ5RUFQhqNn1sA9unL6LYzCiYcW', 'student', 'Active', '2026-02-11 11:28:38', '2026-03-15 16:17:47'),
 (33, '12345', 'lorem', NULL, 'ipsum3', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$Lx7o6G3WXZ515eD9tnpnJ.1dibraMU707qDQ6IKCzM3ezhUFKQ3IG', 'student', 'Active', '2026-02-11 11:29:24', NULL),
 (34, '123456', 'lorem', NULL, 'ipsum4', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$Ji7zY1W7f0q2JTQlzRM8RuI3RhtnwHlgdm2txoKK.F103FT.6fFCy', 'student', 'Active', '2026-02-11 11:29:43', '2026-03-04 09:41:08'),
 (35, '1234567', 'lorem', NULL, 'ipsum5', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$Gz1abyvU8.LHQcM3xszfouDVSBsYU63isbGF8X7cFZBxsdWTp99.6', 'student', 'Active', '2026-02-11 11:34:16', '2026-02-14 15:22:41'),
 (36, '3212', 'testing', NULL, 'test', NULL, NULL, NULL, NULL, NULL, '$2y$10$Wj8OFoD6NcEQcDVRyradWe1WfHC7vTp2q.vEFh0DN8wMfiTNnA0Xi', 'faculty_admin', 'Active', '2026-02-14 19:35:19', '2026-02-14 19:36:31'),
-(37, '67', 'admin', NULL, 'admin', NULL, NULL, NULL, NULL, NULL, '$2y$10$mnUlLfWevNKcSS7rpHjmcunL/2a2TeqbVOUgVRdR4Pzb2JALQP/wK', 'faculty_admin', 'Active', '2026-03-04 12:37:41', '2026-03-06 15:12:07'),
-(38, '69', 'Balls', NULL, 'Balls', NULL, 'sigmaballs@gmail.com', 'BSIT', '2nd Year', '2026-2027', '$2y$10$J0mGrA0TskefFVz6av8hYeZ3foCdqbXZBb6tle6APx.wtPSZFvmcK', 'student', 'Pending', '2026-03-04 13:41:31', '2026-03-07 17:41:39'),
-(39, '2026', 'Glenda', NULL, 'Colalo', NULL, NULL, NULL, NULL, NULL, '$2y$10$hxZMMHklWrMNIc62EERz.uYUQQGYUbZvcdDCtiL2JoETvhFtnpJKu', 'special_admin', 'Active', '2026-03-04 16:37:41', '2026-03-08 20:10:13'),
-(40, '3172744', 'John', NULL, 'Doe', NULL, NULL, NULL, NULL, NULL, '$2y$10$KN6BHjr2Pjg7Z57k/hfirep9fUxgwcgqBWAizcPD5dfumed5FQgty', 'faculty_admin', 'Active', '2026-03-06 15:12:58', '2026-03-07 17:42:18');
+(37, '67', 'admin', NULL, 'admin', NULL, NULL, NULL, NULL, NULL, '$2y$10$mnUlLfWevNKcSS7rpHjmcunL/2a2TeqbVOUgVRdR4Pzb2JALQP/wK', 'faculty_admin', 'Archived', '2026-03-04 12:37:41', '2026-03-09 09:34:54'),
+(38, '69', 'Balls', NULL, 'Balls', NULL, 'sigmaballs@gmail.com', 'BSIT', '2nd Year', '2026-2027', '$2y$10$J0mGrA0TskefFVz6av8hYeZ3foCdqbXZBb6tle6APx.wtPSZFvmcK', 'student', 'Active', '2026-03-04 13:41:31', '2026-03-09 09:35:29'),
+(39, '2026', 'Glenda', NULL, 'Colalo', NULL, NULL, NULL, NULL, NULL, '$2y$10$hxZMMHklWrMNIc62EERz.uYUQQGYUbZvcdDCtiL2JoETvhFtnpJKu', 'special_admin', 'Active', '2026-03-04 16:37:41', '2026-03-18 11:34:29'),
+(40, '3172744', 'John', NULL, 'Doe', NULL, NULL, NULL, NULL, NULL, '$2y$10$KN6BHjr2Pjg7Z57k/hfirep9fUxgwcgqBWAizcPD5dfumed5FQgty', 'faculty_admin', 'Archived', '2026-03-06 15:12:58', '2026-03-07 17:42:18'),
+(41, '1', 'tester1', 'tester', 'tester2', NULL, NULL, NULL, NULL, NULL, '$2y$10$PwESJ3X3iCUG1IIrhaCByOZTFyGXR1y2z4g1gVuM.hjVQA4wEiZom', 'faculty_admin', 'Active', '2026-03-09 14:56:44', '2026-03-15 20:08:33'),
+(42, '2', 'asdasd', 'asdasd', 'asdasd', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$eXPGGVVptSEoo4QxsGFvvOKaAQycAb3L8/3t1hFbTTrrlOljJKDky', 'student', 'Active', '2026-03-09 14:57:50', NULL),
+(43, '3', 'bad', 'b', 'b', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$vYeiKomMrah.1g9iiwNgKuPW96D492YxmdJ4JI1yw.s8Oax586r8.', 'student', 'Active', '2026-03-09 14:58:13', NULL),
+(44, '4', 'cad', 'c', 'c', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$fl8ByDfR0Vv82ntlTmKKUerkOckmgl9vIBQA5w13IuSYpFjaYKPWK', 'student', 'Active', '2026-03-09 14:58:30', NULL),
+(45, '5', 'defs', 'd', 'd', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$R/BbX.Smk2K3YRWxQ42y7edIvZ2L9kF3Ic5OfSBwpUTLkv7NNvq/q', 'student', 'Active', '2026-03-09 14:58:55', NULL),
+(46, '6', 'def', 'd', 'd', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$DDfZGhl6SLsetU8GDX4i4.EE9OSJI8dUaylo7lmTL3PmPGRYby3/G', 'student', 'Active', '2026-03-09 14:59:19', NULL),
+(47, '7', 'efg', 'e', 'e', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$fsx7UEIjaPvmCBaobWOrCOk3RY5X2ANF7JS16ZcvOQh9zUqRFOdpS', 'student', 'Active', '2026-03-09 14:59:37', NULL),
+(48, '9', 'placeholder', NULL, 'placeholder', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$XBpbJF.9rVNH/S1vKl81oOkOglPp97hFoMrM7k3Ff4dGbeMYvoAjq', 'student', 'Active', '2026-03-13 10:19:53', '2026-03-15 20:12:15'),
+(49, '66', 'test', 'er', 'test', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$G2zg8q6suvf7qJ35RhY5J.nKc.wQCNA2zHrE9BTD4d.UBhifnl07O', 'student', 'Pending', '2026-03-15 18:15:40', NULL),
+(50, '65', 'test', 'testtt', 'test', NULL, NULL, 'BSIT', '1st Year', '2026-2027', '$2y$10$xzuJY5v6Ir2IzIAXWS3JiOGJ2YghQhuusmM8eU7/pOf28arKOHIAG', 'org_president', 'Active', '2026-03-15 18:17:30', NULL);
 
 --
 -- Indexes for dumped tables
@@ -1131,7 +1090,8 @@ ALTER TABLE `announcements`
   ADD KEY `idx_org_term` (`org_id`,`academic_term_id`),
   ADD KEY `idx_target_user` (`target_user_id`),
   ADD KEY `fk_ann_created_by` (`created_by`),
-  ADD KEY `fk_ann_reviewed_by` (`reviewed_by`);
+  ADD KEY `fk_ann_reviewed_by` (`reviewed_by`),
+  ADD KEY `idx_target_program` (`target_program`);
 
 --
 -- Indexes for table `event_accomplishments`
@@ -1167,6 +1127,13 @@ ALTER TABLE `event_events`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_event_org` (`org_id`),
   ADD KEY `idx_event_author` (`author_user_id`);
+
+--
+-- Indexes for table `event_proposed_credits`
+--
+ALTER TABLE `event_proposed_credits`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_proposed_credit_event` (`event_id`);
 
 --
 -- Indexes for table `event_proposed_expenses`
@@ -1302,13 +1269,13 @@ ALTER TABLE `academic_terms`
 -- AUTO_INCREMENT for table `accreditation_requests`
 --
 ALTER TABLE `accreditation_requests`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `accreditation_request_documents`
 --
 ALTER TABLE `accreditation_request_documents`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT for table `accreditation_requirements`
@@ -1332,55 +1299,61 @@ ALTER TABLE `admin_role_history`
 -- AUTO_INCREMENT for table `announcements`
 --
 ALTER TABLE `announcements`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `event_accomplishments`
 --
 ALTER TABLE `event_accomplishments`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `event_credits`
 --
 ALTER TABLE `event_credits`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- AUTO_INCREMENT for table `event_debits`
 --
 ALTER TABLE `event_debits`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `event_events`
 --
 ALTER TABLE `event_events`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+
+--
+-- AUTO_INCREMENT for table `event_proposed_credits`
+--
+ALTER TABLE `event_proposed_credits`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `event_proposed_expenses`
 --
 ALTER TABLE `event_proposed_expenses`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `e_signatures`
 --
 ALTER TABLE `e_signatures`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=195;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=245;
 
 --
 -- AUTO_INCREMENT for table `organizations`
 --
 ALTER TABLE `organizations`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `organization_fee_payments`
@@ -1410,13 +1383,13 @@ ALTER TABLE `organization_membership_receipts`
 -- AUTO_INCREMENT for table `organization_officers`
 --
 ALTER TABLE `organization_officers`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=53;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=69;
 
 --
 -- AUTO_INCREMENT for table `passbook_logs`
 --
 ALTER TABLE `passbook_logs`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `programs`
@@ -1428,7 +1401,7 @@ ALTER TABLE `programs`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=51;
 
 --
 -- Constraints for dumped tables
@@ -1510,6 +1483,12 @@ ALTER TABLE `event_debits`
 ALTER TABLE `event_events`
   ADD CONSTRAINT `fk_event_author_user` FOREIGN KEY (`author_user_id`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_event_org` FOREIGN KEY (`org_id`) REFERENCES `organizations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `event_proposed_credits`
+--
+ALTER TABLE `event_proposed_credits`
+  ADD CONSTRAINT `fk_proposed_credit_event` FOREIGN KEY (`event_id`) REFERENCES `event_events` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `event_proposed_expenses`

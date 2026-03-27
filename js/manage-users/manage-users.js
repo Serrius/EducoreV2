@@ -7,6 +7,7 @@
   console.log("User Student:", window.UsersStudent);
   console.log("User Faculty Admin:", window.UsersFacultyAdmin);
   console.log("User Moderator:", window.UsersModerator);
+  console.log("User President:", window.UsersPresident);
 
   const API_URL = "php/manage-users.php";
 
@@ -175,7 +176,7 @@
     if (detailsContainer && itemsEl) {
       if (Array.isArray(config.items) && config.items.length > 0) {
         itemsEl.innerHTML = config.items
-          .slice(0, 5) // Show max 5 items
+          .slice(0, 5)
           .map(item => `<div class="mb-1">${escapeHtml(item)}</div>`)
           .join("");
         detailsContainer.classList.remove("d-none");
@@ -201,7 +202,6 @@
     if (actionBtn) {
       actionBtn.textContent = config.btnText || "Confirm";
       
-      // Set button color based on config
       const btnClasses = {
         primary: "btn-primary",
         success: "btn-success", 
@@ -210,14 +210,11 @@
         info: "btn-info"
       };
       
-      // Remove existing button color classes
       actionBtn.classList.remove("btn-primary", "btn-success", "btn-danger", "btn-warning", "btn-info", "btn-outline-secondary");
       
-      // Add new class
       const btnClass = config.btnClass || "primary";
       actionBtn.classList.add(btnClasses[btnClass] || "btn-primary");
       
-      // Set icon if provided
       const currentIcon = actionBtn.querySelector(".bi");
       if (currentIcon) {
         currentIcon.remove();
@@ -229,7 +226,6 @@
         actionBtn.prepend(icon);
       }
       
-      // Clear previous listeners and add new one
       const newActionBtn = actionBtn.cloneNode(true);
       actionBtn.parentNode.replaceChild(newActionBtn, actionBtn);
       
@@ -238,27 +234,21 @@
         
         if (typeof config.onConfirm === "function") {
           try {
-            // Show loading state
             const originalText = newActionBtn.innerHTML;
             newActionBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...`;
-            newActionBtn.disabled = true;
-            
             await config.onConfirm();
             
-            // Hide modal
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) {
               modalInstance.hide();
             }
           } catch (error) {
-            // Restore button state on error
             newActionBtn.innerHTML = originalText;
             newActionBtn.disabled = false;
             console.error("Confirm action failed:", error);
             safeShowError(error?.message || "Action failed. Please try again.");
           }
         } else {
-          // Just close the modal if no callback
           const modalInstance = bootstrap.Modal.getInstance(modalEl);
           if (modalInstance) {
             modalInstance.hide();
@@ -282,34 +272,28 @@
       });
     }
 
-    // Show the modal
     showModal("modalConfirmAction");
   }
 
   function showSuccessModal(config) {
     const modalEl = getModalEl("modalSuccess");
     if (!modalEl) {
-      // Fallback to alert if modal doesn't exist
       safeShowSuccess(config.message || "Operation completed successfully.");
       return;
     }
 
-    // Set title
     const titleEl = qs("#successModalTitle", modalEl);
     if (titleEl) titleEl.textContent = config.title || "Success";
 
-    // Set message
     const messageEl = qs("#successModalMessage", modalEl);
     if (messageEl) messageEl.textContent = config.message || "Operation completed successfully.";
 
-    // Set icon if provided
     const iconEl = qs("#successModalIcon", modalEl);
     if (iconEl && config.icon) {
       iconEl.className = `bi bi-${config.icon}`;
       iconEl.classList.add("text-success");
     }
 
-    // Configure OK button
     const okBtn = qs("#successModalOkBtn", modalEl);
     if (okBtn) {
       const newOkBtn = okBtn.cloneNode(true);
@@ -324,7 +308,6 @@
       });
     }
 
-    // Show the modal
     showModal("modalSuccess");
   }
 
@@ -458,7 +441,6 @@
   }
 
   function programLabel(p) {
-    // label stays "BSIT — Bachelor..." but VALUE will be "BSIT"
     if (p.abbreviation && p.program_name) return `${p.abbreviation} — ${p.program_name}`;
     return p.abbreviation || p.program_name || "—";
   }
@@ -475,7 +457,6 @@
 
     const programs = normalizePrograms(state.meta.programs);
 
-    // current value might be full program name (old data) or abbreviation (new data)
     const currentValRaw = String(sel.value ?? "").trim();
     const currentProg = currentValRaw ? findProgramByAny(currentValRaw) : null;
     const currentVal = currentProg?.abbreviation ? currentProg.abbreviation : currentValRaw;
@@ -487,14 +468,12 @@
       if (!abbr) continue;
 
       const opt = document.createElement("option");
-      opt.value = abbr; // ✅ IMPORTANT: submit ABBREVIATION
+      opt.value = abbr;
       opt.textContent = programLabel(p);
-      // keep full name available if needed later
       opt.dataset.programName = p.program_name || "";
       sel.appendChild(opt);
     }
 
-    // Restore selection
     if (!force && currentVal) {
       const exists = Array.from(sel.options).some((o) => o.value === currentVal);
       if (exists) sel.value = currentVal;
@@ -540,13 +519,10 @@
 
   // -------------------------
   // Program abbreviation helper (TABLE display)
-  // Now that DB/submit should be abbreviation, this becomes very straightforward.
-  // Still supports old records that stored full names.
   // -------------------------
   function programAbbrevFromRow(row) {
     if (!row) return "—";
 
-    // Prefer known abbreviation-like fields
     const candidates = [
       row.program_abbr,
       row.program_abbreviation,
@@ -562,18 +538,15 @@
     const raw = String(row.program || "").trim();
     if (!raw) return "—";
 
-    // If already looks like an abbreviation, keep it
     if (raw.length <= 10 && !/\s/.test(raw)) return raw;
 
-    // Map full name -> abbreviation using meta
     const found = findProgramByAny(raw);
     if (found?.abbreviation) return found.abbreviation;
 
-    // If "BSIT (Bachelor...)" -> take before "("
     const beforeParen = raw.split("(")[0].trim();
     if (beforeParen && beforeParen.length <= 10 && !/\s/.test(beforeParen)) return beforeParen;
 
-    return raw; // last resort
+    return raw;
   }
 
   // -------------------------
@@ -616,28 +589,21 @@
     getMeta: () => state.meta,
     populateProgramSelect,
 
-    // modal helpers
     getModalEl,
     getOrCreateModal,
     showModal,
     hideModal,
     setModalHtml,
     
-    // NEW: Global modal utilities
     showConfirmModal,
     showSuccessModal,
 
-    // program helpers
     programAbbrevFromRow,
     findProgramByAny,
   };
 
   // -------------------------
-  // Init modules
-  // -------------------------
-  
-  // -------------------------
-  // Event isolation (prevents Students handlers from firing on Staff tables)
+  // Event isolation
   // -------------------------
   function _isInStaffArea(target) {
     if (!target) return false;
@@ -654,7 +620,6 @@
 
   function _wrapStudentDocumentClickListener(fn) {
     if (typeof fn !== "function") return fn;
-    // Guard wrapper: ignore student action clicks when they're inside staff tables
     return function (e) {
       try {
         if (_isStudentActionClick(e.target) && _isInStaffArea(e.target)) return;
@@ -679,12 +644,9 @@
   }
 
   function _patchStudentClickDelegation(addedListeners) {
-    // During students.init, students.js registers a document click handler for ".mu-*" actions.
-    // We replace that handler with a wrapped version that ignores staff-table clicks.
     for (const it of addedListeners) {
       if (it.type !== "click" || typeof it.listener !== "function") continue;
 
-      // Heuristic: only wrap handlers that look like the students row-action delegation
       const src = Function.prototype.toString.call(it.listener);
       const looksLikeStudentRowHandler =
         src.includes(".mu-view-one") || src.includes(".mu-edit-one") || src.includes("openViewStudent") || src.includes("openEditStudent");
@@ -701,7 +663,7 @@
   }
 
   // -------------------------
-  // Modal collision guard (prevents Add Student + Add Staff opening together)
+  // Modal collision guard
   // -------------------------
   function bindAddModalCollisionGuard() {
     if (window.__MU_ADD_GUARD_BOUND) return;
@@ -717,7 +679,6 @@
     }
 
     function settle() {
-      // If multiple add modals are visible for any reason, keep only the last intent.
       const student = qs("#modalAddStudent");
       const faculty = qs("#modalAddFaculty");
       const moderator = qs("#modalAddModerator");
@@ -738,8 +699,6 @@
       }
     }
 
-
-    // Capture intent early
     document.addEventListener("click", (e) => {
       const t = e.target;
       if (!t) return;
@@ -747,15 +706,13 @@
       if (t.closest("#btnAddStudentTab")) window.__MU_LAST_ADD_INTENT = "student";
       if (t.closest("#btnAddFacultyTab, #btnAddModeratorTab")) window.__MU_LAST_ADD_INTENT = "staff";
 
-      // After Bootstrap's data-api runs, clean up any double-open
       setTimeout(settle, 0);
     }, true);
   }
 
-function initModules() {
+  function initModules() {
     bindAddModalCollisionGuard();
 
-    // Students: intercept document click delegation and wrap it so it won't fire on staff tables
     if (window.UsersStudent?.init) {
       const added = _interceptDocumentAddListeners(() => window.UsersStudent.init(Shared));
       _patchStudentClickDelegation(added);
@@ -768,9 +725,12 @@ function initModules() {
 
     if (window.UsersModerator?.init) window.UsersModerator.init(Shared);
     else console.warn("[ManageUsers] moderator.js missing (window.UsersModerator).");
+    
+    if (window.UsersPresident?.init) window.UsersPresident.init(Shared);
+    else console.warn("[ManageUsers] presidents.js missing (window.UsersPresident).");
   }
 
-
+  // FIXED: Single refreshAll function that includes all modules
   async function refreshAll() {
     try {
       await loadMeta();
@@ -780,11 +740,14 @@ function initModules() {
       await window.UsersStudent?.refresh?.();
       await window.UsersFacultyAdmin?.refresh?.();
       await window.UsersModerator?.refresh?.();
+      await window.UsersPresident?.refresh?.();
 
       applyActiveTermToStudentSchoolYear({ force: false });
       populateProgramSelect({ force: true, debugTag: "refreshAll:afterModules" });
 
       cleanupModalBackdrops();
+      
+      console.log("[ManageUsers] All modules refreshed successfully");
     } catch (e) {
       safeShowError(e?.message || "Failed to refresh Manage Users.");
     }
@@ -799,9 +762,8 @@ function initModules() {
     });
   }
 
-
   // -------------------------
-  // Exclusive Add buttons (prevents Add Student + Add Staff opening together)
+  // Exclusive Add buttons
   // -------------------------
   function bindExclusiveAddButtons() {
     if (window.__MU_EXCLUSIVE_ADD_BOUND) return;
@@ -815,7 +777,6 @@ function initModules() {
     }
 
     function openStudentAdd(e) {
-      // Capture-phase handler: prevent Bootstrap data-api from also firing other modal triggers
       e.preventDefault();
       e.stopPropagation();
       if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
@@ -828,7 +789,6 @@ function initModules() {
     const btnStudent = qs("#btnAddStudentTab");
     if (btnStudent) btnStudent.addEventListener("click", openStudentAdd, true);
 
-    // Hard mutual exclusion even if something else tries to open both
     const addStudentEl = qs("#modalAddStudent");
     const addFacultyEl = qs("#modalAddFaculty");
     const addModeratorEl = qs("#modalAddModerator");
@@ -850,7 +810,7 @@ function initModules() {
       addModeratorEl.addEventListener("show.bs.modal", () => hideIfShown("#modalAddStudent"));
       addModeratorEl.addEventListener("shown.bs.modal", () => hideIfShown("#modalAddStudent"));
     }
-}
+  }
 
   function bindAddStudentModalAutofill() {
     const modalEl = qs("#modalAddStudent");
@@ -881,33 +841,31 @@ function initModules() {
   }
 
   // -------------------------
-// Listen to notification "open user" event
-// -------------------------
-function bindNotifOpenUserListener() {
-  if (window.__MU_NOTIF_OPEN_USER_BOUND) return;
-  window.__MU_NOTIF_OPEN_USER_BOUND = true;
+  // Listen to notification "open user" event
+  // -------------------------
+  function bindNotifOpenUserListener() {
+    if (window.__MU_NOTIF_OPEN_USER_BOUND) return;
+    window.__MU_NOTIF_OPEN_USER_BOUND = true;
 
-  window.addEventListener("notif:openUser", async (ev) => {
-    try {
-      const detail = ev?.detail || {};
-      const userId = String(detail.userId || "").trim();
-      const idNumber = String(detail.idNumber || "").trim();
+    window.addEventListener("notif:openUser", async (ev) => {
+      try {
+        const detail = ev?.detail || {};
+        const userId = String(detail.userId || "").trim();
+        const idNumber = String(detail.idNumber || "").trim();
 
-      // Make sure Manage Users is fully loaded + tables fetched
-      await refreshAll();
+        await refreshAll();
 
-      // Prefer students module
-      if (window.UsersStudent?.openFromNotification) {
-        await window.UsersStudent.openFromNotification({ userId, idNumber });
-        return;
+        if (window.UsersStudent?.openFromNotification) {
+          await window.UsersStudent.openFromNotification({ userId, idNumber });
+          return;
+        }
+
+        safeShowError("Students module can't open notification user yet (missing openFromNotification).");
+      } catch (e) {
+        safeShowError(e?.message || "Failed to open user from notification.");
       }
-
-      safeShowError("Students module can't open notification user yet (missing openFromNotification).");
-    } catch (e) {
-      safeShowError(e?.message || "Failed to open user from notification.");
-    }
-  });
-}
+    });
+  }
 
   function init() {
     bindExclusiveAddButtons();
@@ -918,7 +876,6 @@ function bindNotifOpenUserListener() {
 
     bindNotifOpenUserListener();
   }
-  
 
   window.ManageUsers = {
     init,

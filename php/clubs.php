@@ -740,16 +740,22 @@ try {
       $memberCnt = (int)($stCount->fetchColumn() ?: 0);
 
       $stMem = $pdo->prepare("
-        SELECT id, academic_term_id, status, fee_amount, fee_paid, fee_paid_at, requested_at, reviewed_by, reviewed_at
-        FROM organization_memberships
-        WHERE org_id = ?
-          AND student_user_id = ?
-          AND academic_term_id IN $inSql
-        ORDER BY academic_term_id DESC, id DESC
+        SELECT m.id, m.academic_term_id, m.status, m.fee_amount, m.fee_paid, m.fee_paid_at,
+               m.requested_at, m.reviewed_by, m.reviewed_at,
+               r.id AS receipt_id, r.receipt_no, r.amount AS receipt_amount, r.paid_at AS receipt_paid_at
+        FROM organization_memberships m
+        LEFT JOIN organization_membership_receipts r ON r.membership_id = m.id
+        WHERE m.org_id = ?
+          AND m.student_user_id = ?
+          AND m.academic_term_id IN $inSql
+        ORDER BY m.academic_term_id DESC, m.id DESC
         LIMIT 1
       ");
       $stMem->execute(array_merge([(int)$orgId, (int)$uid], $inParams));
       $membership = $stMem->fetch(PDO::FETCH_ASSOC) ?: null;
+      if ($membership && !empty($membership['receipt_id'])) {
+        $membership['print_receipt_url'] = "php/print-membership-receipt.php?receipt_id=" . (int)$membership['receipt_id'];
+      }
 
       $isOfficer = is_officer_for_year($pdo, $orgId, $schoolYear, $termIds, $uid);
       $pos = $isOfficer ? officer_position_year($pdo, $orgId, $schoolYear, $termIds, $uid) : null;

@@ -177,7 +177,211 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
     color: #0f5132;
     border: 1px solid #a3cfbb;
   }
-  </style>
+
+  .student-search-container,
+  .coordinator-search-container {
+    position: relative;
+  }
+
+  .student-search-results,
+  .coordinator-search-results {
+    position: absolute;
+    z-index: 1000;
+    width: 100%;
+    max-height: 250px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .student-search-item,
+  .coordinator-search-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .student-search-item:hover,
+  .coordinator-search-item:hover {
+    background-color: #f8f9fa;
+  }
+
+  .student-name,
+  .coordinator-name {
+    font-weight: 500;
+  }
+
+  .coordinator-id {
+    font-size: 0.85em;
+    color: #6c757d;
+  }
+
+  .req-template-meta {
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+  }
+
+  .req-template-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .req-name {
+    font-weight: 500;
+  }
+
+  .req-meta {
+    font-size: 0.85em;
+    color: #6c757d;
+  }
+
+  .req-upload {
+    min-width: 300px;
+  }
+
+  .sa-truncate {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Renewal badges */
+  .renewal-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .status-copied {
+    background-color: #28a745;
+    color: white;
+  }
+
+  .status-new {
+    background-color: #ffc107;
+    color: #212529;
+  }
+
+  .status-unchanged {
+    background-color: #6c757d;
+    color: white;
+  }
+
+  .status-draft {
+    background-color: #17a2b8;
+    color: white;
+  }
+
+  /* Disabled label styles */
+  .form-check-label.disabled {
+    color: #6c757d;
+    opacity: 0.65;
+  }
+
+  .student-search-container,
+  .coordinator-search-container {
+    position: relative;
+  }
+
+  .student-search-results,
+  .coordinator-search-results {
+    position: absolute;
+    z-index: 1000;
+    width: 100%;
+    max-height: 250px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .student-search-item,
+  .coordinator-search-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+  }
+
+  .student-search-item:hover,
+  .coordinator-search-item:hover {
+    background-color: #f8f9fa;
+  }
+
+  .student-name,
+  .coordinator-name {
+    font-weight: 500;
+  }
+
+  .coordinator-id {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-top: 2px;
+  }
+
+  .req-template-meta {
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+  }
+
+  .req-template-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .req-name {
+    font-weight: 500;
+  }
+
+  .req-meta {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-top: 2px;
+  }
+
+  .req-upload {
+    min-width: 300px;
+  }
+
+  .sa-truncate {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Officer row styles */
+  .officer-row td,
+  .edit-dynamic-officer-row td {
+    vertical-align: middle;
+  }
+
+  .off-pos {
+    max-width: 200px;
+  }
+
+  /* Disabled styles */
+  .form-check-label.disabled {
+    color: #6c757d;
+    opacity: 0.65;
+  }
+
+  input[readonly] {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+  }
+
+  .btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+</style>  
 </head>
 
 <div class="container-fluid py-3 sa-acc" id="adminAccreditationPage">
@@ -217,7 +421,7 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
           <!-- hidden by default; JS shows if admin can still submit -->
           <button class="btn btn-primary" id="openAddOrgModal" type="button"
                   data-bs-toggle="modal" data-bs-target="#addOrgModal">
-            <i class="bi bi-plus-lg me-1"></i> New Accreditation
+            <i class="bi bi-plus-lg me-1"></i> Add Organization
           </button>
         </div>
       </div>
@@ -416,6 +620,9 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
       - fee_required (Organizations)
       - membership_fee (Clubs)
 ========================================================= -->
+<!-- js/accredititation/admin/accreditation.html (or wherever your modal is) -->
+
+<!-- Add Accreditation Modal -->
 <div class="modal fade" id="addOrgModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
     <div class="modal-content rounded-4 border-0 shadow">
@@ -433,64 +640,90 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
       <form class="modal-body" id="addOrgForm" enctype="multipart/form-data">
         <input type="hidden" name="author_id_number" id="addAuthorIdHidden" />
 
+        <!-- Coordinator Selection (NEW) -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            Coordinator (Faculty Admin) <span class="text-danger">*</span>
+            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" 
+               title="Select a faculty member who will coordinate this accreditation"></i>
+          </label>
+          <div class="coordinator-search-container">
+            <div class="input-group">
+              <input type="text" class="form-control" id="accCoordinatorName" 
+                     placeholder="Search coordinator by name or ID..." autocomplete="off" required>
+              <input type="hidden" id="accCoordinatorUserId" name="coordinator_user_id">
+              <button class="btn btn-outline-secondary" type="button" 
+                      onclick="document.getElementById('accCoordinatorName').focus()">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+            <div class="coordinator-search-results mt-1" id="coordinatorSearchResults" 
+                 style="display: none; max-height: 200px; overflow-y: auto;"></div>
+            <div class="form-text text-muted small">
+              Type at least 2 characters to search for faculty admins
+            </div>
+          </div>
+        </div>
+
         <!-- Org details -->
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label">Organization Name</label>
+            <label class="form-label">Organization Name <span class="text-danger">*</span></label>
             <input class="form-control" type="text" name="org_name" id="accOrgName" required>
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">Abbreviation</label>
+            <label class="form-label">Abbreviation <span class="text-danger">*</span></label>
             <input class="form-control" type="text" name="org_abbr" id="accOrgAbbr" maxlength="50" required>
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">Organization Logo (optional)</label>
-            <input class="form-control" type="file" name="org_logo" accept="image/png,image/jpeg">
+            <label class="form-label">Organization Logo</label>
+            <input class="form-control" type="file" name="org_logo" accept="image/png,image/jpeg,image/webp">
+            <div class="form-text text-muted small">Optional: PNG, JPG, WebP (max 2MB)</div>
           </div>
 
           <div class="col-12">
-            <label class="form-label">Description</label>
+            <label class="form-label">Description <span class="text-danger">*</span></label>
             <textarea class="form-control" name="description" id="accOrgDescription" rows="2" required></textarea>
           </div>
 
-          <div class="col-12">
-            <label class="form-label">Mission</label>
-            <textarea class="form-control" name="mission" id="accOrgMission" rows="2" required></textarea>
+          <div class="col-md-4">
+            <label class="form-label">Mission <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="mission" id="accOrgMission" rows="3" required></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Vision <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="vision" id="accOrgVision" rows="3" required></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Objectives <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="objectives" id="accOrgObjectives" rows="3" required></textarea>
           </div>
 
           <div class="col-12">
-            <label class="form-label">Vision</label>
-            <textarea class="form-control" name="vision" id="accOrgVision" rows="2" required></textarea>
-          </div>
-
-          <div class="col-12">
-            <label class="form-label">Objectives</label>
-            <textarea class="form-control" name="objectives" id="accOrgObjectives" rows="2" required></textarea>
-          </div>
-
-          <div class="col-12">
-            <label class="form-label">Advocacy</label>
+            <label class="form-label">Advocacy <span class="text-danger">*</span></label>
             <textarea class="form-control" name="advocacy" id="accOrgAdvocacy" rows="2" required></textarea>
           </div>
         </div>
 
         <hr class="my-4">
 
-        <!-- Type + Scope + Program - FIXED ALIGNMENT -->
+        <!-- Type + Scope + Program -->
         <div class="row g-3">
           <div class="col-lg-4">
-            <label class="form-label">Organization Type</label>
-            <select class="form-select" id="accOrgType" name="org_type">
+            <label class="form-label">Organization Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="accOrgType" name="org_type" required>
               <option value="Organization" selected>Organization</option>
               <option value="Club">Club</option>
             </select>
-            <div class="form-text mt-2">Used to filter requirements (e.g., Club-only requirements).</div>
+            <div class="form-text mt-2 small">Used to filter requirements (e.g., Club-only requirements).</div>
           </div>
 
           <div class="col-lg-4">
-            <label class="form-label">Scope</label>
+            <label class="form-label">Scope <span class="text-danger">*</span></label>
             <div class="btn-group w-100" role="group" aria-label="Scope">
               <input type="radio" class="btn-check" name="scope" id="scopeGeneral" value="General" checked>
               <label class="btn btn-outline-secondary" for="scopeGeneral">General</label>
@@ -498,61 +731,47 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
               <input type="radio" class="btn-check" name="scope" id="scopeExclusive" value="Exclusive">
               <label class="btn btn-outline-primary" for="scopeExclusive">Exclusive</label>
             </div>
-            <div class="form-text mt-2">Requirements load based on scope & type.</div>
+            <div class="form-text mt-2 small">Requirements load based on scope & type.</div>
           </div>
 
           <div class="col-lg-4">
-            <label class="form-label">Program (if Exclusive)</label>
+            <label class="form-label">Program</label>
             <select class="form-select" id="accProgramId" name="program_id">
               <option value="">— Select program —</option>
             </select>
-            <div class="form-text mt-2">Select only for exclusive organizations.</div>
+            <div class="form-text mt-2 small">Required only for Exclusive organizations.</div>
           </div>
         </div>
 
-        <!-- ✅ FEES (optional; toggled by type) -->
-        <div class="row g-3 mt-1" id="feesRow">
-          <!-- Organization-only -->
+        <!-- Fees (optional; toggled by type) -->
+        <div class="row g-3 mt-3" id="feesRow">
           <div class="col-lg-6" id="orgFeeWrap">
-            <label class="form-label">Fee Required (Organizations) <span class="text-muted">(optional)</span></label>
+            <label class="form-label">Required Organization Fee (₱)</label>
             <div class="input-group">
               <span class="input-group-text">₱</span>
-              <input
-                type="number"
-                class="form-control"
-                name="fee_required"
-                id="accFeeRequired"
-                min="0"
-                step="0.01"
-                placeholder="e.g., 50.00">
+              <input type="number" class="form-control" name="fee_required" id="accFeeRequired"
+                     min="0" step="0.01" placeholder="e.g., 50.00">
             </div>
-            <div class="form-text mt-2">Leave blank if no required fee for the organization.</div>
+            <div class="form-text mt-2 small">Leave blank if no required fee (organizations only).</div>
           </div>
 
-          <!-- Club-only -->
           <div class="col-lg-6" id="clubFeeWrap" style="display:none;">
-            <label class="form-label">Membership Fee (Clubs) <span class="text-muted">(optional)</span></label>
+            <label class="form-label">Club Membership Fee (₱)</label>
             <div class="input-group">
               <span class="input-group-text">₱</span>
-              <input
-                type="number"
-                class="form-control"
-                name="membership_fee"
-                id="accMembershipFee"
-                min="0"
-                step="0.01"
-                placeholder="e.g., 100.00">
+              <input type="number" class="form-control" name="membership_fee" id="accMembershipFee"
+                     min="0" step="0.01" placeholder="e.g., 100.00">
             </div>
-            <div class="form-text mt-2">Leave blank if club membership is free.</div>
+            <div class="form-text mt-2 small">Leave blank if club membership is free.</div>
           </div>
         </div>
 
         <hr class="my-4">
 
-        <!-- ✅ OFFICERS (hard-coded REQUIRED only, student search enabled) -->
+        <!-- Officers Section -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <div>
-            <div class="fw-semibold">Organization Officers</div>
+            <div class="fw-semibold">Organization Officers <span class="text-danger">*</span></div>
             <div class="text-muted small">
               Search for students by ID or name to automatically fill their details.
             </div>
@@ -563,35 +782,35 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
           <table class="table align-middle mb-0">
             <thead class="table-light">
               <tr>
-                <th style="width: 260px;">Position</th>
-                <th>
-                  <div>Full Name</div>
-                  <div class="text-muted small fw-normal">Click search icon to find student</div>
-                </th>
-                <th style="width: 200px;">Course / Year</th>
-                <th style="width: 160px;">Status</th>
+                <th style="width: 25%">Position</th>
+                <th style="width: 35%">Full Name</th>
+                <th style="width: 25%">Course / Year</th>
+                <th style="width: 15%">Status</th>
+                <th style="width: 5%"></th>
               </tr>
             </thead>
 
             <tbody id="officersTbody">
-
+              <!-- President / Chairperson (Index 0) - Auto-filled for presidents -->
               <tr class="officer-row off-row-required" data-index="0" data-required="1">
                 <td>
                   <div class="off-pos">
-                    <input class="form-control" name="officers[0][position]" value="President / Chairperson" readonly required>
-              
+                    <input class="form-control" type="text" name="officers[0][position]" 
+                           value="President / Chairperson" readonly required>
                   </div>
+                  <input type="hidden" name="officers[0][id]" id="officer_0_id" value="0">
                   <input type="hidden" name="officers[0][student_id]" id="officer_0_student_id">
                 </td>
                 <td>
                   <div class="student-search-container">
                     <div class="input-group">
-                      <input class="form-control" name="officers[0][full_name]" id="officer_0_full_name"
-                             placeholder="Search student..." required
+                      <input class="form-control" type="text" name="officers[0][full_name]" 
+                             id="officer_0_full_name" placeholder="Auto-filled (President)" 
                              data-search-target="#officer_0_student_id"
                              data-course-target="#officer_0_course_year"
-                             autocomplete="off">
-                      <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(0)">
+                             autocomplete="off" required readonly>
+                      <button class="btn btn-outline-secondary" type="button" 
+                              onclick="searchStudent(0)" disabled>
                         <i class="bi bi-search"></i>
                       </button>
                     </div>
@@ -599,8 +818,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                   </div>
                 </td>
                 <td>
-                  <input class="form-control" name="officers[0][course_year]" id="officer_0_course_year"
-                         placeholder="Will auto-fill from student search" readonly required>
+                  <input class="form-control" type="text" name="officers[0][course_year]" 
+                         id="officer_0_course_year" placeholder="Auto-filled" readonly>
                 </td>
                 <td>
                   <select class="form-select" name="officers[0][status]">
@@ -608,24 +827,29 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td class="text-center">
+                  <!-- No delete for president -->
+                </td>
               </tr>
 
+              <!-- Vice President (Index 1) -->
               <tr class="officer-row off-row-required" data-index="1" data-required="1">
                 <td>
                   <div class="off-pos">
-                    <input class="form-control" name="officers[1][position]" value="Vice President" readonly required>
-              
+                    <input class="form-control" type="text" name="officers[1][position]" 
+                           value="Vice President" readonly required>
                   </div>
+                  <input type="hidden" name="officers[1][id]" id="officer_1_id" value="0">
                   <input type="hidden" name="officers[1][student_id]" id="officer_1_student_id">
                 </td>
                 <td>
                   <div class="student-search-container">
                     <div class="input-group">
-                      <input class="form-control" name="officers[1][full_name]" id="officer_1_full_name"
-                             placeholder="Search student..." required
+                      <input class="form-control" type="text" name="officers[1][full_name]" 
+                             id="officer_1_full_name" placeholder="Search student..." 
                              data-search-target="#officer_1_student_id"
                              data-course-target="#officer_1_course_year"
-                             autocomplete="off">
+                             autocomplete="off" required>
                       <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(1)">
                         <i class="bi bi-search"></i>
                       </button>
@@ -634,8 +858,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                   </div>
                 </td>
                 <td>
-                  <input class="form-control" name="officers[1][course_year]" id="officer_1_course_year"
-                         placeholder="Will auto-fill from student search" readonly required>
+                  <input class="form-control" type="text" name="officers[1][course_year]" 
+                         id="officer_1_course_year" placeholder="Will auto-fill" readonly>
                 </td>
                 <td>
                   <select class="form-select" name="officers[1][status]">
@@ -643,24 +867,29 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td class="text-center">
+                  <!-- No delete for VP -->
+                </td>
               </tr>
 
+              <!-- Secretary (Index 2) -->
               <tr class="officer-row off-row-required" data-index="2" data-required="1">
                 <td>
                   <div class="off-pos">
-                    <input class="form-control" name="officers[2][position]" value="Secretary" readonly required>
-              
+                    <input class="form-control" type="text" name="officers[2][position]" 
+                           value="Secretary" readonly required>
                   </div>
+                  <input type="hidden" name="officers[2][id]" id="officer_2_id" value="0">
                   <input type="hidden" name="officers[2][student_id]" id="officer_2_student_id">
                 </td>
                 <td>
                   <div class="student-search-container">
                     <div class="input-group">
-                      <input class="form-control" name="officers[2][full_name]" id="officer_2_full_name"
-                             placeholder="Search student..." required
+                      <input class="form-control" type="text" name="officers[2][full_name]" 
+                             id="officer_2_full_name" placeholder="Search student..." 
                              data-search-target="#officer_2_student_id"
                              data-course-target="#officer_2_course_year"
-                             autocomplete="off">
+                             autocomplete="off" required>
                       <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(2)">
                         <i class="bi bi-search"></i>
                       </button>
@@ -669,8 +898,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                   </div>
                 </td>
                 <td>
-                  <input class="form-control" name="officers[2][course_year]" id="officer_2_course_year"
-                         placeholder="Will auto-fill from student search" readonly required>
+                  <input class="form-control" type="text" name="officers[2][course_year]" 
+                         id="officer_2_course_year" placeholder="Will auto-fill" readonly>
                 </td>
                 <td>
                   <select class="form-select" name="officers[2][status]">
@@ -678,24 +907,29 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td class="text-center">
+                  <!-- No delete for Secretary -->
+                </td>
               </tr>
 
+              <!-- Treasurer (Index 3) -->
               <tr class="officer-row off-row-required" data-index="3" data-required="1">
                 <td>
                   <div class="off-pos">
-                    <input class="form-control" name="officers[3][position]" value="Treasurer" readonly required>
-              
+                    <input class="form-control" type="text" name="officers[3][position]" 
+                           value="Treasurer" readonly required>
                   </div>
+                  <input type="hidden" name="officers[3][id]" id="officer_3_id" value="0">
                   <input type="hidden" name="officers[3][student_id]" id="officer_3_student_id">
                 </td>
                 <td>
                   <div class="student-search-container">
                     <div class="input-group">
-                      <input class="form-control" name="officers[3][full_name]" id="officer_3_full_name"
-                             placeholder="Search student..." required
+                      <input class="form-control" type="text" name="officers[3][full_name]" 
+                             id="officer_3_full_name" placeholder="Search student..." 
                              data-search-target="#officer_3_student_id"
                              data-course-target="#officer_3_course_year"
-                             autocomplete="off">
+                             autocomplete="off" required>
                       <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(3)">
                         <i class="bi bi-search"></i>
                       </button>
@@ -704,8 +938,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                   </div>
                 </td>
                 <td>
-                  <input class="form-control" name="officers[3][course_year]" id="officer_3_course_year"
-                         placeholder="Will auto-fill from student search" readonly required>
+                  <input class="form-control" type="text" name="officers[3][course_year]" 
+                         id="officer_3_course_year" placeholder="Will auto-fill" readonly>
                 </td>
                 <td>
                   <select class="form-select" name="officers[3][status]">
@@ -713,24 +947,29 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td class="text-center">
+                  <!-- No delete for Treasurer -->
+                </td>
               </tr>
 
+              <!-- Auditor (Index 4) -->
               <tr class="officer-row off-row-required" data-index="4" data-required="1">
                 <td>
                   <div class="off-pos">
-                    <input class="form-control" name="officers[4][position]" value="Auditor" readonly required>
-              
+                    <input class="form-control" type="text" name="officers[4][position]" 
+                           value="Auditor" readonly required>
                   </div>
+                  <input type="hidden" name="officers[4][id]" id="officer_4_id" value="0">
                   <input type="hidden" name="officers[4][student_id]" id="officer_4_student_id">
                 </td>
                 <td>
                   <div class="student-search-container">
                     <div class="input-group">
-                      <input class="form-control" name="officers[4][full_name]" id="officer_4_full_name"
-                             placeholder="Search student..." required
+                      <input class="form-control" type="text" name="officers[4][full_name]" 
+                             id="officer_4_full_name" placeholder="Search student..." 
                              data-search-target="#officer_4_student_id"
                              data-course-target="#officer_4_course_year"
-                             autocomplete="off">
+                             autocomplete="off" required>
                       <button class="btn btn-outline-secondary" type="button" onclick="searchStudent(4)">
                         <i class="bi bi-search"></i>
                       </button>
@@ -739,8 +978,8 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                   </div>
                 </td>
                 <td>
-                  <input class="form-control" name="officers[4][course_year]" id="officer_4_course_year"
-                         placeholder="Will auto-fill from student search" readonly required>
+                  <input class="form-control" type="text" name="officers[4][course_year]" 
+                         id="officer_4_course_year" placeholder="Will auto-fill" readonly>
                 </td>
                 <td>
                   <select class="form-select" name="officers[4][status]">
@@ -748,23 +987,34 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td class="text-center">
+                  <!-- No delete for Auditor -->
+                </td>
               </tr>
-
             </tbody>
+
+            <!-- Dynamic Officers Container -->
+            <tbody id="dynamicOfficersContainer"></tbody>
           </table>
         </div>
 
-        <div class="sa-filehint mt-2">
-          Click the search icon next to each officer name to find and select a student from the database.
-          Course/Year will be automatically filled from student records.
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div class="sa-filehint small">
+            <i class="bi bi-info-circle me-1"></i>
+            Click the search icon next to each officer name to find and select a student. 
+            Course/Year will be automatically filled.
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="addOfficerBtn">
+            <i class="bi bi-plus-circle me-1"></i> Add New Officer Position
+          </button>
         </div>
 
         <hr class="my-4">
 
-        <!-- ✅ REQUIRED DOCUMENTS TABLE -->
+        <!-- Required Documents Table -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <div>
-            <div class="fw-semibold">Required Documents</div>
+            <div class="fw-semibold">Required Documents <span class="text-danger">*</span></div>
             <div class="text-muted small">Templates are shown when available.</div>
           </div>
         </div>
@@ -782,23 +1032,27 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
             <tbody id="requirementsUploadTbody">
               <tr>
                 <td colspan="4" class="text-center text-muted py-4">
-                  Requirements will load here…
+                  <i class="bi bi-file-earmark-text fs-3 d-block mb-2"></i>
+                  Select organization type and scope to load requirements
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <div class="sa-filehint mt-2">
-          Accepted file types are only PDF.
+        <div class="sa-filehint mt-2 small">
+          <i class="bi bi-file-pdf me-1"></i>
+          Accepted file types: PDF only.
         </div>
 
-        <div class="alert alert-light border rounded-3 small mt-3 mb-0">
+        <div class="alert alert-light border rounded-3 small mt-4 mb-0">
           <div class="d-flex align-items-start gap-2">
             <i class="bi bi-info-circle text-primary mt-1"></i>
             <div class="sa-wrap">
-              <div class="fw-semibold">Submission rule</div>
-              Once submitted, you can't create another organization request. You may only track status/returns.
+              <div class="fw-semibold">Note for Organization Presidents</div>
+              Your information will be automatically filled in the President field. 
+              You can add custom officer positions using the "Add New Officer Position" button.
+              Select a faculty coordinator to manage this accreditation.
             </div>
           </div>
         </div>
@@ -808,6 +1062,312 @@ KKKKKKKKK    KKKKKKKIIIIIIIIIIBBBBBBBBBBBBBBBBB   PPPPPP
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="saveAddOrgBtn">
           <i class="bi bi-send-check me-1"></i> Submit
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit Accreditation Modal -->
+<div class="modal fade" id="editOrgModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0 shadow">
+
+      <div class="modal-header">
+        <div class="min-w-0">
+          <h5 class="modal-title fw-semibold mb-0">
+            <i class="bi bi-pencil-square me-2"></i>Edit Accreditation Request
+          </h5>
+          <div class="text-muted small sa-truncate">
+            Update organization details, manage officers, and upload revised documents.
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form class="modal-body" id="editOrgForm" enctype="multipart/form-data">
+        <input type="hidden" id="editOrgId" name="org_id">
+        <input type="hidden" id="editRequestId" name="request_id">
+        <input type="hidden" id="editIsRenewal" name="is_renewal" value="0">
+        <input type="hidden" id="editPreviousRequestId" name="previous_request_id" value="0">
+
+        <!-- Status Badge Row -->
+        <div class="d-flex justify-content-end mb-3">
+          <div>
+            <span class="badge text-bg-warning px-3 py-2" id="editRenewalNotice" style="display:none;">
+              <i class="bi bi-arrow-repeat me-1"></i>Renewal
+            </span>
+          </div>
+        </div>
+
+        <!-- Coordinator Selection -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            Coordinator (Faculty Admin) <span class="text-danger">*</span>
+            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" 
+               title="Select a faculty member who will coordinate this accreditation"></i>
+          </label>
+          <div class="coordinator-search-container">
+            <div class="input-group">
+              <input type="text" class="form-control" id="editAccCoordinatorName" 
+                     placeholder="Search coordinator by name or ID..." autocomplete="off" required>
+              <input type="hidden" id="editAccCoordinatorUserId" name="coordinator_user_id">
+              <button class="btn btn-outline-secondary" type="button" 
+                      onclick="document.getElementById('editAccCoordinatorName').focus()">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+            <div class="coordinator-search-results mt-1" id="editCoordinatorSearchResults" 
+                 style="display: none; max-height: 200px; overflow-y: auto;"></div>
+            <div class="form-text text-muted small">
+              Type at least 2 characters to search for faculty admins
+            </div>
+          </div>
+        </div>
+
+        <!-- Moderator (org_president) Selection -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            Moderator (Organization President)
+            <span class="text-danger">*</span>
+            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip"
+               title="The org_president who manages and submitted this accreditation. Changing this transfers ownership."></i>
+          </label>
+          <!-- Hidden field tracks the original moderator to detect a change -->
+          <input type="hidden" id="editAccModeratorCurrentId">
+          <div class="coordinator-search-container">
+            <div class="input-group">
+              <input type="text" class="form-control" id="editAccModeratorName"
+                     placeholder="Search org president by name or ID..." autocomplete="off" required>
+              <input type="hidden" id="editAccModeratorUserId" name="moderator_user_id">
+              <button class="btn btn-outline-secondary" type="button"
+                      onclick="document.getElementById('editAccModeratorName').focus()">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+            <div class="coordinator-search-results mt-1" id="editModeratorSearchResults"
+                 style="display: none; max-height: 200px; overflow-y: auto;"></div>
+            <div class="form-text text-muted small">
+              Type at least 2 characters to search for org presidents
+            </div>
+          </div>
+          <!-- Turnover warning — shown only when a different person is selected -->
+          <div id="editModeratorTurnoverWarning" class="alert alert-warning d-flex align-items-start gap-2 mt-2 py-2 px-3" style="display:none;">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+            <div>
+              <strong>Ownership Transfer Warning</strong><br>
+              <span class="small">
+                Changing the moderator will <strong>transfer full management</strong> of this
+                organization to the selected person. Once saved, <strong>you will no longer be
+                able to manage this organization</strong> unless re-assigned. The previous
+                moderator will be notified automatically.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Organization Details -->
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Organization Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="editAccOrgName" name="org_name" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Abbreviation <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="editAccOrgAbbr" name="abbreviation" maxlength="50" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Organization Logo</label>
+            <input type="file" class="form-control" name="org_logo" accept="image/png,image/jpeg,image/webp">
+            <div class="form-text text-muted small">Leave empty to keep current logo</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="editAccOrgDescription" name="description" rows="2" required></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Mission <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="editAccOrgMission" name="mission" rows="3" required></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Vision <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="editAccOrgVision" name="vision" rows="3" required></textarea>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Objectives <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="editAccOrgObjectives" name="objectives" rows="3" required></textarea>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Advocacy <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="editAccOrgAdvocacy" name="advocacy" rows="2" required></textarea>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Type + Scope + Program -->
+        <div class="row g-3">
+          <div class="col-lg-4">
+            <label class="form-label">Organization Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="editAccOrgType" name="org_type" required>
+              <option value="Organization">Organization</option>
+              <option value="Club">Club</option>
+            </select>
+            <div class="form-text mt-2 small">Changes may affect required documents.</div>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Scope <span class="text-danger">*</span></label>
+            <div class="btn-group w-100" role="group" aria-label="Scope">
+              <input type="radio" class="btn-check" name="edit_scope" id="editScopeGeneral" value="General">
+              <label class="btn btn-outline-secondary" for="editScopeGeneral">General</label>
+
+              <input type="radio" class="btn-check" name="edit_scope" id="editScopeExclusive" value="Exclusive">
+              <label class="btn btn-outline-primary" for="editScopeExclusive">Exclusive</label>
+            </div>
+            <div class="form-text mt-2 small">Exclusive requires program selection.</div>
+          </div>
+
+          <div class="col-lg-4">
+            <label class="form-label">Program</label>
+            <select class="form-select" id="editAccProgramId" name="program_id">
+              <option value="">— Select program —</option>
+            </select>
+            <div class="form-text mt-2 small">Required only for Exclusive organizations.</div>
+          </div>
+        </div>
+
+        <!-- Fees -->
+        <div class="row g-3 mt-3">
+          <div class="col-lg-6" id="editOrgFeeWrap">
+            <label class="form-label">Required Organization Fee (₱)</label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input type="number" step="0.01" min="0" class="form-control" id="editAccFeeRequired" 
+                     name="fee_required" placeholder="0.00">
+            </div>
+            <div class="form-text mt-2 small">Leave blank if no required fee.</div>
+          </div>
+
+          <div class="col-lg-6" id="editClubFeeWrap" style="display: none;">
+            <label class="form-label">Club Membership Fee (₱)</label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input type="number" step="0.01" min="0" class="form-control" id="editAccMembershipFee" 
+                     name="membership_fee" placeholder="0.00">
+            </div>
+            <div class="form-text mt-2 small">Leave blank if club membership is free.</div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Officers Section -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Organization Officers <span class="text-danger">*</span></div>
+            <div class="text-muted small">
+              President / Chairperson cannot be changed. Search for students by ID or name.
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 25%">Position</th>
+                <th style="width: 35%">Full Name</th>
+                <th style="width: 25%">Course / Year</th>
+                <th style="width: 15%">Status</th>
+                <th style="width: 5%"></th>
+              </tr>
+            </thead>
+
+            <!-- Hardcoded officers will be populated here by JS -->
+            <tbody id="editOfficersTbody"></tbody>
+
+            <!-- Dynamic Officers Container -->
+            <tbody id="editDynamicOfficersContainer"></tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div class="sa-filehint small">
+            <i class="bi bi-info-circle me-1"></i>
+            Click the search icon to find and select a student. Course/Year will auto-fill.
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="editAddOfficerBtn">
+            <i class="bi bi-plus-circle me-1"></i> Add New Officer Position
+          </button>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Required Documents Section -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Required Documents</div>
+            <div class="text-muted small">Upload new files to replace existing ones. Leave empty to keep current.</div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:70px;">#</th>
+                <th>Requirement</th>
+                <th style="width:260px;">Template</th>
+                <th style="width:360px;">Upload File</th>
+              </tr>
+            </thead>
+            <tbody id="editRequirementsUploadTbody">
+              <tr>
+                <td colspan="4" class="text-center text-muted py-4">
+                  <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
+                  Loading requirements...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sa-filehint mt-2 small">
+          <i class="bi bi-file-pdf me-1"></i>
+          Accepted file types: PDF only. Leave blank to keep existing documents.
+        </div>
+
+        <div class="alert alert-light border rounded-3 small mt-4 mb-0">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-info-circle text-primary mt-1"></i>
+            <div class="sa-wrap">
+              <div class="fw-semibold">Editing Guidelines</div>
+              <ul class="mb-0 ps-3 small">
+                <li>President / Chairperson cannot be changed</li>
+                <li>Uploading new documents will replace existing ones</li>
+                <li>Changes will reset the request status to Pending for re-review</li>
+                <li>Add custom officer positions using the button below the table</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveEditOrgBtn">
+          <i class="bi bi-save me-1"></i> Save Changes
         </button>
       </div>
 

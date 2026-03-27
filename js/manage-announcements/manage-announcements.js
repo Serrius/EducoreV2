@@ -717,7 +717,7 @@
       }</div>`;
     }
 
-    async function loadMe() {
+   async function loadMe() {
   const j = await postJSON({ action: "me" });
 
   CURRENT.ME = j;
@@ -729,8 +729,8 @@
     elWhoAmI.textContent = role;
   }
 
-  // ✅ Use the PHP flag to determine if tabs / add button should show
-  CURRENT.STUDENT_ONLY = !j.can_post_announcements;
+  // Use is_student_only flag from PHP to determine if user should see limited view
+  CURRENT.STUDENT_ONLY = j.is_student_only === true;
 
   setTabsVisible(!CURRENT.STUDENT_ONLY);
   setCreateVisible(!CURRENT.STUDENT_ONLY);
@@ -738,7 +738,7 @@
 
   if (CURRENT.STUDENT_ONLY) forceStudentActivePane();
   if (elReadOnlyBadge) elReadOnlyBadge.classList.add("invisible");
-    }
+   }
 
         async function loadTerms() {
           const j = await postJSON({ action: "terms" });

@@ -5,18 +5,16 @@
   "use strict";
 
   // ✅ IMPORTANT SPA FIX:
-  // Old versions may have set this already. DO NOT RETURN.
-  // We still want the updated code to run and re-apply UI gates.
   window.__EventExpensesWatcherStarted = true;
 
   const API_URL = "php/event-expenses.php";
 
-  // ✅ MPDF print endpoints (separate PHP files)
+  // ✅ MPDF print endpoints
   const PRINT_BASE = "php/";
   const PRINT_LEDGER = `${PRINT_BASE}/event-ledger-pdf.php`;
   const PRINT_PASSBOOK = `${PRINT_BASE}/org-passbook-pdf.php`;
   const PRINT_LIQUIDATION = `${PRINT_BASE}/liquidation-report-pdf.php`;
-  const PRINT_ACCOMPLISHMENT = `${PRINT_BASE}/accomplishment-report-pdf.php`; // ✅ NEW
+  const PRINT_ACCOMPLISHMENT = `${PRINT_BASE}/accomplishment-report-pdf.php`;
 
   function qs(sel, root = document) { return root.querySelector(sel); }
   function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
@@ -47,7 +45,6 @@
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  // same resolver logic as your other modules
   function resolveAppUrl(path) {
     if (!path) return "";
     const raw = String(path).trim();
@@ -196,92 +193,804 @@
     return !!state.permissions.is_readonly || isReadOnlyTerm();
   }
 
-  // Bind Submit Accomplishment button
-  function bindSubmitAccomplishment() {
-  const btn = qs("#eeSubmitAccompBtn");
-  if (!btn || btn.dataset.eeBound === "1") return;
-  btn.dataset.eeBound = "1";
-  
-  btn.addEventListener("click", async () => {
-    try {
-      if (isReadOnlyMode()) throw new Error("Read-only mode.");
+  function updateCreditTotal(row) {
+    const qty = parseInt(row.querySelector('.credit-qty')?.value) || 0;
+    const amount = parseFloat(row.querySelector('.credit-amount')?.value) || 0;
+    const total = qty * amount;
+    
+    const totalCell = row.querySelector('.credit-total');
+    if (totalCell) totalCell.textContent = money(total);
+    
+    updateFinancialSummary();
+  }
+
+  // Debit functions
+  function addDebitRow(data = null) {
+    const template = document.getElementById('debitRowTemplate');
+    const tbody = document.getElementById('debitTbody');
+    if (!template || !tbody) return;
+    
+    const clone = template.content.cloneNode(true);
+    const row = clone.querySelector('tr');
+    
+    const descInput = row.querySelector('.debit-desc');
+    const dateInput = row.querySelector('.debit-date');
+    const categorySelect = row.querySelector('.debit-category');
+    const qtyInput = row.querySelector('.debit-qty');
+    const unitPriceInput = row.querySelector('.debit-unit-price');
+    const totalCell = row.querySelector('.debit-total');
+    const receiptNoInput = row.querySelector('.debit-receipt-no');
+    const receiptFile = row.querySelector('.debit-receipt');
+    const removeBtn = row.querySelector('.debit-remove');
+    
+    if (data) {
+      descInput.value = data.description || '';
+      dateInput.value = data.date || '';
+      categorySelect.value = data.category || '';
+      qtyInput.value = data.quantity || 1;
+      unitPriceInput.value = data.unit_price || '';
+      receiptNoInput.value = data.receipt_no || '';
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      dateInput.value = today;
+      qtyInput.value = 1;
+      // DON'T set defaults for category, receiptNo, receiptFile - they must be filled by user
+    }
+    
+    // Calculate total function
+    function updateTotal() {
+      const qty = parseInt(qtyInput.value) || 0;
+      const unitPrice = parseFloat(unitPriceInput.value) || 0;
+      totalCell.textContent = money(qty * unitPrice);
+      updateFinancialSummary();
+    }
+    
+    [qtyInput, unitPriceInput].forEach(input => {
+      input.addEventListener('input', updateTotal);
+    });
+    
+    // Initial total
+    updateTotal();
+    
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      updateFinancialSummary();
+    });
+    
+    tbody.appendChild(clone);
+    updateFinancialSummary();
+  }
+
+  function updateDebitTotal(row) {
+    const qty = parseInt(row.querySelector('.debit-qty')?.value) || 0;
+    const unitPrice = parseFloat(row.querySelector('.debit-unit-price')?.value) || 0;
+    const total = qty * unitPrice;
+    
+    const totalCell = row.querySelector('.debit-total');
+    if (totalCell) totalCell.textContent = money(total);
+    
+    updateFinancialSummary();
+  }
+
+  function updateFinancialSummary() {
+    // Calculate credits total - just sum the amounts, no quantity multiplication
+    const creditRows = document.querySelectorAll('#creditTbody tr');
+    let totalCredits = 0;
+    creditRows.forEach(row => {
+      const amount = parseFloat(row.querySelector('.credit-amount')?.value) || 0;
+      totalCredits += amount; // Direct amount, not multiplied by quantity
+    });
+    
+    // Calculate debits total - quantity * unit price
+    const debitRows = document.querySelectorAll('#debitTbody tr');
+    let totalDebits = 0;
+    debitRows.forEach(row => {
+      const qty = parseInt(row.querySelector('.debit-qty')?.value) || 0;
+      const unitPrice = parseFloat(row.querySelector('.debit-unit-price')?.value) || 0;
+      totalDebits += qty * unitPrice;
+    });
+    
+    const balance = totalCredits - totalDebits;
+    
+    // Update UI
+    const creditsEl = document.getElementById('summaryTotalCredits');
+    const debitsEl = document.getElementById('summaryTotalDebits');
+    const balanceEl = document.getElementById('summaryBalance');
+    const balanceBox = document.getElementById('summaryBalanceBox');
+    const warningEl = document.getElementById('summaryBalanceWarning');
+    const warningAmount = document.getElementById('warningAmount');
+    
+    if (creditsEl) creditsEl.textContent = money(totalCredits);
+    if (debitsEl) debitsEl.textContent = money(totalDebits);
+    if (balanceEl) balanceEl.textContent = money(balance);
+    
+    // Style balance box
+    if (balanceBox) {
+      if (balance >= 0) {
+        balanceBox.style.backgroundColor = '#d4edda';
+        balanceBox.style.borderColor = '#c3e6cb';
+      } else {
+        balanceBox.style.backgroundColor = '#f8d7da';
+        balanceBox.style.borderColor = '#f5c6cb';
+      }
+    }
+    
+    // Show warning if negative
+    if (warningEl && warningAmount) {
+      if (balance < 0) {
+        warningEl.classList.remove('d-none');
+        warningAmount.textContent = money(Math.abs(balance));
+      } else {
+        warningEl.classList.add('d-none');
+      }
+    }
+    
+    return { totalCredits, totalDebits, balance };
+  }
+
+  function initProposedBudgetSections() {
+    console.log("=== INIT PROPOSED BUDGET SECTIONS ===");
+    
+    // Clear and recreate credit table rows
+    const creditTable = document.getElementById('proposedCreditsTable');
+    if (creditTable) {
+        const tbody = creditTable.querySelector('tbody');
+        if (tbody) {
+            // Clear existing rows
+            tbody.innerHTML = '';
+            // Add one empty credit row with event listeners
+            addCreditRow();
+        }
+    }
+    
+    // Clear and recreate expense table rows
+    const expenseTable = document.getElementById('proposedExpensesTable');
+    if (expenseTable) {
+        const tbody = expenseTable.querySelector('tbody');
+        if (tbody) {
+            // Clear existing rows
+            tbody.innerHTML = '';
+            // Add one empty expense row with event listeners
+            addExpenseRow();
+        }
+    }
+    
+    // Bind add buttons if not already bound
+    const addCreditBtn = document.getElementById('addProposedCreditBtn');
+    if (addCreditBtn && addCreditBtn.dataset.eeBound !== '1') {
+        addCreditBtn.dataset.eeBound = '1';
+        addCreditBtn.addEventListener('click', addCreditRow);
+    }
+    
+    const addExpenseBtn = document.getElementById('addProposedExpenseBtn');
+    if (addExpenseBtn && addExpenseBtn.dataset.eeBound !== '1') {
+        addExpenseBtn.dataset.eeBound = '1';
+        addExpenseBtn.addEventListener('click', addExpenseRow);
+    }
+    
+    // Force summary update
+    setTimeout(updateModalBudgetSummary, 100);
+  }
+
+  function addCreditRow() {
+    const table = document.getElementById('proposedCreditsTable');
+    if (!table) {
+        console.log("proposedCreditsTable not found");
+        return;
+    }
+    
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    const row = document.createElement('tr');
+    row.className = 'credit-row';
+    row.innerHTML = `
+        <td><input type="text" class="form-control form-control-sm credit-desc" placeholder="e.g., Sponsorship, Ticket Sales" required>
+        <td><input type="number" class="form-control form-control-sm text-end credit-amount" min="0" step="0.01" placeholder="0.00" required>
+        <td><input type="text" class="form-control form-control-sm credit-notes" placeholder="Optional notes">
+        <td class="text-center">
+            <button type="button" class="btn btn-link btn-sm text-danger p-0 credit-remove" title="Remove">
+                <i class="bi bi-trash"></i>
+            </button>
+    `;
+    
+    const amountInput = row.querySelector('.credit-amount');
+    const removeBtn = row.querySelector('.credit-remove');
+    
+    amountInput.addEventListener('input', function() {
+        updateModalBudgetSummary();
+    });
+    
+    removeBtn.addEventListener('click', function() {
+        row.remove();
+        updateModalBudgetSummary();
+    });
+    
+    tbody.appendChild(row);
+    updateModalBudgetSummary();
+  }
+
+  function addExpenseRow() {
+      const table = document.getElementById('proposedExpensesTable');
+      if (!table) {
+          console.log("proposedExpensesTable not found");
+          return;
+      }
       
-      const objectives = qs("#accompObjectivesInput")?.value.trim() || '';
-      const outcomes = qs("#accompOutcomesInput")?.value.trim() || '';
-      const challenges = qs("#accompChallengesInput")?.value.trim() || '';
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
       
-      if (!objectives) throw new Error("Please enter the objectives achieved.");
-      if (!outcomes) throw new Error("Please enter the outcomes/accomplishments.");
+      const row = document.createElement('tr');
+      row.className = 'expense-row';
+      row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm expense-desc" placeholder="e.g., Food, Venue, Materials" required>
+          <td><input type="number" class="form-control form-control-sm text-center expense-qty" min="1" value="1" required>
+          <td><input type="number" class="form-control form-control-sm text-end expense-unit-price" min="0" step="0.01" placeholder="0.00" required>
+          <td class="text-end expense-total fw-semibold">₱0.00
+          <td><input type="text" class="form-control form-control-sm expense-notes" placeholder="Optional notes">
+          <td class="text-center">
+              <button type="button" class="btn btn-link btn-sm text-danger p-0 expense-remove" title="Remove">
+                  <i class="bi bi-trash"></i>
+              </button>
+          
+      `;
       
-      // Store the form data in data attributes for the modal to use
-      const modal = qs("#eeDecisionModal");
-      modal.dataset.objectives = objectives;
-      modal.dataset.outcomes = outcomes;
-      modal.dataset.challenges = challenges;
+      const qtyInput = row.querySelector('.expense-qty');
+      const priceInput = row.querySelector('.expense-unit-price');
+      const totalCell = row.querySelector('.expense-total');
+      const removeBtn = row.querySelector('.expense-remove');
       
-      openDecisionModal({
-        action: "submit_accomplishment_report",
-        title: "Submit Accomplishment Report?",
-        text: "This will submit the accomplishment report for review by the coordinator.",
-        confirmText: "Submit",
-        confirmBtnClass: "btn-primary",
-        showNoteField: false // No note needed for submission
+      function updateTotal() {
+          const qty = parseInt(qtyInput.value) || 0;
+          const price = parseFloat(priceInput.value) || 0;
+          const total = qty * price;
+          totalCell.textContent = money(total);
+          updateModalBudgetSummary();
+          console.log(`Expense updated: qty=${qty}, price=${price}, total=${total}`);
+      }
+      
+      qtyInput.addEventListener('input', updateTotal);
+      priceInput.addEventListener('input', updateTotal);
+      
+      removeBtn.addEventListener('click', function() {
+          row.remove();
+          updateModalBudgetSummary();
       });
       
-    } catch (e) {
-      safeShowError(e.message);
+      tbody.appendChild(row);
+      updateTotal();
+  }
+
+  function updateModalBudgetSummary() {
+    console.log("=== UPDATE MODAL BUDGET SUMMARY ===");
+    
+    // Calculate credits total from #proposedCreditsTable
+    const creditTable = document.getElementById('proposedCreditsTable');
+    let creditsTotal = 0;
+    
+    if (creditTable) {
+        const creditRows = creditTable.querySelectorAll('tbody tr');
+        console.log("Credit rows found:", creditRows.length);
+        
+        creditRows.forEach((row, idx) => {
+            const amountInput = row.querySelector('.credit-amount');
+            if (amountInput) {
+                const amount = parseFloat(amountInput.value) || 0;
+                console.log(`Credit row ${idx}: amount = ${amount}`);
+                creditsTotal += amount;
+            }
+        });
+    } else {
+        console.log("proposedCreditsTable not found");
+    }
+    
+    // Calculate expenses total from #proposedExpensesTable
+    const expenseTable = document.getElementById('proposedExpensesTable');
+    let expensesTotal = 0;
+    
+    if (expenseTable) {
+        const expenseRows = expenseTable.querySelectorAll('tbody tr');
+        console.log("Expense rows found:", expenseRows.length);
+        
+        expenseRows.forEach((row, idx) => {
+            const qtyInput = row.querySelector('.expense-qty');
+            const priceInput = row.querySelector('.expense-unit-price');
+            
+            if (qtyInput && priceInput) {
+                const qty = parseInt(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const total = qty * price;
+                console.log(`Expense row ${idx}: qty=${qty}, price=${price}, total=${total}`);
+                expensesTotal += total;
+            }
+        });
+    } else {
+        console.log("proposedExpensesTable not found");
+    }
+    
+    const balance = creditsTotal - expensesTotal;
+    
+    console.log("Totals - Credits:", creditsTotal, "Expenses:", expensesTotal, "Balance:", balance);
+    
+    // Update DOM elements
+    const creditsEl = document.getElementById('modalProposedCreditsTotal');
+    const expensesEl = document.getElementById('modalProposedExpensesTotal');
+    const balanceEl = document.getElementById('modalProposedBalance');
+    const balanceBox = document.getElementById('modalBalanceBox');
+    const warningEl = document.getElementById('modalBalanceWarning');
+    const warningAmount = document.getElementById('modalWarningAmount');
+    
+    if (creditsEl) creditsEl.textContent = money(creditsTotal);
+    if (expensesEl) expensesEl.textContent = money(expensesTotal);
+    if (balanceEl) balanceEl.textContent = money(balance);
+    
+    if (balanceBox) {
+        balanceBox.style.backgroundColor = balance >= 0 ? '#d4edda' : '#f8d7da';
+        balanceBox.style.borderColor = balance >= 0 ? '#c3e6cb' : '#f5c6cb';
+    }
+    
+    if (warningEl && warningAmount) {
+        if (balance < 0) {
+            warningEl.classList.remove('d-none');
+            warningAmount.textContent = money(Math.abs(balance));
+        } else {
+            warningEl.classList.add('d-none');
+        }
+    }
+  }
+
+  function collectCreditItems() {
+  const rows = document.querySelectorAll('#creditTbody tr');
+  const items = [];
+  
+  rows.forEach(row => {
+    const date = row.querySelector('.credit-date')?.value;
+    const source = row.querySelector('.credit-source')?.value?.trim();
+    const amount = parseFloat(row.querySelector('.credit-amount')?.value) || 0;
+    const notes = row.querySelector('.credit-notes')?.value?.trim() || '';
+    
+    if (date && source && amount > 0) {
+      items.push({
+        date: date,
+        source: source,
+        amount: amount,
+        notes: notes
+      });
     }
   });
+  
+  return items;
+  }
+
+    // In collectDebitItems
+  function collectDebitItems() {
+    const rows = document.querySelectorAll('#debitTbody tr');
+    const items = [];
+    
+    rows.forEach((row, index) => {
+      // Get the actual DOM elements
+      const descEl = row.querySelector('.debit-desc');
+      const dateEl = row.querySelector('.debit-date');
+      const categoryEl = row.querySelector('.debit-category');
+      const qtyEl = row.querySelector('.debit-qty');
+      const unitPriceEl = row.querySelector('.debit-unit-price');
+      const receiptNoEl = row.querySelector('.debit-receipt-no');
+      const receiptFileEl = row.querySelector('.debit-receipt');
+      
+      // DEBUG: Check if elements exist
+      console.log("=== ELEMENT CHECK ===", index);
+      console.log("descEl exists:", !!descEl);
+      console.log("dateEl exists:", !!dateEl);
+      console.log("categoryEl exists:", !!categoryEl);
+      console.log("qtyEl exists:", !!qtyEl);
+      console.log("unitPriceEl exists:", !!unitPriceEl);
+      console.log("receiptNoEl exists:", !!receiptNoEl);
+      console.log("receiptFileEl exists:", !!receiptFileEl);
+      
+      // Get values
+      const desc = descEl?.value?.trim();
+      const date = dateEl?.value;
+      const category = categoryEl?.value;
+      const qty = parseInt(qtyEl?.value) || 0;
+      const unitPrice = parseFloat(unitPriceEl?.value) || 0;
+      const receiptNo = receiptNoEl?.value?.trim();
+      const receiptFile = receiptFileEl?.files?.[0];
+      
+      console.log("Raw values:", {
+        desc,
+        date,
+        category,
+        qty,
+        unitPrice,
+        receiptNo,
+        receiptFileName: receiptFile?.name
+      });
+      
+      if (desc && date && category && qty > 0 && unitPrice > 0 && receiptNo && receiptFile) {
+        items.push({
+          description: desc,
+          date: date,
+          category: category,
+          quantity: qty,
+          unit_price: unitPrice,
+          receipt_no: receiptNo,
+          receipt_file: receiptFile,
+          row_index: index
+        });
+      }
+    });
+    
+    console.log("Collected debit items:", items);
+    return items;
+  }
+
+  function resetAddEventForm() {
+    // Clear event details
+    const setVal = (id, v) => { const el = qs(id); if (el) el.value = v; };
+    setVal("#aeName", "");
+    setVal("#aeDate", "");
+    setVal("#aeLocation", "");
+    setVal("#aeDescription", "");
+    
+    const scopeSel = qs("#aeScope");
+    const deptWrap = qs("#aeDeptWrap");
+    const deptSel = qs("#aeDepartment");
+    
+    if (scopeSel) scopeSel.value = "general";
+    if (deptSel) deptSel.value = "";
+    if (deptWrap) deptWrap.classList.toggle("d-none", true);
+    
+    // Clear credits table
+    const creditTable = document.getElementById('proposedCreditsTable');
+    if (creditTable) {
+        const tbody = creditTable.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+        }
+    }
+    
+    // Clear expenses table
+    const expenseTable = document.getElementById('proposedExpensesTable');
+    if (expenseTable) {
+        const tbody = expenseTable.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+        }
+    }
+    
+    // Add one empty row to each
+    addCreditRow();
+    addExpenseRow();
+    
+    // Force summary update
+    setTimeout(() => {
+        updateModalBudgetSummary();
+    }, 50);
+    
+    // Reset the modal's hidden input if any
+    const aeYear = document.getElementById('aeYear');
+    if (aeYear) aeYear.value = '';
+  }
+  // -------------------------
+  // Budget Proposal Functions
+  // -------------------------
+  
+  // Update a single row's total and validate
+  function updateItemTotal(row) {
+    const qtyInput = row.querySelector('.proposed-qty');
+    const costInput = row.querySelector('.proposed-cost');
+    const descInput = row.querySelector('.proposed-desc');
+    
+    const qty = parseInt(qtyInput?.value) || 0;
+    const cost = parseFloat(costInput?.value) || 0;
+    const total = qty * cost;
+    
+    const totalCell = row.querySelector('.proposed-item-total');
+    if (totalCell) {
+      totalCell.textContent = money(total);
+    }
+    
+    // Validation styling
+    if (descInput && descInput.value.trim() && qty > 0 && cost > 0) {
+      row.style.backgroundColor = '';
+      if (descInput) descInput.classList.remove('is-invalid');
+      if (qtyInput) qtyInput.classList.remove('is-invalid');
+      if (costInput) costInput.classList.remove('is-invalid');
+    } else {
+      row.style.backgroundColor = '#fff3cd';
+      if (descInput && !descInput.value.trim()) descInput.classList.add('is-invalid');
+      if (qtyInput && qty <= 0) qtyInput.classList.add('is-invalid');
+      if (costInput && cost <= 0) costInput.classList.add('is-invalid');
+    }
+    
+    updateFinancialSummary();
+  }
+
+  // Update row styling based on credit/debit type
+  function updateRowTypeStyle(row) {
+    const typeSelect = row.querySelector('.proposed-type');
+    const descInput = row.querySelector('.proposed-desc');
+    
+    if (typeSelect && typeSelect.value === 'credit') {
+      row.style.borderLeft = '3px solid #28a745';
+      descInput.placeholder = 'e.g., Sponsorship, Ticket Sales, Budget';
+    } else if (typeSelect) {
+      row.style.borderLeft = '3px solid #dc3545';
+      descInput.placeholder = 'e.g., Food, Venue, Materials (Expense)';
+    }
+  }
+
+  // Update the financial summary totals
+  function updateFinancialSummary() {
+    // Calculate credits total - just sum the amounts
+    const creditRows = document.querySelectorAll('#creditTbody tr');
+    let totalCredits = 0;
+    creditRows.forEach(row => {
+      const amount = parseFloat(row.querySelector('.credit-amount')?.value) || 0;
+      totalCredits += amount;
+    });
+    
+    // Calculate debits total - quantity * unit price
+    const debitRows = document.querySelectorAll('#debitTbody tr');
+    let totalDebits = 0;
+    debitRows.forEach(row => {
+      const qty = parseInt(row.querySelector('.debit-qty')?.value) || 0;
+      const unitPrice = parseFloat(row.querySelector('.debit-unit-price')?.value) || 0;
+      totalDebits += qty * unitPrice;
+    });
+    
+    const balance = totalCredits - totalDebits;
+    
+    // Update UI
+    const creditsEl = document.getElementById('summaryTotalCredits');
+    const debitsEl = document.getElementById('summaryTotalDebits');
+    const balanceEl = document.getElementById('summaryBalance');
+    const balanceBox = document.getElementById('summaryBalanceBox');
+    const warningEl = document.getElementById('summaryBalanceWarning');
+    const warningAmount = document.getElementById('warningAmount');
+    
+    if (creditsEl) creditsEl.textContent = money(totalCredits);
+    if (debitsEl) debitsEl.textContent = money(totalDebits);
+    if (balanceEl) balanceEl.textContent = money(balance);
+    
+    // Style balance box
+    if (balanceBox) {
+      if (balance >= 0) {
+        balanceBox.style.backgroundColor = '#d4edda';
+        balanceBox.style.borderColor = '#c3e6cb';
+      } else {
+        balanceBox.style.backgroundColor = '#f8d7da';
+        balanceBox.style.borderColor = '#f5c6cb';
+      }
+    }
+    
+    // Show warning if negative
+    if (warningEl && warningAmount) {
+      if (balance < 0) {
+        warningEl.classList.remove('d-none');
+        warningAmount.textContent = money(Math.abs(balance));
+      } else {
+        warningEl.classList.add('d-none');
+      }
+    }
+    
+    return { totalCredits, totalDebits, balance };
+  }
+
+  // Add a new budget row
+  function addProposedItemRow(data = null) {
+    const template = document.getElementById('proposedExpenseRowTemplate');
+    const tbody = document.getElementById('proposedExpenseTbody');
+    if (!template || !tbody) return;
+    
+    const clone = template.content.cloneNode(true);
+    const row = clone.querySelector('tr');
+    
+    const rowId = 'prop_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    row.dataset.rowId = rowId;
+    
+    const descInput = row.querySelector('.proposed-desc');
+    const qtyInput = row.querySelector('.proposed-qty');
+    const costInput = row.querySelector('.proposed-cost');
+    const typeSelect = row.querySelector('.proposed-type');
+    const removeBtn = row.querySelector('.proposed-remove');
+    
+    if (data) {
+      descInput.value = data.description || '';
+      qtyInput.value = data.quantity || 1;
+      costInput.value = data.estimated_cost || '';
+      if (data.type) typeSelect.value = data.type;
+    } else {
+      qtyInput.value = 1;
+      typeSelect.value = 'credit';
+    }
+    
+    // Initialize row
+    updateItemTotal(row);
+    updateRowTypeStyle(row);
+    
+    // Event listeners
+    [qtyInput, costInput].forEach(input => {
+      input.addEventListener('input', () => {
+        updateItemTotal(row);
+        updateFinancialSummary();
+      });
+      input.addEventListener('blur', () => formatInputValue(input));
+    });
+    
+    descInput.addEventListener('input', () => updateFinancialSummary());
+    typeSelect.addEventListener('change', () => {
+      updateRowTypeStyle(row);
+      updateFinancialSummary();
+    });
+    
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      updateFinancialSummary();
+    });
+    
+    tbody.appendChild(clone);
+    updateFinancialSummary();
+  }
+
+  // Format input values (e.g., cost to 2 decimal places)
+  function formatInputValue(input) {
+    if (!input) return;
+    if (input.classList.contains('proposed-cost') && input.value) {
+      const num = parseFloat(input.value);
+      if (!isNaN(num)) {
+        input.value = num.toFixed(2);
+      }
+    }
+  }
+
+  // Collect all proposed items from the table
+  function collectProposedItems() {
+    const rows = document.querySelectorAll('#proposedExpenseTbody tr');
+    const items = [];
+    
+    rows.forEach(row => {
+      const descInput = row.querySelector('.proposed-desc');
+      const qtyInput = row.querySelector('.proposed-qty');
+      const costInput = row.querySelector('.proposed-cost');
+      const typeSelect = row.querySelector('.proposed-type');
+      
+      const desc = descInput?.value?.trim();
+      const qty = parseInt(qtyInput?.value) || 0;
+      const cost = parseFloat(costInput?.value) || 0;
+      const type = typeSelect?.value || 'credit';
+      
+      if (desc && qty > 0 && cost > 0) {
+        items.push({
+          description: desc,
+          quantity: qty,
+          estimated_cost: cost,
+          type: type
+        });
+      }
+    });
+    
+    return items;
+  }
+
+  // Initialize the proposed expenses table with example rows
+  function initProposedExpenses() {
+    const template = document.getElementById('proposedExpenseRowTemplate');
+    const tbody = document.getElementById('proposedExpenseTbody');
+    const addBtn = document.getElementById('addProposedItemBtn');
+    
+    if (!template || !tbody || !addBtn) return;
+    
+    tbody.innerHTML = '';
+    
+    // Add example rows
+/*    addProposedItemRow({
+      description: 'Sponsorship / Fund Allocation',
+      quantity: 1,
+      estimated_cost: 5000,
+      type: 'credit'
+    });
+    
+    addProposedItemRow({
+      description: 'Food and Refreshments',
+      quantity: 50,
+      estimated_cost: 100,
+      type: 'debit'
+    }); */
+    
+    if (addBtn.dataset.eeBound !== '1') {
+      addBtn.dataset.eeBound = '1';
+      addBtn.addEventListener('click', () => addProposedItemRow());
+    }
+  }
+
+  // -------------------------
+  // Bind Submit Accomplishment button
+  // -------------------------
+  function bindSubmitAccomplishment() {
+    const btn = qs("#eeSubmitAccompBtn");
+    if (!btn || btn.dataset.eeBound === "1") return;
+    btn.dataset.eeBound = "1";
+    
+    btn.addEventListener("click", async () => {
+      try {
+        if (isReadOnlyMode()) throw new Error("Read-only mode.");
+        
+        const objectives = qs("#accompObjectivesInput")?.value.trim() || '';
+        const outcomes = qs("#accompOutcomesInput")?.value.trim() || '';
+        const challenges = qs("#accompChallengesInput")?.value.trim() || '';
+        
+        if (!objectives) throw new Error("Please enter the objectives achieved.");
+        if (!outcomes) throw new Error("Please enter the outcomes/accomplishments.");
+        
+        const modal = qs("#eeDecisionModal");
+        modal.dataset.objectives = objectives;
+        modal.dataset.outcomes = outcomes;
+        modal.dataset.challenges = challenges;
+        
+        openDecisionModal({
+          action: "submit_accomplishment_report",
+          title: "Submit Accomplishment Report?",
+          text: "This will submit the accomplishment report for review by the coordinator.",
+          confirmText: "Submit",
+          confirmBtnClass: "btn-primary",
+          showNoteField: false
+        });
+        
+      } catch (e) {
+        safeShowError(e.message);
+      }
+    });
   }
 
   // Bind Approve Accomplishment button (for coordinators)
   function bindApproveAccomplishment() {
-  const btn = qs("#accompApproveBtn");
-  if (!btn || btn.dataset.eeBound === "1") return;
-  btn.dataset.eeBound = "1";
-  
-  btn.addEventListener("click", async () => {
-    try {
-      if (isReadOnlyMode()) throw new Error("Read-only mode.");
-      
-      openDecisionModal({
-        action: "approve_accomplishment_report",
-        title: "Approve Accomplishment Report?",
-        text: "This will approve the accomplishment report and finalize it. This action cannot be undone.",
-        confirmText: "Approve",
-        confirmBtnClass: "btn-success",
-        showNoteField: false
-      });
-      
-    } catch (e) {
-      safeShowError(e.message);
-    }
-  });
+    const btn = qs("#accompApproveBtn");
+    if (!btn || btn.dataset.eeBound === "1") return;
+    btn.dataset.eeBound = "1";
+    
+    btn.addEventListener("click", async () => {
+      try {
+        if (isReadOnlyMode()) throw new Error("Read-only mode.");
+        
+        openDecisionModal({
+          action: "approve_accomplishment_report",
+          title: "Approve Accomplishment Report?",
+          text: "This will approve the accomplishment report and finalize it. This action cannot be undone.",
+          confirmText: "Approve",
+          confirmBtnClass: "btn-success",
+          showNoteField: false
+        });
+        
+      } catch (e) {
+        safeShowError(e.message);
+      }
+    });
   }
 
   // Bind Decline Accomplishment button (for coordinators)
   function bindDeclineAccomplishment() {
-  const btn = qs("#accompDeclineBtn");
-  if (!btn || btn.dataset.eeBound === "1") return;
-  btn.dataset.eeBound = "1";
-  
-  btn.addEventListener("click", async () => {
-    try {
-      if (isReadOnlyMode()) throw new Error("Read-only mode.");
-      
-      openDecisionModal({
-        action: "decline_accomplishment_report",
-        title: "Decline Accomplishment Report?",
-        text: "This will decline the accomplishment report. Please provide a reason below.",
-        confirmText: "Decline",
-        confirmBtnClass: "btn-danger",
-        showNoteField: true
-      });
-      
-    } catch (e) {
-      safeShowError(e.message);
-    }
-  });
+    const btn = qs("#accompDeclineBtn");
+    if (!btn || btn.dataset.eeBound === "1") return;
+    btn.dataset.eeBound = "1";
+    
+    btn.addEventListener("click", async () => {
+      try {
+        if (isReadOnlyMode()) throw new Error("Read-only mode.");
+        
+        openDecisionModal({
+          action: "decline_accomplishment_report",
+          title: "Decline Accomplishment Report?",
+          text: "This will decline the accomplishment report. Please provide a reason below.",
+          confirmText: "Decline",
+          confirmBtnClass: "btn-danger",
+          showNoteField: true
+        });
+        
+      } catch (e) {
+        safeShowError(e.message);
+      }
+    });
   }
 
   // -------------------------
@@ -331,8 +1040,11 @@
     myOrgs: [],
 
     // Proposed expenses data
-    proposedExpenses: [],
-    proposedTotal: 0,
+    proposedCredits: [],     
+    proposedExpenses: [],     
+    proposedCreditsTotal: 0,
+    proposedExpensesTotal: 0,
+    proposedBalance: 0,
 
     // Accomplishment report data
     accomplishment: {
@@ -347,6 +1059,9 @@
     },
   };
 
+  // -------------------------
+  // Data loading functions
+  // -------------------------
   async function loadTerms() {
     const data = await postJSON({ action: "get_terms" });
 
@@ -356,6 +1071,15 @@
     if (!state.selectedTermId) state.selectedTermId = state.activeTermId || 0;
 
     if (data.permissions) state.permissions = { ...state.permissions, ...data.permissions };
+
+    // ✅ ADD THIS DEBUG
+    console.log("=== LOAD TERMS RESPONSE ===");
+    console.log("my_orgs from server:", data.my_orgs);
+    
+    if (data.my_orgs) {
+      state.myOrgs = data.my_orgs;
+      console.log("State.myOrgs set to:", state.myOrgs);
+    }
 
     renderTermFilters();
     applyGlobalRoleBadges();
@@ -517,9 +1241,6 @@
     hardHide(qs("#eePassbookPrintBtn"), !canPassbook);
     hardHide(qs("#liqPrintBtn"), !canLiqBase);
     
-    // Accomplishment print visibility is handled in renderAccomplishment
-    // Don't hide it globally here
-
     setActionEnabled("#ledgerPrintBtn", canLedger, ro ? "Read-only mode." : "Not allowed.");
     setActionEnabled("#eePassbookPrintBtn", canPassbook, ro ? "Read-only mode." : "Not allowed.");
 
@@ -540,62 +1261,54 @@
   }
 
   function applyEventActionVisibility() {
-  const ro = isReadOnlyMode();
-  const proposalApproved = !!state.gates?.proposal_approved;
-  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
-  const status = state.selectedEvent?.status || '';
-  
-  // 🔒 When accomplishment is approved, EVERYTHING is locked
-  const isLocked = accomplishmentApproved;
+    const ro = isReadOnlyMode();
+    const proposalApproved = !!state.gates?.proposal_approved;
+    const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+    const status = state.selectedEvent?.status || '';
+    
+    const isLocked = accomplishmentApproved;
 
-  // Can add entries ONLY when:
-  // 1. NOT locked (accomplishment not approved)
-  // 2. Proposal is approved
-  // 3. Not read-only
-  const canAddCredit = !!state.permissions?.can_add_credit && !ro && !isLocked && proposalApproved;
-  const canAddDebit = !!state.permissions?.can_add_debit && !ro && !isLocked && proposalApproved;
-  const canManagePassbook = !!state.permissions?.can_manage_passbook && !ro && !isLocked && proposalApproved;
-  const canSubmitForApproval = !!state.permissions?.can_submit_for_approval && !ro && !isLocked && (status === 'Draft' || status === 'Declined');
-  const canDelete = !!state.permissions?.can_delete && !ro && !isLocked;
+    const canAddCredit = !!state.permissions?.can_add_credit && !ro && !isLocked && proposalApproved;
+    const canAddDebit = !!state.permissions?.can_add_debit && !ro && !isLocked && proposalApproved;
+    const canManagePassbook = !!state.permissions?.can_manage_passbook && !ro && !isLocked && proposalApproved;
+    const canSubmitForApproval = !!state.permissions?.can_submit_for_approval && !ro && !isLocked && (status === 'Draft' || status === 'Declined');
+    const canDelete = !!state.permissions?.can_delete && !ro && !isLocked;
 
-  // Hide/show main action buttons
-  hardHide(qs("#fundAddBtn"), !canAddCredit);
-  hardHide(qs("#debitAddBtn"), !canAddDebit);
-  hardHide(qs("#eeAddTxnBtn"), !canManagePassbook);
-  hardHide(qs("#eeSubmitForApprovalBtn"), !canSubmitForApproval);
+    hardHide(qs("#fundAddBtn"), !canAddCredit);
+    hardHide(qs("#debitAddBtn"), !canAddDebit);
+    hardHide(qs("#eeAddTxnBtn"), !canManagePassbook);
+    hardHide(qs("#eeSubmitForApprovalBtn"), !canSubmitForApproval);
 
-  // Update tooltips with clear reasons
-  setActionEnabled("#fundAddBtn", canAddCredit, 
-    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
-    (!proposalApproved ? "❌ Proposal must be approved first" : 
-    (ro ? "🔒 Read-only mode." : "")));
+    setActionEnabled("#fundAddBtn", canAddCredit, 
+      isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+      (!proposalApproved ? "❌ Proposal must be approved first" : 
+      (ro ? "🔒 Read-only mode." : "")));
 
-  setActionEnabled("#debitAddBtn", canAddDebit,
-    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
-    (!proposalApproved ? "❌ Proposal must be approved first" : 
-    (ro ? "🔒 Read-only mode." : "")));
+    setActionEnabled("#debitAddBtn", canAddDebit,
+      isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+      (!proposalApproved ? "❌ Proposal must be approved first" : 
+      (ro ? "🔒 Read-only mode." : "")));
 
-  setActionEnabled("#eeAddTxnBtn", canManagePassbook,
-    isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
-    (!proposalApproved ? "❌ Proposal must be approved first" : 
-    (ro ? "🔒 Read-only mode." : "")));
+    setActionEnabled("#eeAddTxnBtn", canManagePassbook,
+      isLocked ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+      (!proposalApproved ? "❌ Proposal must be approved first" : 
+      (ro ? "🔒 Read-only mode." : "")));
 
-  setActionEnabled("#eeSubmitForApprovalBtn", canSubmitForApproval,
-    isLocked ? "🔒 Event is already finalized" : 
-    (ro ? "🔒 Read-only mode." : 
-    (status !== 'Draft' && status !== 'Declined' ? "❌ Can only submit Draft or Declined events" : "")));
+    setActionEnabled("#eeSubmitForApprovalBtn", canSubmitForApproval,
+      isLocked ? "🔒 Event is already finalized" : 
+      (ro ? "🔒 Read-only mode." : 
+      (status !== 'Draft' && status !== 'Declined' ? "❌ Can only submit Draft or Declined events" : "")));
 
-  // Print buttons visibility
-  const canPrintLedger = !!state.permissions?.can_print_ledger;
-  const canPrintPassbook = !!state.permissions?.can_print_passbook;
-  const canPrintLiqBase = !!state.permissions?.can_print_liquidation;
+    const canPrintLedger = !!state.permissions?.can_print_ledger;
+    const canPrintPassbook = !!state.permissions?.can_print_passbook;
+    const canPrintLiqBase = !!state.permissions?.can_print_liquidation;
 
-  hardHide(qs("#ledgerPrintBtn"), !canPrintLedger);
-  hardHide(qs("#eePassbookPrintBtn"), !canPrintPassbook);
-  hardHide(qs("#liqPrintBtn"), !(canPrintLiqBase && accomplishmentApproved));
+    hardHide(qs("#ledgerPrintBtn"), !canPrintLedger);
+    hardHide(qs("#eePassbookPrintBtn"), !canPrintPassbook);
+    hardHide(qs("#liqPrintBtn"), !(canPrintLiqBase && accomplishmentApproved));
 
-  setActionEnabled("#ledgerPrintBtn", canPrintLedger, "Not allowed.");
-  setActionEnabled("#eePassbookPrintBtn", canPrintPassbook, "Not allowed.");
+    setActionEnabled("#ledgerPrintBtn", canPrintLedger, "Not allowed.");
+    setActionEnabled("#eePassbookPrintBtn", canPrintPassbook, "Not allowed.");
   }
 
   // -------------------------
@@ -728,6 +1441,212 @@
     document.head.appendChild(style);
   }
 
+  function ensureCardStyles2() {
+    if (document.getElementById("ee-card-styles")) return;
+
+    const style = document.createElement("style");
+    style.id = "ee-card-styles";
+    style.textContent = `
+      #eeCardsGrid .ee-event-card {
+        border-radius: 18px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        border: 1px solid rgba(13, 110, 253, 0.08);
+        min-height: 100%;
+      }
+
+      #eeCardsGrid .ee-event-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.10) !important;
+      }
+
+      #eeCardsGrid .ee-event-card .card-body {
+        padding: 0;
+      }
+
+      #eeCardsGrid .ee-event-card__top {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 18px 18px 12px;
+        background:
+          radial-gradient(circle at top right, rgba(13,110,253,0.10), transparent 35%),
+          linear-gradient(180deg, rgba(13,110,253,0.04), rgba(13,110,253,0));
+      }
+
+      #eeCardsGrid .ee-event-card__avatar {
+        width: 46px;
+        height: 46px;
+        min-width: 46px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #0d6efd;
+        background: rgba(13, 110, 253, 0.12);
+        border: 1px solid rgba(13, 110, 253, 0.12);
+      }
+
+      #eeCardsGrid .ee-event-card__title-wrap {
+        flex: 1;
+        min-width: 0;
+      }
+
+      #eeCardsGrid .ee-event-card__title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1f2937;
+        line-height: 1.3;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      #eeCardsGrid .ee-event-card__org {
+        font-size: .875rem;
+        color: #6b7280;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #eeCardsGrid .ee-event-card__badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0 18px 14px;
+      }
+
+      #eeCardsGrid .ee-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: .72rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: .01em;
+        border: 1px solid transparent;
+      }
+
+      #eeCardsGrid .ee-badge-success {
+        color: #0f5132;
+        background: #d1e7dd;
+        border-color: #badbcc;
+      }
+
+      #eeCardsGrid .ee-badge-warning {
+        color: #664d03;
+        background: #fff3cd;
+        border-color: #ffecb5;
+      }
+
+      #eeCardsGrid .ee-badge-danger {
+        color: #842029;
+        background: #f8d7da;
+        border-color: #f5c2c7;
+      }
+
+      #eeCardsGrid .ee-badge-info {
+        color: #055160;
+        background: #cff4fc;
+        border-color: #b6effb;
+      }
+
+      #eeCardsGrid .ee-badge-secondary {
+        color: #41464b;
+        background: #e2e3e5;
+        border-color: #d3d6d8;
+      }
+
+      #eeCardsGrid .ee-badge-dark {
+        color: #fff;
+        background: #495057;
+        border-color: #495057;
+      }
+
+      #eeCardsGrid .ee-event-card__meta {
+        display: grid;
+        gap: 10px;
+        padding: 0 18px 16px;
+      }
+
+      #eeCardsGrid .ee-event-card__meta-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 11px 12px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid #eef2f7;
+      }
+
+      #eeCardsGrid .ee-event-card__meta-icon {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        border: 1px solid #e9eef5;
+        color: #0d6efd;
+        font-size: .95rem;
+      }
+
+      #eeCardsGrid .ee-event-card__meta-label {
+        font-size: .72rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        margin-bottom: 2px;
+      }
+
+      #eeCardsGrid .ee-event-card__meta-value {
+        font-size: .92rem;
+        font-weight: 600;
+        color: #1f2937;
+        line-height: 1.25;
+        word-break: break-word;
+      }
+
+      #eeCardsGrid .ee-event-card__footer {
+        margin-top: auto;
+        padding: 0 18px 18px;
+      }
+
+      #eeCardsGrid .ee-open-btn {
+        border-radius: 12px;
+        font-weight: 600;
+        padding: .65rem .9rem;
+        box-shadow: none !important;
+      }
+
+      @media (max-width: 575.98px) {
+        #eeCardsGrid .ee-event-card__top,
+        #eeCardsGrid .ee-event-card__badges,
+        #eeCardsGrid .ee-event-card__meta,
+        #eeCardsGrid .ee-event-card__footer {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+
+        #eeCardsGrid .ee-event-card__title {
+          font-size: .96rem;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function filterEvents() {
     const q = String(state.search || "").trim().toLowerCase();
     if (!q) {
@@ -746,6 +1665,7 @@
 
   function renderCards() {
     ensureCardStyles();
+    ensureCardStyles2();
     const grid = qs("#eeCardsGrid");
     if (!grid) return;
 
@@ -878,212 +1798,6 @@
       });
     });
   }
-  
-  function ensureCardStyles() {
-  if (document.getElementById("ee-card-styles")) return;
-
-  const style = document.createElement("style");
-  style.id = "ee-card-styles";
-  style.textContent = `
-    #eeCardsGrid .ee-event-card {
-      border-radius: 18px;
-      overflow: hidden;
-      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-      border: 1px solid rgba(13, 110, 253, 0.08);
-      min-height: 100%;
-    }
-
-    #eeCardsGrid .ee-event-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.10) !important;
-    }
-
-    #eeCardsGrid .ee-event-card .card-body {
-      padding: 0;
-    }
-
-    #eeCardsGrid .ee-event-card__top {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      padding: 18px 18px 12px;
-      background:
-        radial-gradient(circle at top right, rgba(13,110,253,0.10), transparent 35%),
-        linear-gradient(180deg, rgba(13,110,253,0.04), rgba(13,110,253,0));
-    }
-
-    #eeCardsGrid .ee-event-card__avatar {
-      width: 46px;
-      height: 46px;
-      min-width: 46px;
-      border-radius: 14px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: #0d6efd;
-      background: rgba(13, 110, 253, 0.12);
-      border: 1px solid rgba(13, 110, 253, 0.12);
-    }
-
-    #eeCardsGrid .ee-event-card__title-wrap {
-      flex: 1;
-      min-width: 0;
-    }
-
-    #eeCardsGrid .ee-event-card__title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #1f2937;
-      line-height: 1.3;
-      margin-bottom: 4px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    #eeCardsGrid .ee-event-card__org {
-      font-size: .875rem;
-      color: #6b7280;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #eeCardsGrid .ee-event-card__badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 0 18px 14px;
-    }
-
-    #eeCardsGrid .ee-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      padding: 7px 10px;
-      font-size: .72rem;
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: .01em;
-      border: 1px solid transparent;
-    }
-
-    #eeCardsGrid .ee-badge-success {
-      color: #0f5132;
-      background: #d1e7dd;
-      border-color: #badbcc;
-    }
-
-    #eeCardsGrid .ee-badge-warning {
-      color: #664d03;
-      background: #fff3cd;
-      border-color: #ffecb5;
-    }
-
-    #eeCardsGrid .ee-badge-danger {
-      color: #842029;
-      background: #f8d7da;
-      border-color: #f5c2c7;
-    }
-
-    #eeCardsGrid .ee-badge-info {
-      color: #055160;
-      background: #cff4fc;
-      border-color: #b6effb;
-    }
-
-    #eeCardsGrid .ee-badge-secondary {
-      color: #41464b;
-      background: #e2e3e5;
-      border-color: #d3d6d8;
-    }
-
-    #eeCardsGrid .ee-badge-dark {
-      color: #fff;
-      background: #495057;
-      border-color: #495057;
-    }
-
-    #eeCardsGrid .ee-event-card__meta {
-      display: grid;
-      gap: 10px;
-      padding: 0 18px 16px;
-    }
-
-    #eeCardsGrid .ee-event-card__meta-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 11px 12px;
-      border-radius: 14px;
-      background: #f8fafc;
-      border: 1px solid #eef2f7;
-    }
-
-    #eeCardsGrid .ee-event-card__meta-icon {
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
-      border-radius: 10px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: #ffffff;
-      border: 1px solid #e9eef5;
-      color: #0d6efd;
-      font-size: .95rem;
-    }
-
-    #eeCardsGrid .ee-event-card__meta-label {
-      font-size: .72rem;
-      font-weight: 700;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      margin-bottom: 2px;
-    }
-
-    #eeCardsGrid .ee-event-card__meta-value {
-      font-size: .92rem;
-      font-weight: 600;
-      color: #1f2937;
-      line-height: 1.25;
-      word-break: break-word;
-    }
-
-    #eeCardsGrid .ee-event-card__footer {
-      margin-top: auto;
-      padding: 0 18px 18px;
-    }
-
-    #eeCardsGrid .ee-open-btn {
-      border-radius: 12px;
-      font-weight: 600;
-      padding: .65rem .9rem;
-      box-shadow: none !important;
-    }
-
-    @media (max-width: 575.98px) {
-      #eeCardsGrid .ee-event-card__top,
-      #eeCardsGrid .ee-event-card__badges,
-      #eeCardsGrid .ee-event-card__meta,
-      #eeCardsGrid .ee-event-card__footer {
-        padding-left: 14px;
-        padding-right: 14px;
-      }
-
-      #eeCardsGrid .ee-event-card__title {
-        font-size: .96rem;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-  }
 
   // -------------------------
   // event rendering
@@ -1116,320 +1830,171 @@
   }
 
   function isEventApprovedLocked(ev = null) {
-  const e = ev || state.selectedEvent || {};
-  const st = deriveStatusesFromEvent(e);
-  
-  // Only accomplishment approved should lock everything
-  return st.accomplishmentLc === "approved";
-}
-
-function setGateBadges() {
-  const p = !!state.gates.proposal_approved;
-  const a = !!state.gates.accomplishment_approved;
-  const status = state.selectedEvent?.status || '';
-  const accompStatus = state.accomplishment?.status || 'Draft';
-
-  console.log("[GateBadges] Proposal approved:", p, "Accomplishment approved:", a, "Accomp status:", accompStatus);
-
-  // Update header badges
-  setHidden(qs("#eeProposalGateBadge"), p);
-  setHidden(qs("#eeAccompGateBadge"), a);
-  setHidden(qs("#eeUnlockedBadge"), !(p && a));
-
-  // Main event banner
-  const banner = qs("#eeEventGateBanner");
-  const txt = qs("#eeEventGateText");
-
-  if (status === 'Draft') {
-    setHidden(banner, false);
-    if (txt) txt.textContent = "📝 This event is in DRAFT mode. Submit for approval to proceed.";
-  } else if (status === 'Submitted') {
-    setHidden(banner, false);
-    if (txt) txt.textContent = "⏳ This event is PENDING APPROVAL. Please wait for reviewer action.";
-  } else if (!p) {
-    setHidden(banner, false);
-    if (txt) txt.textContent = "⚠️ Proposal is not approved yet. You cannot add funds or expenses until the proposal is approved.";
-  } else if (!a) {
-    setHidden(banner, false);
-    if (txt) txt.textContent = "✅ Proposal approved. You can now add funds and expenses. The liquidation report becomes available after accomplishment is approved.";
-  } else {
-    setHidden(banner, true);
+    const e = ev || state.selectedEvent || {};
+    const st = deriveStatusesFromEvent(e);
+    return st.accomplishmentLc === "approved";
   }
 
-  // Funds/Expenses tabs lock banners
-  const fundsLock = qs("#eeFundsLock");
-  const fundsLockText = qs("#eeFundsLockText");
-  const debitsLock = qs("#eeDebitsLock");
-  const debitsLockText = qs("#eeDebitsLockText");
+  function setGateBadges() {
+    const p = !!state.gates.proposal_approved;
+    const a = !!state.gates.accomplishment_approved;
+    const status = state.selectedEvent?.status || '';
+    const accompStatus = state.accomplishment?.status || 'Draft';
 
-  if (!p) {
-    // Proposal not approved - show lock
-    setHidden(fundsLock, false);
-    setHidden(debitsLock, false);
-    if (fundsLockText) fundsLockText.textContent = "❌ Proposal must be approved first before adding funds.";
-    if (debitsLockText) debitsLockText.textContent = "❌ Proposal must be approved first before adding expenses.";
-  } else if (a) {
-    // Accomplishment approved - show lock (finalized)
-    setHidden(fundsLock, false);
-    setHidden(debitsLock, false);
-    if (fundsLockText) fundsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
-    if (debitsLockText) debitsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
-  } else {
-    // Proposal approved, accomplishment not approved - no lock
-    setHidden(fundsLock, true);
-    setHidden(debitsLock, true);
-  }
+    console.log("[GateBadges] Proposal approved:", p, "Accomplishment approved:", a, "Accomp status:", accompStatus);
 
-  // Liquidation tab - only unlocked when accomplishment is approved
-  const liqLock = qs("#eeLiqLock");
-  const liqLockText = qs("#eeLiqLockText");
-  
-  // Liquidation is ONLY available when accomplishment is approved
-  // Show lock when accomplishment is NOT approved
-  setHidden(liqLock, a); // Hide lock when a=true (accomplishment approved), show when a=false
-  
-  if (!a) {
-    if (liqLockText) liqLockText.textContent = "📄 Liquidation report becomes available AFTER the accomplishment report is approved.";
-    // Also make sure the print button is disabled/hidden when locked
-    hardHide(qs("#liqPrintBtn"), true);
-  } else {
-    // When accomplishment is approved, make sure print button is visible
-    hardHide(qs("#liqPrintBtn"), false);
-  }
+    setHidden(qs("#eeProposalGateBadge"), p);
+    setHidden(qs("#eeAccompGateBadge"), a);
+    setHidden(qs("#eeUnlockedBadge"), !(p && a));
 
-  // Accomplishment tab - lock banner should ONLY show when proposal is NOT approved
-  const accompLock = qs("#eeAccompLock");
-  const accompLockText = qs("#eeAccompLockText");
-  
-  // Accomplishment tab is available when proposal is approved
-  // Show lock when proposal is NOT approved
-  setHidden(accompLock, p); // Hide when p=true (proposal approved), show when p=false
-  
-  if (!p) {
-    if (accompLockText) accompLockText.textContent = "📝 This report becomes available AFTER the event proposal is approved.";
-  }
+    const banner = qs("#eeEventGateBanner");
+    const txt = qs("#eeEventGateText");
 
-  // 🔥 FIXED: Accomplishment status alert - use gates as source of truth
-  const accompStatusAlert = qs("#accompStatusAlert");
-  const accompStatusText = qs("#accompStatusText");
+    if (status === 'Draft') {
+      setHidden(banner, false);
+      if (txt) txt.textContent = "📝 This event is in DRAFT mode. Submit for approval to proceed.";
+    } else if (status === 'Submitted') {
+      setHidden(banner, false);
+      if (txt) txt.textContent = "⏳ This event is PENDING APPROVAL. Please wait for reviewer action.";
+    } else if (!p) {
+      setHidden(banner, false);
+      if (txt) txt.textContent = "⚠️ Proposal is not approved yet. You cannot add funds or expenses until the proposal is approved.";
+    } else if (!a) {
+      setHidden(banner, false);
+      if (txt) txt.textContent = "✅ Proposal approved. You can now add funds and expenses. The liquidation report becomes available after accomplishment is approved.";
+    } else {
+      setHidden(banner, true);
+    }
 
-  if (accompStatusAlert && accompStatusText) {
-    // Use gates.accomplishment_approved as the ultimate source of truth
-    const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
-    
-    console.log("[GateBadges] Accomplishment check:", {
-      gatesApproved: isAccomplishmentApproved,
-      stateStatus: state.accomplishment?.status,
-      proposalApproved: p
-    });
+    const fundsLock = qs("#eeFundsLock");
+    const fundsLockText = qs("#eeFundsLockText");
+    const debitsLock = qs("#eeDebitsLock");
+    const debitsLockText = qs("#eeDebitsLockText");
 
     if (!p) {
-      // Proposal not approved - show warning
-      accompStatusAlert.className = "alert alert-warning py-2 mb-3 small";
-      accompStatusAlert.style.display = "block";
-      accompStatusText.textContent = "🔒 Accomplishment report is locked. Event proposal must be approved first.";
-    } 
-    else if (isAccomplishmentApproved) {
-      // ✅ Accomplishment IS approved - HIDE THE ALERT COMPLETELY
-      console.log("[GateBadges] Accomplishment is approved - HIDING alert");
-      accompStatusAlert.style.display = "none";
-    } 
-    else {
-      // Proposal approved but accomplishment NOT approved yet
-      // Use state.accomplishment.status for Draft/Submitted/Declined
-      const currentStatus = state.accomplishment?.status || 'Draft';
-      console.log("[GateBadges] Showing alert for status:", currentStatus);
+      setHidden(fundsLock, false);
+      setHidden(debitsLock, false);
+      if (fundsLockText) fundsLockText.textContent = "❌ Proposal must be approved first before adding funds.";
+      if (debitsLockText) debitsLockText.textContent = "❌ Proposal must be approved first before adding expenses.";
+    } else if (a) {
+      setHidden(fundsLock, false);
+      setHidden(debitsLock, false);
+      if (fundsLockText) fundsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
+      if (debitsLockText) debitsLockText.textContent = "🔒 Event is already finalized. No further changes allowed.";
+    } else {
+      setHidden(fundsLock, true);
+      setHidden(debitsLock, true);
+    }
+
+    const liqLock = qs("#eeLiqLock");
+    const liqLockText = qs("#eeLiqLockText");
+    
+    setHidden(liqLock, a);
+    
+    if (!a) {
+      if (liqLockText) liqLockText.textContent = "📄 Liquidation report becomes available AFTER the accomplishment report is approved.";
+      hardHide(qs("#liqPrintBtn"), true);
+    } else {
+      hardHide(qs("#liqPrintBtn"), false);
+    }
+
+    const accompLock = qs("#eeAccompLock");
+    const accompLockText = qs("#eeAccompLockText");
+    
+    setHidden(accompLock, p);
+    
+    if (!p) {
+      if (accompLockText) accompLockText.textContent = "📝 This report becomes available AFTER the event proposal is approved.";
+    }
+
+    const accompStatusAlert = qs("#accompStatusAlert");
+    const accompStatusText = qs("#accompStatusText");
+
+    if (accompStatusAlert && accompStatusText) {
+      const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
       
-      switch (currentStatus) {
-        case "Submitted":
-          accompStatusAlert.className = "alert alert-info py-2 mb-3 small";
-          accompStatusAlert.style.display = "block";
-          accompStatusText.textContent = "⏳ Accomplishment report is pending review by the coordinator.";
-          break;
-        case "Declined":
-          accompStatusAlert.className = "alert alert-danger py-2 mb-3 small";
-          accompStatusAlert.style.display = "block";
-          accompStatusText.textContent = "❌ Accomplishment report was declined. Please revise and resubmit.";
-          break;
-        default: // Draft or any other status
-          accompStatusAlert.className = "alert alert-secondary py-2 mb-3 small";
-          accompStatusAlert.style.display = "block";
-          accompStatusText.textContent = "📝 Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
+      console.log("[GateBadges] Accomplishment check:", {
+        gatesApproved: isAccomplishmentApproved,
+        stateStatus: state.accomplishment?.status,
+        proposalApproved: p
+      });
+
+      if (!p) {
+        accompStatusAlert.className = "alert alert-warning py-2 mb-3 small";
+        accompStatusAlert.style.display = "block";
+        accompStatusText.textContent = "🔒 Accomplishment report is locked. Event proposal must be approved first.";
+      } 
+      else if (isAccomplishmentApproved) {
+        console.log("[GateBadges] Accomplishment is approved - HIDING alert");
+        accompStatusAlert.style.display = "none";
+      } 
+      else {
+        const currentStatus = state.accomplishment?.status || 'Draft';
+        console.log("[GateBadges] Showing alert for status:", currentStatus);
+        
+        switch (currentStatus) {
+          case "Submitted":
+            accompStatusAlert.className = "alert alert-info py-2 mb-3 small";
+            accompStatusAlert.style.display = "block";
+            accompStatusText.textContent = "⏳ Accomplishment report is pending review by the coordinator.";
+            break;
+          case "Declined":
+            accompStatusAlert.className = "alert alert-danger py-2 mb-3 small";
+            accompStatusAlert.style.display = "block";
+            accompStatusText.textContent = "❌ Accomplishment report was declined. Please revise and resubmit.";
+            break;
+          default:
+            accompStatusAlert.className = "alert alert-secondary py-2 mb-3 small";
+            accompStatusAlert.style.display = "block";
+            accompStatusText.textContent = "📝 Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
+        }
       }
     }
-  }
 
-  // Update button visibility based on current state
-  applyEventActionVisibility();
-  applyAccomplishmentSubmitButton();
-}
+    applyEventActionVisibility();
+    applyAccomplishmentSubmitButton();
+  }
 
   function applyApprovalButtons() {
-  const wrap = qs("#eeApprovalWrap");
-  if (!wrap) return;
+    const wrap = qs("#eeApprovalWrap");
+    if (!wrap) return;
 
-  const e = state.selectedEvent || {};
-  const role = state.permissions.role || "";
-  const approver = isApproverRole(role);
-  const ro = isReadOnlyMode();
+    const e = state.selectedEvent || {};
+    const role = state.permissions.role || "";
+    const approver = isApproverRole(role);
+    const ro = isReadOnlyMode();
 
-  if (!approver || ro) {
-    setHidden(wrap, true);
-    return;
-  }
-
-  const st = deriveStatusesFromEvent(e);
-  const status = e.status || '';
-
-  const proposalApproved = (state.gates.proposal_approved != null)
-    ? !!state.gates.proposal_approved
-    : (st.proposalLc === "approved");
-
-  const accompApproved = (state.gates.accomplishment_approved != null)
-    ? !!state.gates.accomplishment_approved
-    : (st.accomplishmentLc === "approved");
-
-  // Proposal needs decision when status is Submitted
-  const proposalNeedsDecision = !proposalApproved && status === 'Submitted';
-
-  // Accomplishment needs decision when proposal approved and accomplishment is Submitted
-  const accompNeedsDecision = proposalApproved && !accompApproved && st.accomplishmentLc === 'submitted';
-
-  const apProp = qs("#eeApproveProposalBtn");
-  const dcProp = qs("#eeDeclineProposalBtn");
-  const apAcc = qs("#eeApproveAccompBtn");
-  const dcAcc = qs("#eeDeclineAccompBtn");
-
-  setHidden(apProp, !proposalNeedsDecision);
-  setHidden(dcProp, !proposalNeedsDecision);
-  setHidden(apAcc, !accompNeedsDecision);
-  setHidden(dcAcc, !accompNeedsDecision);
-
-  const anyVisible = [apProp, dcProp, apAcc, dcAcc].some((x) => x && !x.classList.contains("d-none"));
-  setHidden(wrap, !anyVisible);
-  }
-
-  // Proposed expenses functions
-  let proposedItems = [];
-
-  function initProposedExpenses() {
-    const template = document.getElementById('proposedExpenseRowTemplate');
-    const tbody = document.getElementById('proposedExpenseTbody');
-    const addBtn = document.getElementById('addProposedItemBtn');
-    
-    if (!template || !tbody || !addBtn) return;
-    
-    tbody.innerHTML = '';
-    proposedItems = [];
-    addProposedItemRow();
-    
-    if (addBtn.dataset.eeBound !== '1') {
-      addBtn.dataset.eeBound = '1';
-      addBtn.addEventListener('click', () => addProposedItemRow());
+    if (!approver || ro) {
+      setHidden(wrap, true);
+      return;
     }
-  }
 
-  function addProposedItemRow(data = null) {
-    const template = document.getElementById('proposedExpenseRowTemplate');
-    const tbody = document.getElementById('proposedExpenseTbody');
-    if (!template || !tbody) return;
-    
-    const clone = template.content.cloneNode(true);
-    const row = clone.querySelector('tr');
-    
-    const rowId = 'prop_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    row.dataset.rowId = rowId;
-    
-    const descInput = row.querySelector('.proposed-desc');
-    const qtyInput = row.querySelector('.proposed-qty');
-    const costInput = row.querySelector('.proposed-cost');
-    const totalCell = row.querySelector('.proposed-item-total');
-    const removeBtn = row.querySelector('.proposed-remove');
-    
-    if (data) {
-      descInput.value = data.description || '';
-      qtyInput.value = data.quantity || 1;
-      costInput.value = data.estimated_cost || '';
-    }
-    
-    updateItemTotal(row);
-    
-    [qtyInput, costInput].forEach(input => {
-      input.addEventListener('input', () => updateItemTotal(row));
-      input.addEventListener('blur', () => formatInputValue(input));
-    });
-    
-    descInput.addEventListener('blur', () => descInput.value = descInput.value.trim());
-    
-    removeBtn.addEventListener('click', () => {
-      row.remove();
-      updateGrandTotal();
-    });
-    
-    tbody.appendChild(clone);
-    updateGrandTotal();
-  }
+    const st = deriveStatusesFromEvent(e);
+    const status = e.status || '';
 
-  function updateItemTotal(row) {
-    const qty = parseInt(row.querySelector('.proposed-qty')?.value) || 0;
-    const cost = parseFloat(row.querySelector('.proposed-cost')?.value) || 0;
-    const total = qty * cost;
-    
-    const totalCell = row.querySelector('.proposed-item-total');
-    if (totalCell) {
-      totalCell.textContent = money(total);
-    }
-    
-    updateGrandTotal();
-  }
+    const proposalApproved = (state.gates.proposal_approved != null)
+      ? !!state.gates.proposal_approved
+      : (st.proposalLc === "approved");
 
-  function updateGrandTotal() {
-    const rows = document.querySelectorAll('#proposedExpenseTbody tr');
-    let grandTotal = 0;
-    
-    rows.forEach(row => {
-      const qty = parseInt(row.querySelector('.proposed-qty')?.value) || 0;
-      const cost = parseFloat(row.querySelector('.proposed-cost')?.value) || 0;
-      grandTotal += qty * cost;
-    });
-    
-    const grandTotalEl = document.getElementById('proposedGrandTotal');
-    if (grandTotalEl) {
-      grandTotalEl.textContent = money(grandTotal);
-    }
-    
-    return grandTotal;
-  }
+    const accompApproved = (state.gates.accomplishment_approved != null)
+      ? !!state.gates.accomplishment_approved
+      : (st.accomplishmentLc === "approved");
 
-  function formatInputValue(input) {
-    if (!input) return;
-    if (input.classList.contains('proposed-cost') && input.value) {
-      const num = parseFloat(input.value);
-      if (!isNaN(num)) {
-        input.value = num.toFixed(2);
-      }
-    }
-  }
+    const proposalNeedsDecision = !proposalApproved && status === 'Submitted';
+    const accompNeedsDecision = proposalApproved && !accompApproved && st.accomplishmentLc === 'submitted';
 
-  function collectProposedItems() {
-    const rows = document.querySelectorAll('#proposedExpenseTbody tr');
-    const items = [];
-    
-    rows.forEach(row => {
-      const desc = row.querySelector('.proposed-desc')?.value?.trim();
-      const qty = parseInt(row.querySelector('.proposed-qty')?.value) || 0;
-      const cost = parseFloat(row.querySelector('.proposed-cost')?.value) || 0;
-      
-      if (desc && qty > 0 && cost > 0) {
-        items.push({
-          description: desc,
-          quantity: qty,
-          estimated_cost: cost
-        });
-      }
-    });
-    
-    return items;
+    const apProp = qs("#eeApproveProposalBtn");
+    const dcProp = qs("#eeDeclineProposalBtn");
+    const apAcc = qs("#eeApproveAccompBtn");
+    const dcAcc = qs("#eeDeclineAccompBtn");
+
+    setHidden(apProp, !proposalNeedsDecision);
+    setHidden(dcProp, !proposalNeedsDecision);
+    setHidden(apAcc, !accompNeedsDecision);
+    setHidden(dcAcc, !accompNeedsDecision);
+
+    const anyVisible = [apProp, dcProp, apAcc, dcAcc].some((x) => x && !x.classList.contains("d-none"));
+    setHidden(wrap, !anyVisible);
   }
 
   // -------------------------
@@ -1443,7 +2008,6 @@ function setGateBadges() {
     const proposalApproved = state.gates?.proposal_approved || false;
     const status = state.accomplishment?.status || 'Draft';
     
-    // Show submit button only for Draft or Declined, hide for Submitted/Approved
     const canSubmit = proposalApproved && !ro && isOfficerRole() && 
                       (status === 'Draft' || status === 'Declined');
     
@@ -1462,7 +2026,6 @@ function setGateBadges() {
       const status = state.accomplishment?.status || 'Draft';
       const isCoord = isCoordinator();
       
-      // Don't allow printing if it's draft/submitted and user is not coordinator
       if ((status === 'Draft' || status === 'Submitted') && !isCoord) {
         return safeShowError("Printing is not available until the report is approved.");
       }
@@ -1477,236 +2040,364 @@ function setGateBadges() {
   }
 
   function renderAccomplishment() {
-  const e = state.selectedEvent || {};
-  const accomp = state.accomplishment || {};
-  
-  // Use gates as source of truth for approval
-  const proposalApproved = !!state.gates?.proposal_approved;
-  const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
-  
-  // Override status if gates says it's approved
-  const status = isAccomplishmentApproved ? 'Approved' : (accomp.status || 'Draft');
-  
-  const isCoord = isCoordinator();
-  const canSubmit = !!state.permissions?.can_submit_accomplishment;
-  const canApprove = !!state.permissions?.can_approve_accomplishment;
-  const canDecline = !!state.permissions?.can_decline_accomplishment;
-  const canPrintBase = !!state.permissions?.can_print_accomplishment;
+    const e = state.selectedEvent || {};
+    const accomp = state.accomplishment || {};
+    
+    const proposalApproved = !!state.gates?.proposal_approved;
+    const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
+    
+    const status = isAccomplishmentApproved ? 'Approved' : (accomp.status || 'Draft');
+    
+    const isCoord = isCoordinator();
+    const canSubmit = !!state.permissions?.can_submit_accomplishment;
+    const canApprove = !!state.permissions?.can_approve_accomplishment;
+    const canDecline = !!state.permissions?.can_decline_accomplishment;
+    const canPrintBase = !!state.permissions?.can_print_accomplishment;
 
-  console.log("[Accomplishment] Rendering with status:", status, "Gates approved:", isAccomplishmentApproved);
+    console.log("[Accomplishment] Rendering with status:", status, "Gates approved:", isAccomplishmentApproved);
 
-  // -------------------------
-  // Basic event info
-  // -------------------------
-  const elEvent = qs("#accompEvent");
-  const elOrg = qs("#accompOrg");
-  const elVenue = qs("#accompVenue");
-  const elDate = qs("#accompDate");
-  const elYear = qs("#accompYear");
-  const elSem = qs("#accompSemester");
-  const elDesc = qs("#accompDescription");
+    // Basic event info
+    const elEvent = qs("#accompEvent");
+    const elOrg = qs("#accompOrg");
+    const elVenue = qs("#accompVenue");
+    const elDate = qs("#accompDate");
+    const elYear = qs("#accompYear");
+    const elSem = qs("#accompSemester");
+    const elDesc = qs("#accompDescription");
 
-  if (elEvent) elEvent.textContent = e.title || e.event_name || "—";
-  if (elOrg) elOrg.textContent = e.org_name || e.organization || "—";
-  if (elVenue) elVenue.textContent = e.location || "—";
-  if (elDate) {
-    elDate.textContent = e.event_date
-      ? new Date(e.event_date).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric"
-        })
-      : "—";
-  }
-  if (elYear) elYear.textContent = e.school_year || "—";
-  if (elSem) elSem.textContent = e.semester || "—";
-  if (elDesc) elDesc.textContent = e.description || e.event_description || "No description provided.";
-
-  // -------------------------
-  // Objectives / outcomes / challenges
-  // -------------------------
-  const defaultObjectives =
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-
-  const defaultOutcomes =
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.";
-
-  const defaultChallenges =
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.";
-
-  const objectivesText = String(accomp.objectives || "").trim() || defaultObjectives;
-  const outcomesText = String(accomp.outcomes || "").trim() || defaultOutcomes;
-  const challengesText = String(accomp.challenges || "").trim() || defaultChallenges;
-
-  const objectivesInput = qs("#accompObjectivesInput");
-  const outcomesInput = qs("#accompOutcomesInput");
-  const challengesInput = qs("#accompChallengesInput");
-
-  const objectivesView = qs("#accompObjectivesView");
-  const outcomesView = qs("#accompOutcomesView");
-  const challengesView = qs("#accompChallengesView");
-
-  const objectivesEdit = qs("#accompObjectivesEdit");
-  const outcomesEdit = qs("#accompOutcomesEdit");
-  const challengesEdit = qs("#accompChallengesEdit");
-
-  const isEditable =
-    proposalApproved &&
-    !isReadOnlyMode() &&
-    isOfficerRole() &&
-    !isAccomplishmentApproved &&
-    (status === "Draft" || status === "Declined");
-
-  if (objectivesInput) objectivesInput.value = objectivesText;
-  if (outcomesInput) outcomesInput.value = outcomesText;
-  if (challengesInput) challengesInput.value = challengesText;
-
-  if (objectivesView) {
-    objectivesView.innerHTML = objectivesText
-      ? objectivesText
-          .split("\n")
-          .filter(line => line.trim())
-          .map(line => `<div>• ${escapeHtml(line)}</div>`)
-          .join("")
-      : `<span class="text-muted">No objectives recorded.</span>`;
-  }
-
-  if (outcomesView) {
-    outcomesView.innerHTML = outcomesText
-      ? outcomesText
-          .split("\n")
-          .filter(line => line.trim())
-          .map(line => `<div>• ${escapeHtml(line)}</div>`)
-          .join("")
-      : `<span class="text-muted">No outcomes recorded.</span>`;
-  }
-
-  if (challengesView) {
-    challengesView.innerHTML = challengesText
-      ? challengesText
-          .split("\n")
-          .filter(line => line.trim())
-          .map(line => `<div>${escapeHtml(line)}</div>`)
-          .join("")
-      : `<span class="text-muted">No challenges recorded.</span>`;
-  }
-
-  setHidden(objectivesEdit, !isEditable);
-  setHidden(outcomesEdit, !isEditable);
-  setHidden(challengesEdit, !isEditable);
-
-  setHidden(objectivesView, isEditable);
-  setHidden(outcomesView, isEditable);
-  setHidden(challengesView, isEditable);
-
-  // -------------------------
-  // Financial summary
-  // -------------------------
-  const credits = Number(e.total_credits ?? 0);
-  const debits = Number(e.total_debits ?? 0);
-  const proposed = Number(state.proposedTotal || 0);
-  
-  // Calculate balance from credits and debits only
-  const balance = credits - debits;
-
-  const elProposed = qs("#accompProposedTotal");
-  const elActual = qs("#accompActualTotal");
-  const elCredits = qs("#accompCredits");
-  const elBalance = qs("#accompBalance");
-  const elBalanceBox = qs("#accompBalanceBox");
-
-  if (elProposed) elProposed.textContent = money(proposed);
-  if (elActual) elActual.textContent = money(debits);
-  if (elCredits) elCredits.textContent = money(credits);
-  if (elBalance) elBalance.textContent = money(balance);
-
-  if (elBalanceBox) {
-    if (balance >= 0) {
-      elBalanceBox.style.backgroundColor = "#d4edda";
-      elBalanceBox.style.borderColor = "#c3e6cb";
-    } else {
-      elBalanceBox.style.backgroundColor = "#f8d7da";
-      elBalanceBox.style.borderColor = "#f5c6cb";
+    if (elEvent) elEvent.textContent = e.title || e.event_name || "—";
+    if (elOrg) elOrg.textContent = e.org_name || e.organization || "—";
+    if (elVenue) elVenue.textContent = e.location || "—";
+    if (elDate) {
+      elDate.textContent = e.event_date
+        ? new Date(e.event_date).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric"
+          })
+        : "—";
     }
-  }
+    if (elYear) elYear.textContent = e.school_year || "—";
+    if (elSem) elSem.textContent = e.semester || "—";
+    if (elDesc) elDesc.textContent = e.description || e.event_description || "No description provided.";
 
-  // -------------------------
-  // Buttons
-  // -------------------------
-  const showSubmitButton =
-    canSubmit &&
-    proposalApproved &&
-    !isReadOnlyMode() &&
-    isOfficerRole() &&
-    !isAccomplishmentApproved &&
-    (status === "Draft" || status === "Declined");
+    // Objectives / outcomes / challenges - NO MORE LOREM IPSUM DEFAULTS
+    const objectivesText = String(accomp.objectives || "").trim();
+    const outcomesText = String(accomp.outcomes || "").trim();
+    const challengesText = String(accomp.challenges || "").trim();
 
-  setHidden(qs("#eeSubmitAccompBtn"), !showSubmitButton);
+    const objectivesInput = qs("#accompObjectivesInput");
+    const outcomesInput = qs("#accompOutcomesInput");
+    const challengesInput = qs("#accompChallengesInput");
 
-  setHidden(qs("#accompApproveBtn"), !(canApprove && status === "Submitted" && !isAccomplishmentApproved));
-  setHidden(qs("#accompDeclineBtn"), !(canDecline && status === "Submitted" && !isAccomplishmentApproved));
+    const objectivesView = qs("#accompObjectivesView");
+    const outcomesView = qs("#accompOutcomesView");
+    const challengesView = qs("#accompChallengesView");
 
-  let showPrintButton = false;
-  if (canPrintBase && proposalApproved) {
-    if (status === "Approved" || isAccomplishmentApproved) {
-      showPrintButton = true;
-    } else if ((status === "Draft" || status === "Submitted" || status === "Declined") && isCoord) {
-      showPrintButton = true;
+    const objectivesEdit = qs("#accompObjectivesEdit");
+    const outcomesEdit = qs("#accompOutcomesEdit");
+    const challengesEdit = qs("#accompChallengesEdit");
+
+    const isEditable =
+      proposalApproved &&
+      !isReadOnlyMode() &&
+      isOfficerRole() &&
+      !isAccomplishmentApproved &&
+      (status === "Draft" || status === "Declined");
+
+    if (objectivesInput) objectivesInput.value = objectivesText;
+    if (outcomesInput) outcomesInput.value = outcomesText;
+    if (challengesInput) challengesInput.value = challengesText;
+
+    if (objectivesView) {
+      objectivesView.innerHTML = objectivesText
+        ? objectivesText
+            .split("\n")
+            .filter(line => line.trim())
+            .map(line => `<div>• ${escapeHtml(line)}</div>`)
+            .join("")
+        : `<span class="text-muted">No objectives recorded.</span>`;
     }
-  }
-  setHidden(qs("#eePrintAccompBtn"), !showPrintButton);
 
-  const approvalWrapper = qs("#accompApprovalButtons");
-  if (approvalWrapper) {
-    const approveHidden = qs("#accompApproveBtn")?.classList.contains("d-none");
-    const declineHidden = qs("#accompDeclineBtn")?.classList.contains("d-none");
-    setHidden(approvalWrapper, !!approveHidden && !!declineHidden);
-  }
+    if (outcomesView) {
+      outcomesView.innerHTML = outcomesText
+        ? outcomesText
+            .split("\n")
+            .filter(line => line.trim())
+            .map(line => `<div>• ${escapeHtml(line)}</div>`)
+            .join("")
+        : `<span class="text-muted">No outcomes recorded.</span>`;
+    }
 
-  // -------------------------
-  // Status alert
-  // -------------------------
-  const alert = qs("#accompStatusAlert");
-  const alertText = qs("#accompStatusText");
+    if (challengesView) {
+      challengesView.innerHTML = challengesText
+        ? challengesText
+            .split("\n")
+            .filter(line => line.trim())
+            .map(line => `<div>${escapeHtml(line)}</div>`)
+            .join("")
+        : `<span class="text-muted">No challenges recorded.</span>`;
+    }
 
-  if (alert && alertText) {
-    if (!proposalApproved) {
-      alert.className = "alert alert-warning py-2 mb-3 small";
-      alert.style.display = "block";
-      alertText.textContent = "Accomplishment report is locked. Event proposal must be approved first.";
-    } else if (isAccomplishmentApproved) {
-      // Hide alert when approved
-      alert.style.display = "none";
-    } else {
-      switch (status) {
-        case "Submitted":
-          alert.className = "alert alert-info py-2 mb-3 small";
-          alert.style.display = "block";
-          alertText.textContent = "Accomplishment report is pending review by the coordinator.";
-          break;
-        case "Declined":
-          alert.className = "alert alert-danger py-2 mb-3 small";
-          alert.style.display = "block";
-          alertText.textContent = "Accomplishment report was declined. Please revise and resubmit.";
-          break;
-        default:
-          alert.className = "alert alert-secondary py-2 mb-3 small";
-          alert.style.display = "block";
-          alertText.textContent = "Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
+    setHidden(objectivesEdit, !isEditable);
+    setHidden(outcomesEdit, !isEditable);
+    setHidden(challengesEdit, !isEditable);
+
+    setHidden(objectivesView, isEditable);
+    setHidden(outcomesView, isEditable);
+    setHidden(challengesView, isEditable);
+
+    // Financial summary
+    const credits = Number(e.total_credits ?? 0);
+    const debits = Number(e.total_debits ?? 0);
+    const proposedCredits = state.proposedCreditsTotal || 0;
+    const proposedExpenses = state.proposedExpensesTotal || 0;
+    const proposedBalance = proposedCredits - proposedExpenses;
+    const actualBalance = credits - debits;
+
+    const elProposedCredits = qs("#accompProposedCredits");
+    const elProposedExpenses = qs("#accompProposedExpenses");
+    const elProposedBalance = qs("#accompProposedBalance");
+    const elActualCredits = qs("#accompActualCredits");
+    const elActualTotal = qs("#accompActualTotal");
+    const elBalance = qs("#accompBalance");
+    const elBalanceBox = qs("#accompBalanceBox");
+
+    if (elProposedCredits) elProposedCredits.textContent = money(proposedCredits);
+    if (elProposedExpenses) elProposedExpenses.textContent = money(proposedExpenses);
+    if (elProposedBalance) elProposedBalance.textContent = money(proposedBalance);
+    if (elActualCredits) elActualCredits.textContent = money(credits);
+    if (elActualTotal) elActualTotal.textContent = money(debits);
+    if (elBalance) elBalance.textContent = money(actualBalance);
+
+    if (elBalanceBox) {
+        if (actualBalance >= 0) {
+            elBalanceBox.style.backgroundColor = "#d4edda";
+            elBalanceBox.style.borderColor = "#c3e6cb";
+        } else {
+            elBalanceBox.style.backgroundColor = "#f8d7da";
+            elBalanceBox.style.borderColor = "#f5c6cb";
+        }
+    }
+
+    // Buttons
+    const showSubmitButton =
+      canSubmit &&
+      proposalApproved &&
+      !isReadOnlyMode() &&
+      isOfficerRole() &&
+      !isAccomplishmentApproved &&
+      (status === "Draft" || status === "Declined");
+
+    setHidden(qs("#eeSubmitAccompBtn"), !showSubmitButton);
+
+    setHidden(qs("#accompApproveBtn"), !(canApprove && status === "Submitted" && !isAccomplishmentApproved));
+    setHidden(qs("#accompDeclineBtn"), !(canDecline && status === "Submitted" && !isAccomplishmentApproved));
+
+    let showPrintButton = false;
+    if (canPrintBase && proposalApproved) {
+      if (status === "Approved" || isAccomplishmentApproved) {
+        showPrintButton = true;
+      } else if ((status === "Draft" || status === "Submitted" || status === "Declined") && isCoord) {
+        showPrintButton = true;
       }
     }
+    setHidden(qs("#eePrintAccompBtn"), !showPrintButton);
+
+    const approvalWrapper = qs("#accompApprovalButtons");
+    if (approvalWrapper) {
+      const approveHidden = qs("#accompApproveBtn")?.classList.contains("d-none");
+      const declineHidden = qs("#accompDeclineBtn")?.classList.contains("d-none");
+      setHidden(approvalWrapper, !!approveHidden && !!declineHidden);
+    }
+
+    // Status alert
+    const alert = qs("#accompStatusAlert");
+    const alertText = qs("#accompStatusText");
+
+    if (alert && alertText) {
+      if (!proposalApproved) {
+        alert.className = "alert alert-warning py-2 mb-3 small";
+        alert.style.display = "block";
+        alertText.textContent = "Accomplishment report is locked. Event proposal must be approved first.";
+      } else if (isAccomplishmentApproved) {
+        alert.style.display = "none";
+      } else {
+        switch (status) {
+          case "Submitted":
+            alert.className = "alert alert-info py-2 mb-3 small";
+            alert.style.display = "block";
+            alertText.textContent = "Accomplishment report is pending review by the coordinator.";
+            break;
+          case "Declined":
+            alert.className = "alert alert-danger py-2 mb-3 small";
+            alert.style.display = "block";
+            alertText.textContent = "Accomplishment report was declined. Please revise and resubmit.";
+            break;
+          default:
+            alert.className = "alert alert-secondary py-2 mb-3 small";
+            alert.style.display = "block";
+            alertText.textContent = "Accomplishment report is in draft mode. Click 'Submit for Review' when complete.";
+        }
+      }
+    }
+
+    // Signers + generated info
+    loadAccomplishmentSigners();
+
+    const generatedInfo = qs("#accompGeneratedInfo");
+    if (generatedInfo) {
+      generatedInfo.textContent = `Generated: ${new Date().toLocaleString()}`;
+    }
   }
 
-  // -------------------------
-  // Signers + generated info
-  // -------------------------
-  loadAccomplishmentSigners();
-
-  const generatedInfo = qs("#accompGeneratedInfo");
-  if (generatedInfo) {
-    generatedInfo.textContent = `Generated: ${new Date().toLocaleString()}`;
+  function renderProposedBudgetComparison() {
+      // ==================== PROPOSED CREDITS SECTION (Funds Tab) ====================
+      const proposedCreditsTbody = qs("#proposedCreditsTbody");
+      if (proposedCreditsTbody) {
+          if (state.proposedCredits.length === 0) {
+              proposedCreditsTbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No proposed credits yet.</td></tr>';
+          } else {
+              proposedCreditsTbody.innerHTML = state.proposedCredits.map((item, idx) => `
+                  <tr>
+                      <td>${escapeHtml(item.description)}</td>
+                      <td class="text-end fw-semibold text-success">${money(item.amount)}</td>
+                      <td>${escapeHtml(item.notes || '—')}</td>
+                  </tr>
+              `).join('');
+          }
+          
+          const totalProposedCreditsEl = qs("#totalProposedCredits");
+          if (totalProposedCreditsEl) totalProposedCreditsEl.textContent = money(state.proposedCreditsTotal);
+      }
+      
+      // ==================== PROPOSED EXPENSES SECTION (Expenses Tab) ====================
+      const proposedDebitsTbody = qs("#proposedDebitsTbody");
+      if (proposedDebitsTbody) {
+          if (state.proposedExpenses.length === 0) {
+              proposedDebitsTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No proposed expenses yet.</td></tr>';
+          } else {
+              proposedDebitsTbody.innerHTML = state.proposedExpenses.map((item, idx) => `
+                  <tr>
+                      <td>${escapeHtml(item.description)}</td>
+                      <td class="text-center">${item.quantity}</td>
+                      <td class="text-end">${money(item.estimated_cost)}</td>
+                      <td class="text-end fw-semibold text-danger">${money(item.total)}</td>
+                      <td>${escapeHtml(item.notes || '—')}</td>
+                  </tr>
+              `).join('');
+          }
+          
+          const totalProposedDebitsEl = qs("#totalProposedDebits");
+          if (totalProposedDebitsEl) totalProposedDebitsEl.textContent = money(state.proposedExpensesTotal);
+      }
+      
+      // ==================== VARIANCE IN FUNDS TAB ====================
+      const actualCreditsTotal = state.credits.reduce((sum, c) => sum + c.amount, 0);
+      const creditVariance = actualCreditsTotal - state.proposedCreditsTotal;
+      
+      const varianceProposedCreditsEl = qs("#varianceProposedCredits");
+      const varianceActualCreditsEl = qs("#varianceActualCredits");
+      const varianceCreditsDiffEl = qs("#varianceCreditsDiff");
+      
+      if (varianceProposedCreditsEl) varianceProposedCreditsEl.textContent = money(state.proposedCreditsTotal);
+      if (varianceActualCreditsEl) varianceActualCreditsEl.textContent = money(actualCreditsTotal);
+      if (varianceCreditsDiffEl) {
+          varianceCreditsDiffEl.textContent = money(creditVariance);
+          varianceCreditsDiffEl.className = creditVariance >= 0 ? 'text-success' : 'text-danger';
+      }
+      
+      // ==================== VARIANCE IN EXPENSES TAB ====================
+      const actualDebitsTotal = state.debits.reduce((sum, d) => sum + d.amount, 0);
+      const expenseVariance = actualDebitsTotal - state.proposedExpensesTotal;
+      const variancePercent = state.proposedExpensesTotal > 0 ? (actualDebitsTotal / state.proposedExpensesTotal) * 100 : 0;
+      
+      const expenseVarianceProposedEl = qs("#expenseVarianceProposed");
+      const expenseVarianceActualEl = qs("#expenseVarianceActual");
+      const expenseVarianceDiffEl = qs("#expenseVarianceDiff");
+      const expenseVarianceProgress = qs("#expenseVarianceProgress");
+      const expenseVariancePercent = qs("#expenseVariancePercent");
+      
+      if (expenseVarianceProposedEl) expenseVarianceProposedEl.textContent = money(state.proposedExpensesTotal);
+      if (expenseVarianceActualEl) expenseVarianceActualEl.textContent = money(actualDebitsTotal);
+      if (expenseVarianceDiffEl) {
+          expenseVarianceDiffEl.textContent = money(expenseVariance);
+          expenseVarianceDiffEl.className = expenseVariance <= 0 ? 'text-success' : 'text-danger';
+      }
+      
+      if (expenseVarianceProgress) {
+          const width = Math.min(100, Math.max(0, variancePercent));
+          expenseVarianceProgress.style.width = `${width}%`;
+          expenseVarianceProgress.className = expenseVariance <= 0 ? 'progress-bar bg-success' : 'progress-bar bg-danger';
+          if (expenseVariancePercent) expenseVariancePercent.textContent = `${width.toFixed(0)}%`;
+      }
+      
+      // ==================== LEDGER SUMMARY ====================
+      const proposedBalance = state.proposedCreditsTotal - state.proposedExpensesTotal;
+      const actualBalance = actualCreditsTotal - actualDebitsTotal;
+      const netVariance = actualBalance - proposedBalance;
+      
+      const ledgerProposedCredits = qs("#ledgerProposedCredits");
+      const ledgerActualCredits = qs("#ledgerActualCredits");
+      const ledgerProposedDebits = qs("#ledgerProposedDebits");
+      const ledgerActualDebits = qs("#ledgerActualDebits");
+      const ledgerProposedBalance = qs("#ledgerProposedBalance");
+      const ledgerActualBalance = qs("#ledgerActualBalance");
+      const ledgerVariance = qs("#ledgerVariance");
+      
+      if (ledgerProposedCredits) ledgerProposedCredits.textContent = money(state.proposedCreditsTotal);
+      if (ledgerActualCredits) ledgerActualCredits.textContent = money(actualCreditsTotal);
+      if (ledgerProposedDebits) ledgerProposedDebits.textContent = money(state.proposedExpensesTotal);
+      if (ledgerActualDebits) ledgerActualDebits.textContent = money(actualDebitsTotal);
+      if (ledgerProposedBalance) ledgerProposedBalance.textContent = money(proposedBalance);
+      if (ledgerActualBalance) ledgerActualBalance.textContent = money(actualBalance);
+      if (ledgerVariance) {
+          ledgerVariance.textContent = money(netVariance);
+          ledgerVariance.className = netVariance >= 0 ? 'text-success' : 'text-danger';
+      }
+      
+      // ==================== VARIANCE IN OVERVIEW TAB ====================
+      const varianceProposedBalanceEl = qs("#varianceProposedBalance");
+      const varianceActualBalanceEl = qs("#varianceActualBalance");
+      const varianceNetDiffEl = qs("#varianceNetDiff");
+      
+      if (varianceProposedBalanceEl) varianceProposedBalanceEl.textContent = money(proposedBalance);
+      if (varianceActualBalanceEl) varianceActualBalanceEl.textContent = money(actualBalance);
+      if (varianceNetDiffEl) {
+          varianceNetDiffEl.textContent = money(netVariance);
+          varianceNetDiffEl.className = netVariance >= 0 ? 'text-success' : 'text-danger';
+      }
+      
+      // ==================== ACCOMPLISHMENT TAB FINANCIAL SUMMARY ====================
+      const accompProposedCredits = qs("#accompProposedCredits");
+      const accompProposedExpenses = qs("#accompProposedExpenses");
+      const accompProposedBalance = qs("#accompProposedBalance");
+      const accompActualCredits = qs("#accompActualCredits");
+      const accompActualTotal = qs("#accompActualTotal");
+      const accompBalance = qs("#accompBalance");
+      const accompVarianceAlert = qs("#accompVarianceAlert");
+      const accompVarianceText = qs("#accompVarianceText");
+      
+      if (accompProposedCredits) accompProposedCredits.textContent = money(state.proposedCreditsTotal);
+      if (accompProposedExpenses) accompProposedExpenses.textContent = money(state.proposedExpensesTotal);
+      if (accompProposedBalance) accompProposedBalance.textContent = money(proposedBalance);
+      if (accompActualCredits) accompActualCredits.textContent = money(actualCreditsTotal);
+      if (accompActualTotal) accompActualTotal.textContent = money(actualDebitsTotal);
+      if (accompBalance) accompBalance.textContent = money(actualBalance);
+      
+      if (accompVarianceAlert && accompVarianceText) {
+          if (netVariance > 0) {
+              accompVarianceAlert.className = "alert alert-success mt-3 py-2 small";
+              accompVarianceText.innerHTML = `✅ The event ended ₱${Math.abs(netVariance).toFixed(2)} UNDER budget. Good financial management!`;
+          } else if (netVariance < 0) {
+              accompVarianceAlert.className = "alert alert-warning mt-3 py-2 small";
+              accompVarianceText.innerHTML = `⚠️ The event exceeded the budget by ₱${Math.abs(netVariance).toFixed(2)}. Please provide explanation in challenges/recommendations.`;
+          } else {
+              accompVarianceAlert.className = "alert alert-info mt-3 py-2 small";
+              accompVarianceText.innerHTML = `✅ The event met the budget exactly. No variance.`;
+          }
+      }
   }
-}
 
   // -------------------------
   // event submit-for-approval UI (officer)
@@ -1793,122 +2484,84 @@ function setGateBadges() {
   }
 
   function renderCredits() {
-  const tb = qs("#fundsTbody");
-  if (!tb) return;
+    const tb = qs("#fundsTbody");
+    if (!tb) return;
 
-  const ro = isReadOnlyMode();
-  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
-  const isLocked = accomplishmentApproved;
-  const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
+    const ro = isReadOnlyMode();
+    const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+    const isLocked = accomplishmentApproved;
+    const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
 
-  if (!state.credits.length) {
-    tb.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No credits yet.</td></tr>`;
-    return;
-  }
+    if (!state.credits.length) {
+      tb.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No credits yet.</td></tr>`;
+      return;
+    }
 
-  tb.innerHTML = state.credits.map((c) => {
-    const dt = escapeHtml(c.date || c.created_at || "—");
-    const src = escapeHtml(c.source || c.title || "—");
-    const notes = escapeHtml(c.notes || c.description || "—");
-    const amt = money(c.amount || 0);
-    const creditId = Number(c.id || 0);
+    tb.innerHTML = state.credits.map((c) => {
+      const dt = escapeHtml(c.date || c.created_at || "—");
+      const src = escapeHtml(c.source || c.title || "—");
+      const notes = escapeHtml(c.notes || c.description || "—");
+      const amt = money(c.amount || 0);
+      const creditId = Number(c.id || 0);
+      
+      const deleteBtn = canDelete 
+        ? `<button class="btn btn-link btn-sm text-danger p-0 ee-credit-delete" data-credit-id="${creditId}" title="Delete credit">
+            <i class="bi bi-trash"></i>
+          </button>`
+        : '';
+
+      return `
+        <tr data-credit-id="${creditId}">
+          <td>${dt}</td>
+          <td>${src}</td>
+          <td>${notes}</td>
+          <td class="text-end">${amt}</td>
+          <td class="text-center">${deleteBtn}</td>
+        </tr>
+      `;
+    }).join("");
     
-    const deleteBtn = canDelete 
-      ? `<button class="btn btn-link btn-sm text-danger p-0 ee-credit-delete" data-credit-id="${creditId}" title="Delete credit">
-          <i class="bi bi-trash"></i>
-        </button>`
-      : '';
-
-    return `
-      <tr data-credit-id="${creditId}">
-        <td>${dt}</td>
-        <td>${src}</td>
-        <td>${notes}</td>
-        <td class="text-end">${amt}</td>
-        <td class="text-center">${deleteBtn}</td>
-      </tr>
-    `;
-  }).join("");
-  
-  // Bind delete events after rendering (only if canDelete is true)
-  if (canDelete) {
-    qsa(".ee-credit-delete").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const creditId = btn.getAttribute("data-credit-id");
-        if (!creditId) return;
-        
-        const modal = qs("#eeDecisionModal");
-        modal.dataset.creditId = creditId;
-        
-        openDecisionModal({
-          action: "delete_credit",
-          title: "Delete Credit?",
-          text: "This will permanently delete this credit. This action cannot be undone.",
-          confirmText: "Delete",
-          confirmBtnClass: "btn-danger",
-          showNoteField: false
+    if (canDelete) {
+      qsa(".ee-credit-delete").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const creditId = btn.getAttribute("data-credit-id");
+          if (!creditId) return;
+          
+          const modal = qs("#eeDecisionModal");
+          modal.dataset.creditId = creditId;
+          
+          openDecisionModal({
+            action: "delete_credit",
+            title: "Delete Credit?",
+            text: "This will permanently delete this credit. This action cannot be undone.",
+            confirmText: "Delete",
+            confirmBtnClass: "btn-danger",
+            showNoteField: false
+          });
         });
       });
-    });
-  }
+    }
   }
 
   function renderDebits() {
-  const tb = qs("#debitsTbody");
-  const liqTb = qs("#liqTbody");
-  if (!tb) return;
+    const tb = qs("#debitsTbody");
+    const liqTb = qs("#liqTbody");
+    if (!tb) return;
 
-  const ro = isReadOnlyMode();
-  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
-  const isLocked = accomplishmentApproved;
-  const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
+    const ro = isReadOnlyMode();
+    const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+    const isLocked = accomplishmentApproved;
+    const canDelete = !ro && !isLocked && !!state.permissions?.can_delete;
 
-  if (!state.debits.length) {
-    tb.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No expenses yet.</td></tr>`;
-    if (liqTb) liqTb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No items.</td></tr>`;
-    return;
-  }
+    if (!state.debits.length) {
+      tb.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No expenses yet.</td></tr>`;
+      if (liqTb) liqTb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No items.</td></tr>`;
+      return;
+    }
 
-  tb.innerHTML = state.debits.map((d) => {
-    const dt = escapeHtml(d.date || d.created_at || "—");
-    const cat = escapeHtml(d.category || "—");
-    const notes = escapeHtml(d.notes || d.description || "—");
-    const qty = escapeHtml(d.qty ?? d.quantity ?? 1);
-    const unit = money(d.unit_price ?? 0);
-    const amt = money(d.amount ?? 0);
-    const rno = escapeHtml(d.receipt_no || d.receipt_number || "—");
-    const debitId = Number(d.id || 0);
-
-    const fileUrl = d.receipt_url || d.receipt_path || "";
-    const receiptCell = fileUrl
-      ? `<button type="button" class="btn btn-link btn-sm p-0" data-ee-openfile="${escapeHtml(fileUrl)}">View</button>`
-      : `<span class="text-muted small">—</span>`;
-    
-    const deleteBtn = canDelete 
-      ? `<button class="btn btn-link btn-sm text-danger p-0 ee-debit-delete" data-debit-id="${debitId}" title="Delete expense">
-          <i class="bi bi-trash"></i>
-        </button>`
-      : '';
-
-    return `
-      <tr data-debit-id="${debitId}">
-        <td>${dt}</td>
-        <td>${cat}</td>
-        <td>${notes}</td>
-        <td class="text-center">${qty}</td>
-        <td class="text-end">${unit}</td>
-        <td class="text-end">${amt}</td>
-        <td>${rno}</td>
-        <td>${receiptCell}</td>
-        <td class="text-center">${deleteBtn}</td>
-      </tr>
-    `;
-  }).join("");
-
-  if (liqTb) {
-    liqTb.innerHTML = state.debits.map((d, idx) => {
+    tb.innerHTML = state.debits.map((d) => {
       const dt = escapeHtml(d.date || d.created_at || "—");
       const cat = escapeHtml(d.category || "—");
       const notes = escapeHtml(d.notes || d.description || "—");
@@ -1916,9 +2569,21 @@ function setGateBadges() {
       const unit = money(d.unit_price ?? 0);
       const amt = money(d.amount ?? 0);
       const rno = escapeHtml(d.receipt_no || d.receipt_number || "—");
+      const debitId = Number(d.id || 0);
+
+      const fileUrl = d.receipt_url || d.receipt_path || "";
+      const receiptCell = fileUrl
+        ? `<button type="button" class="btn btn-link btn-sm p-0" data-ee-openfile="${escapeHtml(fileUrl)}">View</button>`
+        : `<span class="text-muted small">—</span>`;
+      
+      const deleteBtn = canDelete 
+        ? `<button class="btn btn-link btn-sm text-danger p-0 ee-debit-delete" data-debit-id="${debitId}" title="Delete expense">
+            <i class="bi bi-trash"></i>
+          </button>`
+        : '';
+
       return `
-        <tr>
-          <td>${idx + 1}</td>
+        <tr data-debit-id="${debitId}">
           <td>${dt}</td>
           <td>${cat}</td>
           <td>${notes}</td>
@@ -1926,38 +2591,62 @@ function setGateBadges() {
           <td class="text-end">${unit}</td>
           <td class="text-end">${amt}</td>
           <td>${rno}</td>
+          <td>${receiptCell}</td>
+          <td class="text-center">${deleteBtn}</td>
         </tr>
       `;
     }).join("");
-  }
 
-  qsa("[data-ee-openfile]").forEach((btn) => {
-    btn.addEventListener("click", () => openNewTab(btn.getAttribute("data-ee-openfile") || ""));
-  });
-  
-  // Bind delete events after rendering (only if canDelete is true)
-  if (canDelete) {
-    qsa(".ee-debit-delete").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const debitId = btn.getAttribute("data-debit-id");
-        if (!debitId) return;
-        
-        const modal = qs("#eeDecisionModal");
-        modal.dataset.debitId = debitId;
-        
-        openDecisionModal({
-          action: "delete_debit",
-          title: "Delete Expense?",
-          text: "This will permanently delete this expense. This action cannot be undone.",
-          confirmText: "Delete",
-          confirmBtnClass: "btn-danger",
-          showNoteField: false
+    if (liqTb) {
+      liqTb.innerHTML = state.debits.map((d, idx) => {
+        const dt = escapeHtml(d.date || d.created_at || "—");
+        const cat = escapeHtml(d.category || "—");
+        const notes = escapeHtml(d.notes || d.description || "—");
+        const qty = escapeHtml(d.qty ?? d.quantity ?? 1);
+        const unit = money(d.unit_price ?? 0);
+        const amt = money(d.amount ?? 0);
+        const rno = escapeHtml(d.receipt_no || d.receipt_number || "—");
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${dt}</td>
+            <td>${cat}</td>
+            <td>${notes}</td>
+            <td class="text-center">${qty}</td>
+            <td class="text-end">${unit}</td>
+            <td class="text-end">${amt}</td>
+            <td>${rno}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    qsa("[data-ee-openfile]").forEach((btn) => {
+      btn.addEventListener("click", () => openNewTab(btn.getAttribute("data-ee-openfile") || ""));
+    });
+    
+    if (canDelete) {
+      qsa(".ee-debit-delete").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const debitId = btn.getAttribute("data-debit-id");
+          if (!debitId) return;
+          
+          const modal = qs("#eeDecisionModal");
+          modal.dataset.debitId = debitId;
+          
+          openDecisionModal({
+            action: "delete_debit",
+            title: "Delete Expense?",
+            text: "This will permanently delete this expense. This action cannot be undone.",
+            confirmText: "Delete",
+            confirmBtnClass: "btn-danger",
+            showNoteField: false
+          });
         });
       });
-    });
-  }
+    }
   }
 
   async function deleteCredit(creditId) {
@@ -1995,129 +2684,117 @@ function setGateBadges() {
   }
 
   function renderLedger() {
-  const tb = qs("#ledgerTbody");
-  if (!tb) {
-    console.error("[Ledger] Table body element #ledgerTbody not found!");
-    return;
-  }
+    const tb = qs("#ledgerTbody");
+    if (!tb) {
+      console.error("[Ledger] Table body element #ledgerTbody not found!");
+      return;
+    }
 
-  console.log("[Ledger] Rendering ledger with data:", state.ledger);
-  console.log("[Ledger] Data type:", typeof state.ledger);
-  console.log("[Ledger] Is array:", Array.isArray(state.ledger));
-  console.log("[Ledger] Length:", state.ledger?.length);
+    console.log("[Ledger] Rendering ledger with data:", state.ledger);
 
-  // If ledger is empty but we have credits/debits, create a simple ledger on the fly
-  if ((!state.ledger || state.ledger.length === 0) && (state.credits?.length > 0 || state.debits?.length > 0)) {
-    console.log("[Ledger] Creating simple ledger from credits/debits");
-    const simpleLedger = [];
-    let balance = 0;
-    
-    // Create entries from credits
-    state.credits.forEach(c => {
-      balance += c.amount;
-      simpleLedger.push({
-        date: c.date,
-        type: 'CREDIT',
-        description: c.source + (c.notes ? ' - ' + c.notes : ''),
-        credit: c.amount,
-        debit: 0,
-        balance: balance,
-        recorded_by_name: 'User ' + (c.recorded_by || ''),
-        reference: 'credit#' + c.id
+    if ((!state.ledger || state.ledger.length === 0) && (state.credits?.length > 0 || state.debits?.length > 0)) {
+      console.log("[Ledger] Creating simple ledger from credits/debits");
+      const simpleLedger = [];
+      let balance = 0;
+      
+      state.credits.forEach(c => {
+        balance += c.amount;
+        simpleLedger.push({
+          date: c.date,
+          type: 'CREDIT',
+          description: c.source + (c.notes ? ' - ' + c.notes : ''),
+          credit: c.amount,
+          debit: 0,
+          balance: balance,
+          recorded_by_name: 'User ' + (c.recorded_by || ''),
+          reference: 'credit#' + c.id
+        });
       });
-    });
-    
-    // Create entries from debits
-    state.debits.forEach(d => {
-      balance -= d.amount;
-      simpleLedger.push({
-        date: d.date,
-        type: 'DEBIT',
-        description: d.category + (d.notes ? ' - ' + d.notes : ''),
-        credit: 0,
-        debit: d.amount,
-        balance: balance,
-        recorded_by_name: 'User ' + (d.recorded_by || ''),
-        reference: 'debit#' + d.id
+      
+      state.debits.forEach(d => {
+        balance -= d.amount;
+        simpleLedger.push({
+          date: d.date,
+          type: 'DEBIT',
+          description: d.category + (d.notes ? ' - ' + d.notes : ''),
+          credit: 0,
+          debit: d.amount,
+          balance: balance,
+          recorded_by_name: 'User ' + (d.recorded_by || ''),
+          reference: 'debit#' + d.id
+        });
       });
-    });
-    
-    // Sort by date
-    simpleLedger.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    // Recalculate running balance after sorting
-    let runningBalance = 0;
-    simpleLedger.forEach(entry => {
-      runningBalance += (entry.credit || 0) - (entry.debit || 0);
-      entry.balance = runningBalance;
-    });
-    
-    state.ledger = simpleLedger;
-    console.log("[Ledger] Created simple ledger:", state.ledger);
-  }
+      
+      simpleLedger.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      let runningBalance = 0;
+      simpleLedger.forEach(entry => {
+        runningBalance += (entry.credit || 0) - (entry.debit || 0);
+        entry.balance = runningBalance;
+      });
+      
+      state.ledger = simpleLedger;
+      console.log("[Ledger] Created simple ledger:", state.ledger);
+    }
 
-  if (!state.ledger || !Array.isArray(state.ledger) || state.ledger.length === 0) {
-    tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No ledger entries found. Try adding some credits or debits first.</td></tr>`;
-    return;
-  }
+    if (!state.ledger || !Array.isArray(state.ledger) || state.ledger.length === 0) {
+      tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No ledger entries found. Try adding some credits or debits first.</td></tr>`;
+      return;
+    }
 
-  let totalCredits = 0;
-  let totalDebits = 0;
-  let finalBalance = 0;
+    let totalCredits = 0;
+    let totalDebits = 0;
+    let finalBalance = 0;
 
-  tb.innerHTML = state.ledger.map((x, index) => {
-    // Ensure we have valid numbers
-    const credit = typeof x.credit === 'number' ? x.credit : (typeof x.amount_in === 'number' ? x.amount_in : 0);
-    const debit = typeof x.debit === 'number' ? x.debit : (typeof x.amount_out === 'number' ? x.amount_out : 0);
-    const balance = typeof x.balance === 'number' ? x.balance : (typeof x.balance_after === 'number' ? x.balance_after : 0);
-    
-    const dt = escapeHtml(x.date || x.txn_date || "—");
-    const type = escapeHtml(x.type || (credit > 0 ? 'CREDIT' : 'DEBIT') || "—");
-    const desc = escapeHtml(x.description || x.notes || "—");
-    const recordedBy = escapeHtml(x.recorded_by_name || x.recorded_by || "—");
-    const cr = credit > 0 ? money(credit) : "—";
-    const dr = debit > 0 ? money(debit) : "—";
-    const bal = money(balance);
-    const ref = escapeHtml(x.reference || x.ref || (x.id ? '#' + x.id : '—'));
-    
-    totalCredits += credit;
-    totalDebits += debit;
-    finalBalance = balance;
+    tb.innerHTML = state.ledger.map((x, index) => {
+      const credit = typeof x.credit === 'number' ? x.credit : (typeof x.amount_in === 'number' ? x.amount_in : 0);
+      const debit = typeof x.debit === 'number' ? x.debit : (typeof x.amount_out === 'number' ? x.amount_out : 0);
+      const balance = typeof x.balance === 'number' ? x.balance : (typeof x.balance_after === 'number' ? x.balance_after : 0);
+      
+      const dt = escapeHtml(x.date || x.txn_date || "—");
+      const type = escapeHtml(x.type || (credit > 0 ? 'CREDIT' : 'DEBIT') || "—");
+      const desc = escapeHtml(x.description || x.notes || "—");
+      const recordedBy = escapeHtml(x.recorded_by_name || x.recorded_by || "—");
+      const cr = credit > 0 ? money(credit) : "—";
+      const dr = debit > 0 ? money(debit) : "—";
+      const bal = money(balance);
+      const ref = escapeHtml(x.reference || x.ref || (x.id ? '#' + x.id : '—'));
+      
+      totalCredits += credit;
+      totalDebits += debit;
+      finalBalance = balance;
 
-    const rowClass = balance < 0 ? 'table-danger' : '';
+      const rowClass = balance < 0 ? 'table-danger' : '';
 
-    return `
-      <tr class="${rowClass}">
-        <td>${dt}</td>
-        <td><span class="badge ${type === 'CREDIT' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
-        <td>${desc}</td>
-        <td>${recordedBy}</td>
-        <td class="text-end fw-semibold text-success">${cr}</td>
-        <td class="text-end fw-semibold text-danger">${dr}</td>
-        <td class="text-end"><small class="text-muted">${ref}</small></td>
-        <td class="text-end fw-bold ${balance < 0 ? 'text-danger' : ''}">${bal}</td>
+      return `
+        <tr class="${rowClass}">
+          <td>${dt}</td>
+          <td><span class="badge ${type === 'CREDIT' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
+          <td>${desc}</td>
+          <td>${recordedBy}</td>
+          <td class="text-end fw-semibold text-success">${cr}</td>
+          <td class="text-end fw-semibold text-danger">${dr}</td>
+          <td class="text-end"><small class="text-muted">${ref}</small></td>
+          <td class="text-end fw-bold ${balance < 0 ? 'text-danger' : ''}">${bal}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const summaryRow = `
+      <tr class="table-secondary fw-bold">
+        <td colspan="4" class="text-end">TOTALS:</td>
+        <td class="text-end text-success">${money(totalCredits)}</td>
+        <td class="text-end text-danger">${money(totalDebits)}</td>
+        <td class="text-end"></td>
+        <td class="text-end ${finalBalance < 0 ? 'text-danger' : ''}">${money(finalBalance)}</td>
       </tr>
     `;
-  }).join("");
+    tb.innerHTML += summaryRow;
 
-  // Add summary row with correct colspan (now 8 columns)
-  const summaryRow = `
-    <tr class="table-secondary fw-bold">
-      <td colspan="4" class="text-end">TOTALS:</td>
-      <td class="text-end text-success">${money(totalCredits)}</td>
-      <td class="text-end text-danger">${money(totalDebits)}</td>
-      <td class="text-end"></td>
-      <td class="text-end ${finalBalance < 0 ? 'text-danger' : ''}">${money(finalBalance)}</td>
-    </tr>
-  `;
-  tb.innerHTML += summaryRow;
-
-  // Update overview
-  updateOverviewFinancials(totalCredits, totalDebits, finalBalance);
+    updateOverviewFinancials(totalCredits, totalDebits, finalBalance);
   }
 
-    function showBalanceWarning(balance) {
-    // Remove existing warning
+  function showBalanceWarning(balance) {
     const existingWarning = qs("#balanceWarning");
     if (existingWarning) existingWarning.remove();
     
@@ -2131,7 +2808,6 @@ function setGateBadges() {
         This event is over budget.
       `;
       
-      // Insert after the overview card
       const overviewCard = qs("#pane-overview .row");
       if (overviewCard) {
         overviewCard.parentNode.insertBefore(warningDiv, overviewCard.nextSibling);
@@ -2161,94 +2837,89 @@ function setGateBadges() {
   }
 
   function renderPassbookLog(rows) {
-  const tb = qs("#eePassbookTbody");
-  if (!tb) {
-    console.warn("[Passbook] Missing tbody #eePassbookTbody. Passbook section will not render.");
-    return;
-  }
+    const tb = qs("#eePassbookTbody");
+    if (!tb) {
+      console.warn("[Passbook] Missing tbody #eePassbookTbody. Passbook section will not render.");
+      return;
+    }
 
-  const proposalApproved = !!state.gates?.proposal_approved;
-  const accomplishmentApproved = !!state.gates?.accomplishment_approved;
-  const canManage = !!state.permissions?.can_manage_passbook;
-  const ro = isReadOnlyMode();
-  
-  // Passbook is locked if:
-  // 1. Accomplishment approved OR
-  // 2. Proposal not approved OR
-  // 3. Read-only mode
-  const locked = ro || !proposalApproved || accomplishmentApproved;
-
-  const btnAdd = qs("#eeAddTxnBtn");
-  if (btnAdd) {
-    btnAdd.disabled = locked || !canManage;
-    btnAdd.classList.toggle("disabled", locked || !canManage);
-    btnAdd.title = locked ? 
-      (accomplishmentApproved ? "🔒 Event is already finalized (Accomplishment Approved)" : 
-       !proposalApproved ? "❌ Proposal must be approved first" : 
-       "🔒 Read-only mode") : 
-      "";
-  }
-
-  let totalW = 0;
-  let totalD = 0;
-  let runningBalance = 0;
-
-  const passbookRows = Array.isArray(rows) ? rows : [];
-
-  if (!passbookRows.length) {
-    tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No transactions yet.</td></tr>`;
-  } else {
-    // Sort by date and ID to ensure correct running balance
-    const sortedRows = [...passbookRows].sort((a, b) => {
-      const dateA = a.date || a.txn_date || '';
-      const dateB = b.date || b.txn_date || '';
-      if (dateA < dateB) return -1;
-      if (dateA > dateB) return 1;
-      return (a.id || 0) - (b.id || 0);
-    });
+    const proposalApproved = !!state.gates?.proposal_approved;
+    const accomplishmentApproved = !!state.gates?.accomplishment_approved;
+    const canManage = !!state.permissions?.can_manage_passbook;
+    const ro = isReadOnlyMode();
     
-    tb.innerHTML = sortedRows.map(r => {
-      const date = formatMDY(r.date || r.txn_date || "");
-      const typeLabel = String(r.title || "").trim() || (String(r.type || "").toLowerCase() === "debit" ? "Withdrawal" : "Deposit");
-      const fullname = String(r.recorded_by_name || "").trim() || `User #${Number(r.recorded_by_user_id || 0)}`;
-      const desc = String(r.notes || "").trim() || String(r.description || "").trim();
+    const locked = ro || !proposalApproved || accomplishmentApproved;
 
-      const w = Number(r.amount_out ?? r.debit ?? 0) || 0;
-      const d = Number(r.amount_in ?? r.credit ?? 0) || 0;
+    const btnAdd = qs("#eeAddTxnBtn");
+    if (btnAdd) {
+      btnAdd.disabled = locked || !canManage;
+      btnAdd.classList.toggle("disabled", locked || !canManage);
+      btnAdd.title = locked ? 
+        (accomplishmentApproved ? "🔒 Event is already finalized (Accomplishment Approved)" : 
+         !proposalApproved ? "❌ Proposal must be approved first" : 
+         "🔒 Read-only mode") : 
+        "";
+    }
+
+    let totalW = 0;
+    let totalD = 0;
+    let runningBalance = 0;
+
+    const passbookRows = Array.isArray(rows) ? rows : [];
+
+    if (!passbookRows.length) {
+      tb.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No transactions yet.</td></tr>`;
+    } else {
+      const sortedRows = [...passbookRows].sort((a, b) => {
+        const dateA = a.date || a.txn_date || '';
+        const dateB = b.date || b.txn_date || '';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return (a.id || 0) - (b.id || 0);
+      });
       
-      totalW += w;
-      totalD += d;
-      
-      runningBalance += d - w;
+      tb.innerHTML = sortedRows.map(r => {
+        const date = formatMDY(r.date || r.txn_date || "");
+        const typeLabel = String(r.title || "").trim() || (String(r.type || "").toLowerCase() === "debit" ? "Withdrawal" : "Deposit");
+        const fullname = String(r.recorded_by_name || "").trim() || `User #${Number(r.recorded_by_user_id || 0)}`;
+        const desc = String(r.notes || "").trim() || String(r.description || "").trim();
 
-      const canDeleteRow = canManage && !locked && !!r.is_manual;
+        const w = Number(r.amount_out ?? r.debit ?? 0) || 0;
+        const d = Number(r.amount_in ?? r.credit ?? 0) || 0;
+        
+        totalW += w;
+        totalD += d;
+        
+        runningBalance += d - w;
 
-      return `
-        <tr data-id="${Number(r.id || 0)}">
-          <td>${escapeHtml(date)}</td>
-          <td>${escapeHtml(typeLabel)}</td>
-          <td>${escapeHtml(fullname)}</td>
-          <td>${escapeHtml(desc)}</td>
-          <td class="text-end">${w > 0 ? peso(w) : "—"}</td>
-          <td class="text-end">${d > 0 ? peso(d) : "—"}</td>
-          <td class="text-end fw-semibold">${peso(runningBalance)}</td>
-          <td class="text-center">
-            ${canDeleteRow ? `<button class="btn btn-link p-0 text-danger eeTxnDel" title="Delete"><i class="bi bi-trash"></i></button>` : ``}
-          </td>
-        </tr>
-      `;
-    }).join("");
+        const canDeleteRow = canManage && !locked && !!r.is_manual;
+
+        return `
+          <tr data-id="${Number(r.id || 0)}">
+            <td>${escapeHtml(date)}</td>
+            <td>${escapeHtml(typeLabel)}</td>
+            <td>${escapeHtml(fullname)}</td>
+            <td>${escapeHtml(desc)}</td>
+            <td class="text-end">${w > 0 ? peso(w) : "—"}</td>
+            <td class="text-end">${d > 0 ? peso(d) : "—"}</td>
+            <td class="text-end fw-semibold">${peso(runningBalance)}</td>
+            <td class="text-center">
+              ${canDeleteRow ? `<button class="btn btn-link p-0 text-danger eeTxnDel" title="Delete"><i class="bi bi-trash"></i></button>` : ``}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    const elW = qs("#eeTxnSumWithdraw");
+    const elD = qs("#eeTxnSumDeposit");
+    const elB = qs("#eeTxnBalance");
+    
+    if (elW) elW.textContent = peso(totalW);
+    if (elD) elD.textContent = peso(totalD);
+    if (elB) elB.textContent = peso(runningBalance);
   }
 
-  const elW = qs("#eeTxnSumWithdraw");
-  const elD = qs("#eeTxnSumDeposit");
-  const elB = qs("#eeTxnBalance");
-  
-  if (elW) elW.textContent = peso(totalW);
-  if (elD) elD.textContent = peso(totalD);
-  if (elB) elB.textContent = peso(runningBalance);
-  }
-  
   // -------------------------
   // Passbook Log (per-event)
   // -------------------------
@@ -2361,177 +3032,176 @@ function setGateBadges() {
     }
 
     if (!window.__EEPassbookDeleteBound) {
-  window.__EEPassbookDeleteBound = true;
+      window.__EEPassbookDeleteBound = true;
 
-  document.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest?.(".eeTxnDel");
-    if (!btn) return;
+      document.addEventListener("click", async (ev) => {
+        const btn = ev.target.closest?.(".eeTxnDel");
+        if (!btn) return;
 
-    const tr = btn.closest("tr");
-    const pid = Number(tr?.getAttribute("data-id") || 0);
-    if (!pid) return;
+        const tr = btn.closest("tr");
+        const pid = Number(tr?.getAttribute("data-id") || 0);
+        if (!pid) return;
 
-    if (isReadOnlyMode()) return safeShowError("Read-only mode.");
-    if (isEventApprovedLocked()) return safeShowError("Locked: this event is already approved.");
+        if (isReadOnlyMode()) return safeShowError("Read-only mode.");
+        if (isEventApprovedLocked()) return safeShowError("Locked: this event is already approved.");
 
-    // Store passbook ID in modal
-    const modal = qs("#eeDecisionModal");
-    modal.dataset.passbookId = pid;
-    
-    openDecisionModal({
-      action: "delete_passbook_txn",
-      title: "Delete Transaction?",
-      text: "This will permanently delete this passbook transaction. This action cannot be undone.",
-      confirmText: "Delete",
-      confirmBtnClass: "btn-danger",
-      showNoteField: false
-    });
-  });
-      }
-  }
-
-  async function openEvent(eventId, opts = {}) {
-  state.selectedEventId = Number(eventId) || 0;
-  if (!state.selectedEventId) return;
-
-  const termId = Number(state.selectedTermId || 0);
-
-  console.log("[openEvent] Fetching event data for ID:", eventId);
-  
-  const data = await postJSON({
-    action: "get_event",
-    event_id: state.selectedEventId,
-    term_id: termId,
-  });
-
-  console.log("[openEvent] Full response:", data);
-  console.log("[openEvent] Ledger data:", data.ledger);
-  console.log("[openEvent] Credits data:", data.credits);
-  console.log("[openEvent] Debits data:", data.debits);
-
-  state.selectedEvent = data.event || data.row || null;
-
-  state.permissions = { ...state.permissions, ...(data.permissions || {}) };
-  state.gates = { ...state.gates, ...(data.gates || {}) };
-  
-  console.log("[openEvent] Gates after update:", state.gates);
-
-  // Ensure role is properly set
-  if (!state.permissions.role && data.permissions?.role) {
-    state.permissions.role = data.permissions.role;
-  }
-
-  applyAddEventVisibility();
-
-  if (!data.gates && state.selectedEvent) {
-    const st = deriveStatusesFromEvent(state.selectedEvent);
-    state.gates.proposal_approved = st.proposalLc === "approved";
-    state.gates.accomplishment_approved = st.accomplishmentLc === "approved";
-  }
-
-  // Load proposed expenses
-  if (data.proposed_expenses && Array.isArray(data.proposed_expenses)) {
-    state.proposedExpenses = data.proposed_expenses;
-    state.proposedTotal = data.proposed_total || 0;
-  } else {
-    try {
-      const propData = await postJSON({
-        action: "get_proposed_expenses",
-        event_id: state.selectedEventId
-      }).catch(() => ({ items: [], total: 0 }));
-      
-      state.proposedExpenses = propData.items || [];
-      state.proposedTotal = propData.total || 0;
-    } catch (e) {
-      state.proposedExpenses = [];
-      state.proposedTotal = 0;
+        const modal = qs("#eeDecisionModal");
+        modal.dataset.passbookId = pid;
+        
+        openDecisionModal({
+          action: "delete_passbook_txn",
+          title: "Delete Transaction?",
+          text: "This will permanently delete this passbook transaction. This action cannot be undone.",
+          confirmText: "Delete",
+          confirmBtnClass: "btn-danger",
+          showNoteField: false
+        });
+      });
     }
   }
 
-  // Load accomplishment data - use gates as source of truth
-  const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
-  
-  if (data.accomplishment) {
-    state.accomplishment = {
-      objectives: data.accomplishment.objectives || '',
-      outcomes: data.accomplishment.outcomes || '',
-      challenges: data.accomplishment.challenges || '',
-      status: isAccomplishmentApproved ? 'Approved' : (data.accomplishment.status || 'Draft'),
-      submitted_by: data.accomplishment.submitted_by || 0,
-      submitted_at: data.accomplishment.submitted_at || null,
-      approved_by: data.accomplishment.approved_by || 0,
-      approved_at: data.accomplishment.approved_at || null,
-      declined_reason: data.accomplishment.declined_reason || '',
-      generated_pdf: data.accomplishment.generated_pdf || null
-    };
-  } else {
-    state.accomplishment = {
-      objectives: '',
-      outcomes: '',
-      challenges: '',
-      status: isAccomplishmentApproved ? 'Approved' : 'Draft',
-      submitted_by: 0,
-      submitted_at: null,
-      approved_by: 0,
-      approved_at: null,
-      declined_reason: '',
-      generated_pdf: null
-    };
-  }
+  async function openEvent(eventId, opts = {}) {
+    state.selectedEventId = Number(eventId) || 0;
+    if (!state.selectedEventId) return;
 
-  console.log("[openEvent] Loaded accomplishment:", state.accomplishment);
+    const termId = Number(state.selectedTermId || 0);
 
-  state.credits = Array.isArray(data.credits) ? data.credits : [];
-  state.debits = Array.isArray(data.debits) ? data.debits : [];
-  state.ledger = Array.isArray(data.ledger) ? data.ledger : [];
+    console.log("[openEvent] Fetching event data for ID:", eventId);
+    
+    const data = await postJSON({
+      action: "get_event",
+      event_id: state.selectedEventId,
+      term_id: termId,
+    });
 
-  console.log("[openEvent] State after update:", {
-    credits: state.credits.length,
-    debits: state.debits.length,
-    ledger: state.ledger.length
-  });
+    console.log("[openEvent] Full response:", data);
+    console.log("[openEvent] Ledger data:", data.ledger);
+    console.log("[openEvent] Credits data:", data.credits);
+    console.log("[openEvent] Debits data:", data.debits);
 
-  showView("event");
-  renderOverview();
-  applyEventActionVisibility();
-  setGateBadges();
-  applyPrintVisibility();
-  applyApprovalButtons();
-  applyAccomplishmentSubmitButton();
-  applyEventSubmitForApprovalButton();
-  renderCredits();
-  renderDebits();
-  renderLedger();
-  renderAccomplishment();
-  renderAccomplishmentPdfPreview();
-  renderLiquidation();
+    state.selectedEvent = data.event || data.row || null;
 
-  const pbRows =
-    (Array.isArray(data.passbook) && data.passbook) ||
-    (Array.isArray(data.passbook_logs) && data.passbook_logs) ||
-    (Array.isArray(data.passbookLog) && data.passbookLog) ||
-    (Array.isArray(data.passbook_rows) && data.passbook_rows) ||
-    [];
+    state.permissions = { ...state.permissions, ...(data.permissions || {}) };
+    state.gates = { ...state.gates, ...(data.gates || {}) };
+    
+    console.log("[openEvent] Gates after update:", state.gates);
 
-  state.passbook = pbRows;
+    if (!state.permissions.role && data.permissions?.role) {
+      state.permissions.role = data.permissions.role;
+    }
 
-  const pbPerms =
-    data.passbook_permissions ||
-    data.passbookPerms ||
-    data.passbook_perms ||
-    data.permissions ||
-    {};
+    applyAddEventVisibility();
 
-  renderPassbookLog(state.passbook, state.selectedEvent || {}, pbPerms);
-  bindPassbookUI();
-  renderLiquidationPassbook();
-  
-  toast("Event loaded.");
+    if (!data.gates && state.selectedEvent) {
+      const st = deriveStatusesFromEvent(state.selectedEvent);
+      state.gates.proposal_approved = st.proposalLc === "approved";
+      state.gates.accomplishment_approved = st.accomplishmentLc === "approved";
+    }
+
+    // ==================== LOAD PROPOSED CREDITS ====================
+    if (data.proposed_credits && Array.isArray(data.proposed_credits)) {
+        state.proposedCredits = data.proposed_credits;
+        state.proposedCreditsTotal = data.proposed_credits_total || 0;
+    } else {
+        state.proposedCredits = [];
+        state.proposedCreditsTotal = 0;
+    }
+
+    // ==================== LOAD PROPOSED EXPENSES ====================
+    if (data.proposed_expenses && Array.isArray(data.proposed_expenses)) {
+        state.proposedExpenses = data.proposed_expenses;
+        state.proposedExpensesTotal = data.proposed_expenses_total || 0;
+    } else {
+        state.proposedExpenses = [];
+        state.proposedExpensesTotal = 0;
+    }
+
+    // Calculate proposed balance
+    state.proposedBalance = state.proposedCreditsTotal - state.proposedExpensesTotal;
+
+    const isAccomplishmentApproved = !!state.gates?.accomplishment_approved;
+    
+    if (data.accomplishment) {
+      state.accomplishment = {
+        objectives: data.accomplishment.objectives || '',
+        outcomes: data.accomplishment.outcomes || '',
+        challenges: data.accomplishment.challenges || '',
+        status: isAccomplishmentApproved ? 'Approved' : (data.accomplishment.status || 'Draft'),
+        submitted_by: data.accomplishment.submitted_by || 0,
+        submitted_at: data.accomplishment.submitted_at || null,
+        approved_by: data.accomplishment.approved_by || 0,
+        approved_at: data.accomplishment.approved_at || null,
+        declined_reason: data.accomplishment.declined_reason || '',
+        generated_pdf: data.accomplishment.generated_pdf || null
+      };
+    } else {
+      state.accomplishment = {
+        objectives: '',
+        outcomes: '',
+        challenges: '',
+        status: isAccomplishmentApproved ? 'Approved' : 'Draft',
+        submitted_by: 0,
+        submitted_at: null,
+        approved_by: 0,
+        approved_at: null,
+        declined_reason: '',
+        generated_pdf: null
+      };
+    }
+
+    console.log("[openEvent] Loaded accomplishment:", state.accomplishment);
+
+    state.credits = Array.isArray(data.credits) ? data.credits : [];
+    state.debits = Array.isArray(data.debits) ? data.debits : [];
+    state.ledger = Array.isArray(data.ledger) ? data.ledger : [];
+
+    console.log("[openEvent] State after update:", {
+      credits: state.credits.length,
+      debits: state.debits.length,
+      ledger: state.ledger.length
+    });
+
+    showView("event");
+    renderOverview();
+    applyEventActionVisibility();
+    setGateBadges();
+    applyPrintVisibility();
+    applyApprovalButtons();
+    applyAccomplishmentSubmitButton();
+    applyEventSubmitForApprovalButton();
+    renderCredits();
+    renderDebits();
+    renderLedger();
+    renderProposedBudgetComparison();
+    renderAccomplishment();
+    renderAccomplishmentPdfPreview();
+    renderLiquidation();
+
+    const pbRows =
+      (Array.isArray(data.passbook) && data.passbook) ||
+      (Array.isArray(data.passbook_logs) && data.passbook_logs) ||
+      (Array.isArray(data.passbookLog) && data.passbookLog) ||
+      (Array.isArray(data.passbook_rows) && data.passbook_rows) ||
+      [];
+
+    state.passbook = pbRows;
+
+    const pbPerms =
+      data.passbook_permissions ||
+      data.passbookPerms ||
+      data.passbook_perms ||
+      data.permissions ||
+      {};
+
+    renderPassbookLog(state.passbook, state.selectedEvent || {}, pbPerms);
+    bindPassbookUI();
+    renderLiquidationPassbook();
+    
+    toast("Event loaded.");
   }
 
   // ==================== Accomplishment Report Functions ====================
 
-  // Add this new function to render the PDF preview
   function renderAccomplishmentPdfPreview() {
     const previewCard = qs("#accompPdfPreviewCard");
     const previewIframe = qs("#accompPdfPreview");
@@ -2548,7 +3218,6 @@ function setGateBadges() {
     const status = String(accomp.status || "Draft");
     const isCoord = isCoordinator();
     
-    // Show preview card only when proposal is approved
     if (!proposalApproved) {
       previewCard.classList.add("d-none");
       return;
@@ -2556,23 +3225,19 @@ function setGateBadges() {
     
     previewCard.classList.remove("d-none");
     
-    // Generate preview URL
     const eventId = Number(state.selectedEventId || 0);
     if (!eventId) return;
     
-    // Different preview modes based on status and role
     let previewMode = "preview";
     if (status === "Approved") {
       previewMode = "final";
     } else if (isCoord && (status === "Draft" || status === "Submitted" || status === "Declined")) {
       previewMode = "coordinator_preview";
     } else if (!isCoord && status !== "Approved") {
-      // Regular users can only see preview if approved
       previewCard.classList.add("d-none");
       return;
     }
     
-    // Update status badge
     if (statusBadge) {
       statusBadge.textContent = status;
       statusBadge.className = "badge";
@@ -2587,15 +3252,13 @@ function setGateBadges() {
       }
     }
     
-    // Build preview URL
     const previewUrl = buildUrl(PRINT_ACCOMPLISHMENT, {
       event_id: eventId,
       term_id: Number(state.selectedTermId || 0) || null,
       mode: previewMode,
-      _t: Date.now() // Cache bust
+      _t: Date.now()
     });
     
-    // Show iframe with preview
     if (previewIframe) {
       previewIframe.src = previewUrl;
       previewIframe.classList.remove("d-none");
@@ -2605,7 +3268,6 @@ function setGateBadges() {
       placeholder.classList.add("d-none");
     }
     
-    // Setup download button
     if (downloadBtn) {
       downloadBtn.onclick = () => {
         const downloadUrl = buildUrl(PRINT_ACCOMPLISHMENT, {
@@ -2618,7 +3280,6 @@ function setGateBadges() {
       };
     }
     
-    // Setup refresh button
     if (refreshBtn) {
       refreshBtn.onclick = () => {
         if (previewIframe) {
@@ -2633,7 +3294,6 @@ function setGateBadges() {
     }
   }
 
-  // Also need to bind the refresh button (add this function)
   function bindAccomplishmentPreview() {
     const refreshBtn = qs("#accompRefreshPreviewBtn");
     if (!refreshBtn || refreshBtn.dataset.eeBound === "1") return;
@@ -2680,200 +3340,89 @@ function setGateBadges() {
     }
   }
 
+  async function loadAccomplishmentData(eventId) {
+    try {
+      const data = await postJSON({
+        action: "get_accomplishment_data",
+        event_id: eventId
+      }).catch(() => null);
+      
+      if (data && data.accomplishment) {
+        state.accomplishment = {
+          objectives: data.accomplishment.objectives || '',
+          outcomes: data.accomplishment.outcomes || '',
+          challenges: data.accomplishment.challenges || '',
+          status: data.accomplishment.status || 'Draft',
+          submitted_by: data.accomplishment.submitted_by || 0,
+          submitted_at: data.accomplishment.submitted_at || null,
+          approved_by: data.accomplishment.approved_by || 0,
+          approved_at: data.accomplishment.approved_at || null,
+          declined_reason: data.accomplishment.declined_reason || ''
+        };
+      }
+    } catch (e) {
+      console.warn("Failed to load accomplishment data:", e);
+    }
+  }
+
   // ==================== Enhanced Liquidation Functions ====================
 
   function renderLiquidationProposed() {
-  const proposedTbody = qs("#proposedBreakdownTbody");
-  const proposedTotalEl = qs("#proposedBreakdownTotal");
-  const liqProposedTotal = qs("#liqProposedTotal");
-  const liqActualTotal = qs("#liqActualTotal");
-  const liqVariance = qs("#liqVariance");
-  const varianceBox = qs("#liqVarianceBox");
-  
-  if (!proposedTbody) return;
-  
-  const items = Array.isArray(state.proposedExpenses) ? state.proposedExpenses : [];
-  const proposedTotal = state.proposedTotal || 0;
-  
-  // Calculate actual expenses from debits
-  const actualExpenses = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
-  const variance = proposedTotal - actualExpenses;
-  
-  console.log("[LiquidationProposed] Proposed:", proposedTotal, "Actual:", actualExpenses, "Variance:", variance);
-  
-  if (!items.length) {
-    proposedTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No proposed expenses submitted.</td></tr>';
-  } else {
-    proposedTbody.innerHTML = items.map((item, idx) => {
-      const desc = escapeHtml(item.description || '—');
-      const qty = Number(item.quantity || 1);
-      const cost = Number(item.estimated_cost || 0);
-      const total = qty * cost;
-      
-      return `
-        <tr>
-          <td>${idx + 1}</td>
-          <td>${desc}</td>
-          <td class="text-center">${qty}</td>
-          <td class="text-end">${money(cost)}</td>
-          <td class="text-end fw-semibold">${money(total)}</td>
-        </tr>
-      `;
-    }).join('');
-  }
-  
-  if (proposedTotalEl) proposedTotalEl.textContent = money(proposedTotal);
-  if (liqProposedTotal) liqProposedTotal.textContent = money(proposedTotal);
-  if (liqActualTotal) liqActualTotal.textContent = money(actualExpenses);
-  
-  if (liqVariance) {
-    liqVariance.textContent = money(variance);
+    const proposedTbody = qs("#proposedBreakdownTbody");
+    const proposedTotalEl = qs("#proposedBreakdownTotal");
+    const liqProposedTotal = qs("#liqProposedTotal");
+    const liqActualTotal = qs("#liqActualTotal");
+    const liqVariance = qs("#liqVariance");
+    const varianceBox = qs("#liqVarianceBox");
     
-    if (varianceBox) {
-      if (variance >= 0) {
-        varianceBox.style.backgroundColor = '#d4edda';
-        varianceBox.style.borderColor = '#c3e6cb';
-      } else {
-        varianceBox.style.backgroundColor = '#f8d7da';
-        varianceBox.style.borderColor = '#f5c6cb';
-      }
+    if (!proposedTbody) return;
+    
+    const items = Array.isArray(state.proposedExpenses) ? state.proposedExpenses : [];
+    const proposedTotal = state.proposedExpensesTotal || 0;
+    
+    const actualExpenses = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+    const variance = proposedTotal - actualExpenses;
+    
+    console.log("[LiquidationProposed] Proposed:", proposedTotal, "Actual:", actualExpenses, "Variance:", variance);
+    
+    if (!items.length) {
+      proposedTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No proposed expenses submitted.</td></tr>';
+    } else {
+      proposedTbody.innerHTML = items.map((item, idx) => {
+        const desc = escapeHtml(item.description || '—');
+        const qty = Number(item.quantity || 1);
+        const cost = Number(item.estimated_cost || 0);
+        const total = qty * cost;
+        
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${desc}</td>
+            <td class="text-center">${qty}</td>
+            <td class="text-end">${money(cost)}</td>
+            <td class="text-end fw-semibold">${money(total)}</td>
+          </tr>
+        `;
+      }).join('');
     }
-  }
-  }
-
-  function renderLiquidationPassbook() {
-  const tbody = qs("#passbookLiquidationTbody");
-  const depositsEl = qs("#passbookTotalDeposits");
-  const withdrawalsEl = qs("#passbookTotalWithdrawals");
-  const balanceEl = qs("#passbookFinalBalance");
-  
-  if (!tbody) return;
-  
-  const rows = Array.isArray(state.passbook) ? state.passbook : [];
-  
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No passbook transactions recorded.</td></tr>';
-    return;
-  }
-  
-  // Sort by date for correct running balance
-  const sortedRows = [...rows].sort((a, b) => {
-    const dateA = a.date || a.txn_date || '';
-    const dateB = b.date || b.txn_date || '';
-    if (dateA < dateB) return -1;
-    if (dateA > dateB) return 1;
-    return (a.id || 0) - (b.id || 0);
-  });
-  
-  let totalDeposits = 0;
-  let totalWithdrawals = 0;
-  let runningBalance = 0;
-  
-  tbody.innerHTML = sortedRows.map((r, idx) => {
-    const date = escapeHtml(r.date || r.txn_date || '—');
-    const type = r.txn_type === 'credit' ? 'DEPOSIT' : 'WITHDRAWAL';
-    const typeClass = r.txn_type === 'credit' ? 'text-success' : 'text-danger';
     
-    const title = escapeHtml(r.title || '');
-    const notes = escapeHtml(r.notes || '');
-    const desc = notes ? `${title} - ${notes}` : (title || '—');
+    if (proposedTotalEl) proposedTotalEl.textContent = money(proposedTotal);
+    if (liqProposedTotal) liqProposedTotal.textContent = money(proposedTotal);
+    if (liqActualTotal) liqActualTotal.textContent = money(actualExpenses);
     
-    const deposit = Number(r.amount_in || r.credit || 0);
-    const withdrawal = Number(r.amount_out || r.debit || 0);
-    
-    totalDeposits += deposit;
-    totalWithdrawals += withdrawal;
-    runningBalance += deposit - withdrawal;
-    
-    const ref = escapeHtml(r.ref_table ? `${r.ref_table}#${r.ref_id}` : '—');
-    
-    return `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${date}</td>
-        <td class="${typeClass} fw-semibold">${type}</td>
-        <td>${desc}</td>
-        <td class="text-end">${deposit > 0 ? money(deposit) : '—'}</td>
-        <td class="text-end">${withdrawal > 0 ? money(withdrawal) : '—'}</td>
-        <td class="text-end fw-semibold">${money(runningBalance)}</td>
-        <td><small class="text-muted">${ref}</small></td>
-      </tr>
-    `;
-  }).join('');
-  
-  if (depositsEl) depositsEl.textContent = money(totalDeposits);
-  if (withdrawalsEl) withdrawalsEl.textContent = money(totalWithdrawals);
-  if (balanceEl) balanceEl.textContent = money(runningBalance);
-  }
-
-  function updateVariance() {
-    const proposed = Number(state.proposedTotal || 0);
-    const actual = Number(state.selectedEvent?.total_debits || 0);
-    const variance = proposed - actual;
-    
-    const varianceEl = qs("#liqVariance");
-    const actualTotalEl = qs("#liqActualTotal");
-    
-    if (actualTotalEl) actualTotalEl.textContent = money(actual);
-    if (varianceEl) {
-      varianceEl.textContent = money(variance);
+    if (liqVariance) {
+      liqVariance.textContent = money(variance);
       
-      const box = qs("#liqVarianceBox");
-      if (box) {
+      if (varianceBox) {
         if (variance >= 0) {
-          box.style.backgroundColor = '#d4edda';
-          box.style.borderColor = '#c3e6cb';
+          varianceBox.style.backgroundColor = '#d4edda';
+          varianceBox.style.borderColor = '#c3e6cb';
         } else {
-          box.style.backgroundColor = '#f8d7da';
-          box.style.borderColor = '#f5c6cb';
+          varianceBox.style.backgroundColor = '#f8d7da';
+          varianceBox.style.borderColor = '#f5c6cb';
         }
       }
     }
-  }
-
-  function renderLiquidation() {
-  const e = state.selectedEvent || {};
-  
-  const liqEvent = qs("#liqEvent");
-  const liqOrg = qs("#liqOrg");
-  const liqDate = qs("#liqDate");
-  const liqYear = qs("#liqYear");
-  const liqCredits = qs("#liqCredits");
-  const liqDebits = qs("#liqDebits");
-  const liqBalance = qs("#liqBalance");
-
-  if (liqEvent) liqEvent.textContent = e.title || e.event_name || "—";
-  if (liqOrg) liqOrg.textContent = e.org_name || e.organization || "—";
-  if (liqDate) liqDate.textContent = e.event_date || e.date || "—";
-  if (liqYear) liqYear.textContent = e.school_year || "—";
-  
-  // Calculate totals from credits and debits directly
-  const credits = Array.isArray(state.credits) ? state.credits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
-  const debits = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
-  const balance = credits - debits;
-  
-  console.log("[Liquidation] Credits:", credits, "Debits:", debits, "Balance:", balance);
-  
-  if (liqCredits) {
-    liqCredits.textContent = money(credits);
-    liqCredits.className = credits > 0 ? 'text-success' : '';
-  }
-  if (liqDebits) {
-    liqDebits.textContent = money(debits);
-    liqDebits.className = debits > 0 ? 'text-danger' : '';
-  }
-  if (liqBalance) {
-    liqBalance.textContent = money(balance);
-    liqBalance.className = balance < 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
-  }
-  
-  // Call these functions only if they exist
-  if (typeof renderLiquidationProposed === 'function') {
-    renderLiquidationProposed();
-  }
-  if (typeof renderLiquidationPassbook === 'function') {
-    renderLiquidationPassbook();
-  }
   }
 
   function renderLiquidationPassbook() {
@@ -2884,7 +3433,7 @@ function setGateBadges() {
     
     if (!tbody) return;
     
-    const rows = state.passbook || [];
+    const rows = Array.isArray(state.passbook) ? state.passbook : [];
     
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No passbook transactions recorded.</td></tr>';
@@ -2912,12 +3461,14 @@ function setGateBadges() {
       const notes = escapeHtml(r.notes || '');
       const desc = notes ? `${title} - ${notes}` : (title || '—');
       
-      const deposit = Number(r.amount_in || 0);
-      const withdrawal = Number(r.amount_out || 0);
+      const deposit = Number(r.amount_in || r.credit || 0);
+      const withdrawal = Number(r.amount_out || r.debit || 0);
       
       totalDeposits += deposit;
       totalWithdrawals += withdrawal;
       runningBalance += deposit - withdrawal;
+      
+      const ref = escapeHtml(r.ref_table ? `${r.ref_table}#${r.ref_id}` : '—');
       
       return `
         <tr>
@@ -2928,7 +3479,7 @@ function setGateBadges() {
           <td class="text-end">${deposit > 0 ? money(deposit) : '—'}</td>
           <td class="text-end">${withdrawal > 0 ? money(withdrawal) : '—'}</td>
           <td class="text-end fw-semibold">${money(runningBalance)}</td>
-          <td><small class="text-muted">PB#${r.id}</small></td>
+          <td><small class="text-muted">${ref}</small></td>
         </tr>
       `;
     }).join('');
@@ -2936,6 +3487,111 @@ function setGateBadges() {
     if (depositsEl) depositsEl.textContent = money(totalDeposits);
     if (withdrawalsEl) withdrawalsEl.textContent = money(totalWithdrawals);
     if (balanceEl) balanceEl.textContent = money(runningBalance);
+  }
+
+  function updateVariance() {
+    const proposed = Number(state.proposedExpensesTotal || 0);
+    const actual = Number(state.selectedEvent?.total_debits || 0);
+    const variance = proposed - actual;
+    
+    const varianceEl = qs("#liqVariance");
+    const actualTotalEl = qs("#liqActualTotal");
+    
+    if (actualTotalEl) actualTotalEl.textContent = money(actual);
+    if (varianceEl) {
+      varianceEl.textContent = money(variance);
+      
+      const box = qs("#liqVarianceBox");
+      if (box) {
+        if (variance >= 0) {
+          box.style.backgroundColor = '#d4edda';
+          box.style.borderColor = '#c3e6cb';
+        } else {
+          box.style.backgroundColor = '#f8d7da';
+          box.style.borderColor = '#f5c6cb';
+        }
+      }
+    }
+  }
+
+  function renderLiquidation() {
+    const e = state.selectedEvent || {};
+    
+    const liqEvent = qs("#liqEvent");
+    const liqOrg = qs("#liqOrg");
+    const liqDate = qs("#liqDate");
+    const liqYear = qs("#liqYear");
+    const liqCredits = qs("#liqCredits");
+    const liqDebits = qs("#liqDebits");
+    const liqBalance = qs("#liqBalance");
+
+    if (liqEvent) liqEvent.textContent = e.title || e.event_name || "—";
+    if (liqOrg) liqOrg.textContent = e.org_name || e.organization || "—";
+    if (liqDate) liqDate.textContent = e.event_date || e.date || "—";
+    if (liqYear) liqYear.textContent = e.school_year || "—";
+    
+    const credits = Array.isArray(state.credits) ? state.credits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+    const debits = Array.isArray(state.debits) ? state.debits.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0;
+    const balance = credits - debits;
+
+    const proposedCredits = state.proposedCreditsTotal || 0;
+    const proposedExpenses = state.proposedExpensesTotal || 0;
+    const proposedBalance = proposedCredits - proposedExpenses;
+    const creditVariance = credits - proposedCredits;
+    const expenseVariance = debits - proposedExpenses;
+    const netVariance = (credits - debits) - (proposedCredits - proposedExpenses);
+
+    // Update the DOM elements with these new values
+    const liqProposedCredits = qs("#liqProposedCredits");
+    const liqActualCredits = qs("#liqActualCredits");
+    const liqCreditVariance = qs("#liqCreditVariance");
+    const liqProposedExpenses = qs("#liqProposedExpenses");
+    const liqActualExpenses = qs("#liqActualExpenses");
+    const liqExpenseVariance = qs("#liqExpenseVariance");
+    const liqProposedBalance = qs("#liqProposedBalance");
+    const liqActualBalance = qs("#liqActualBalance");
+    const liqNetVariance = qs("#liqNetVariance");
+
+    if (liqProposedCredits) liqProposedCredits.textContent = money(proposedCredits);
+    if (liqActualCredits) liqActualCredits.textContent = money(credits);
+    if (liqCreditVariance) {
+        liqCreditVariance.textContent = money(creditVariance);
+        liqCreditVariance.className = creditVariance >= 0 ? 'text-success' : 'text-danger';
+    }
+    if (liqProposedExpenses) liqProposedExpenses.textContent = money(proposedExpenses);
+    if (liqActualExpenses) liqActualExpenses.textContent = money(debits);
+    if (liqExpenseVariance) {
+        liqExpenseVariance.textContent = money(expenseVariance);
+        liqExpenseVariance.className = expenseVariance <= 0 ? 'text-success' : 'text-danger';
+    }
+    if (liqProposedBalance) liqProposedBalance.textContent = money(proposedBalance);
+    if (liqActualBalance) liqActualBalance.textContent = money(balance);
+    if (liqNetVariance) {
+        liqNetVariance.textContent = money(netVariance);
+        liqNetVariance.className = netVariance >= 0 ? 'text-success' : 'text-danger';
+    }
+    
+    console.log("[Liquidation] Credits:", credits, "Debits:", debits, "Balance:", balance);
+    
+    if (liqCredits) {
+      liqCredits.textContent = money(credits);
+      liqCredits.className = credits > 0 ? 'text-success' : '';
+    }
+    if (liqDebits) {
+      liqDebits.textContent = money(debits);
+      liqDebits.className = debits > 0 ? 'text-danger' : '';
+    }
+    if (liqBalance) {
+      liqBalance.textContent = money(balance);
+      liqBalance.className = balance < 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
+    }
+    
+    if (typeof renderLiquidationProposed === 'function') {
+      renderLiquidationProposed();
+    }
+    if (typeof renderLiquidationPassbook === 'function') {
+      renderLiquidationPassbook();
+    }
   }
 
   // ==================== End New Functions ====================
@@ -2988,67 +3644,43 @@ function setGateBadges() {
     bootstrap.Modal.getOrCreateInstance(el).show();
   }
 
-  function resetAddEventForm() {
-    const setVal = (id, v) => { const el = qs(id); if (el) el.value = v; };
-
-    setVal("#aeName", "");
-    setVal("#aeDate", "");
-    setVal("#aeLocation", "");
-    setVal("#aeDescription", "");
-
-    const scopeSel = qs("#aeScope");
-    const deptWrap = qs("#aeDeptWrap");
-    const deptSel = qs("#aeDepartment");
-
-    if (scopeSel) scopeSel.value = "general";
-    if (deptSel) deptSel.value = "";
-    if (deptWrap) deptWrap.classList.toggle("d-none", true);
-    
-    const tbody = document.getElementById('proposedExpenseTbody');
-    if (tbody) {
-      tbody.innerHTML = '';
-      addProposedItemRow();
-    }
-  }
-
   function openDecisionModal(opts) {
-  const {
-    action = "",
-    title = "Confirm Action",
-    text = "Are you sure?",
-    confirmText = "Confirm",
-    confirmBtnClass = "btn-primary",
-    showNoteField = true, // New parameter
-  } = opts || {};
+    const {
+      action = "",
+      title = "Confirm Action",
+      text = "Are you sure?",
+      confirmText = "Confirm",
+      confirmBtnClass = "btn-primary",
+      showNoteField = true,
+    } = opts || {};
 
-  const mTitle = qs("#eeDecisionTitle");
-  const mText = qs("#eeDecisionText");
-  const noteField = qs("#eeDecisionNoteField");
-  const hidAction = qs("#eeDecisionAction");
-  const hidEventId = qs("#eeDecisionEventId");
-  const btn = qs("#eeDecisionConfirmBtn");
+    const mTitle = qs("#eeDecisionTitle");
+    const mText = qs("#eeDecisionText");
+    const noteField = qs("#eeDecisionNoteField");
+    const hidAction = qs("#eeDecisionAction");
+    const hidEventId = qs("#eeDecisionEventId");
+    const btn = qs("#eeDecisionConfirmBtn");
 
-  if (mTitle) mTitle.textContent = title;
-  if (mText) mText.textContent = text;
+    if (mTitle) mTitle.textContent = title;
+    if (mText) mText.textContent = text;
 
-  // Show/hide note field based on parameter
-  if (noteField) {
-    noteField.classList.toggle("d-none", !showNoteField);
-    if (!showNoteField) {
-      const note = qs("#eeDecisionNote");
-      if (note) note.value = ""; // Clear any previous value
+    if (noteField) {
+      noteField.classList.toggle("d-none", !showNoteField);
+      if (!showNoteField) {
+        const note = qs("#eeDecisionNote");
+        if (note) note.value = "";
+      }
     }
-  }
 
-  if (hidAction) hidAction.value = String(action || "");
-  if (hidEventId) hidEventId.value = String(state.selectedEventId || "");
+    if (hidAction) hidAction.value = String(action || "");
+    if (hidEventId) hidEventId.value = String(state.selectedEventId || "");
 
-  if (btn) {
-    btn.textContent = confirmText;
-    btn.className = `btn ${confirmBtnClass}`;
-  }
+    if (btn) {
+      btn.textContent = confirmText;
+      btn.className = `btn ${confirmBtnClass}`;
+    }
 
-  openModal("#eeDecisionModal");
+    openModal("#eeDecisionModal");
   }
 
   function bindApprovalButtons() {
@@ -3125,7 +3757,6 @@ function setGateBadges() {
 
           let data;
           
-          // Handle different actions
           switch (action) {
             case "submit_accomplishment_report":
               if (!state.permissions?.can_submit_accomplishment) {
@@ -3226,14 +3857,12 @@ function setGateBadges() {
           safeShowSuccess(data.message || "Action completed successfully.");
           closeModal("#eeDecisionModal");
           
-          // Refresh the view
           await openEvent(eventId);
           
         } catch (e) {
           safeShowError(e.message);
         } finally {
           confirm.disabled = false;
-          // Clear stored data
           const modal = qs("#eeDecisionModal");
           delete modal.dataset.objectives;
           delete modal.dataset.outcomes;
@@ -3246,12 +3875,8 @@ function setGateBadges() {
     }
   }
 
-  // Legacy accomplishment submit (keep for backward compatibility but hide)
   function bindAccomplishmentSubmit() {
-    // This is kept for backward compatibility but will be hidden
-    const openBtn = qs("#eeSubmitAccompBtn");
-    const submitBtn = qs("#eeAccompSubmitBtn");
-    const modal = qs("#eeAccompModal");
+    // Kept for backward compatibility
   }
 
   function bindListEvents() {
@@ -3279,52 +3904,73 @@ function setGateBadges() {
   }
 
   function bindAddEventModal() {
-    const scopeSel = qs("#aeScope");
-    const deptWrap = qs("#aeDeptWrap");
-    const deptSel = qs("#aeDepartment");
+  const scopeSel = qs("#aeScope");
+  const deptWrap = qs("#aeDeptWrap");
+  const deptSel = qs("#aeDepartment");
 
-    if (scopeSel && deptWrap && scopeSel.dataset.eeBound !== "1") {
-      scopeSel.dataset.eeBound = "1";
-      scopeSel.addEventListener("change", () => {
-        const v = String(scopeSel.value || "");
-        deptWrap.classList.toggle("d-none", v !== "organization");
+  if (scopeSel && deptWrap && scopeSel.dataset.eeBound !== "1") {
+    scopeSel.dataset.eeBound = "1";
+    scopeSel.addEventListener("change", () => {
+      const v = String(scopeSel.value || "");
+      deptWrap.classList.toggle("d-none", v !== "organization");
+    });
+  }
+
+  // In bindAddEventModal function, replace the addEventModal event listener:
+  const addEventModal = document.getElementById('addEventModal');
+  if (addEventModal) {
+      // Remove any existing listeners by cloning and replacing
+      const newModal = addEventModal.cloneNode(true);
+      addEventModal.parentNode.replaceChild(newModal, addEventModal);
+      
+      newModal.addEventListener('show.bs.modal', function() {
+          setTimeout(() => {
+              if (typeof initProposedBudgetSections === 'function') {
+                  initProposedBudgetSections();
+              }
+          }, 100);
+      });
+      
+      // Re-bind the modal to the variable for later use
+      window.addEventModalInstance = newModal;
+  }
+
+  function enforceAddEventOrgLock() {
+    const scopeSel2 = qs("#aeScope");
+    const deptWrap2 = qs("#aeDeptWrap");
+    const deptSel2 = qs("#aeDepartment");
+
+    renderOrgOptions();
+
+    if (!isOfficerRole()) {
+      if (scopeSel2) {
+        scopeSel2.disabled = false;
+        Array.from(scopeSel2.options || []).forEach((opt) => (opt.disabled = false));
+      }
+      return;
+    }
+
+    if (scopeSel2) {
+      scopeSel2.value = "organization";
+      scopeSel2.disabled = true;
+      Array.from(scopeSel2.options || []).forEach((opt) => {
+        opt.disabled = (String(opt.value) !== "organization");
       });
     }
 
-    function enforceAddEventOrgLock() {
-      const scopeSel2 = qs("#aeScope");
-      const deptWrap2 = qs("#aeDeptWrap");
-      const deptSel2 = qs("#aeDepartment");
+    if (deptWrap2) deptWrap2.classList.remove("d-none");
 
-      renderOrgOptions();
-
-      if (!isOfficerRole()) {
-        if (scopeSel2) {
-          scopeSel2.disabled = false;
-          Array.from(scopeSel2.options || []).forEach((opt) => (opt.disabled = false));
-        }
-        return;
-      }
-
-      if (scopeSel2) {
-        scopeSel2.value = "organization";
-        scopeSel2.disabled = true;
-        Array.from(scopeSel2.options || []).forEach((opt) => {
-          opt.disabled = (String(opt.value) !== "organization");
-        });
-      }
-
-      if (deptWrap2) deptWrap2.classList.remove("d-none");
-
-      if (deptSel2 && deptSel2.options && deptSel2.options.length > 0 && !deptSel2.value) {
-        const first = Array.from(deptSel2.options).find((o) => o.value && !o.disabled);
-        if (first) deptSel2.value = first.value;
-      }
+    if (deptSel2 && deptSel2.options && deptSel2.options.length > 0 && !deptSel2.value) {
+      const first = Array.from(deptSel2.options).find((o) => o.value && !o.disabled);
+      if (first) deptSel2.value = first.value;
     }
+  }
 
     async function submitAddEvent(mode) {
-      try {
-        if (!state.permissions?.can_add_event || isReadOnlyMode()) throw new Error("Not allowed.");
+    try {
+        if (!state.permissions?.can_add_event || isReadOnlyMode()) {
+            throw new Error("Not allowed.");
+        }
 
         enforceAddEventOrgLock();
 
@@ -3341,78 +3987,177 @@ function setGateBadges() {
         if (!scope) throw new Error("Scope is required.");
 
         if (scope === "organization" && !orgId) {
-          throw new Error(isOfficerRole()
-            ? "No organization found for your account (check officers for this term)."
-            : "Organization is required."
-          );
+            throw new Error(isOfficerRole()
+                ? "No organization found for your account (check officers for this term)."
+                : "Organization is required."
+            );
         }
 
         const schoolYear = String(state.selectedSchoolYear || "");
         const semester = String(state.selectedSemester || "");
 
-        const data = await postJSON({
-          action: "add_event",
-          mode: mode,
-          school_year: schoolYear,
-          semester: semester,
-          title: name,
-          event_date: eventDate,
-          location: loc,
-          scope,
-          description: desc || null,
-          org_id: scope === "organization" ? orgId : null,
-        });
-
-        if (data.success && data.event_id) {
-          const proposedItems = collectProposedItems();
-          if (proposedItems.length > 0) {
-            await postJSON({
-              action: "save_proposed_expenses",
-              event_id: data.event_id,
-              items: proposedItems
+        // Collect PROPOSED budget items from the modal
+        function collectProposedBudgetItems() {
+            const credits = [];
+            const expenses = [];
+            
+            // Collect from Proposed Credits table
+            const creditRows = document.querySelectorAll('#proposedCreditsTable tbody tr');
+            console.log("Found credit rows:", creditRows.length);
+            
+            creditRows.forEach((row, index) => {
+                const descInput = row.querySelector('.credit-desc');
+                const amountInput = row.querySelector('.credit-amount');
+                const notesInput = row.querySelector('.credit-notes');
+                
+                const desc = descInput?.value?.trim();
+                const amount = parseFloat(amountInput?.value) || 0;
+                const notes = notesInput?.value?.trim() || '';
+                
+                console.log(`Credit row ${index}: desc="${desc}", amount=${amount}, notes="${notes}"`);
+                
+                if (desc && amount > 0) {
+                    credits.push({
+                        description: desc,
+                        amount: amount,
+                        notes: notes
+                    });
+                } else {
+                    console.log(`Credit row ${index} skipped - desc: ${desc}, amount: ${amount}`);
+                }
             });
-          }
+            
+            // Collect from Proposed Expenses table
+            const expenseRows = document.querySelectorAll('#proposedExpensesTable tbody tr');
+            console.log("Found expense rows:", expenseRows.length);
+            
+            expenseRows.forEach((row, index) => {
+                const descInput = row.querySelector('.expense-desc');
+                const qtyInput = row.querySelector('.expense-qty');
+                const priceInput = row.querySelector('.expense-unit-price');
+                const notesInput = row.querySelector('.expense-notes');
+                
+                const desc = descInput?.value?.trim();
+                const qty = parseInt(qtyInput?.value) || 0;
+                const price = parseFloat(priceInput?.value) || 0;
+                const notes = notesInput?.value?.trim() || '';
+                
+                console.log(`Expense row ${index}: desc="${desc}", qty=${qty}, price=${price}, notes="${notes}"`);
+                
+                if (desc && qty > 0 && price > 0) {
+                    expenses.push({
+                        description: desc,
+                        quantity: qty,
+                        estimated_cost: price,
+                        notes: notes
+                    });
+                } else {
+                    console.log(`Expense row ${index} skipped - desc: ${desc}, qty: ${qty}, price: ${price}`);
+                }
+            });
+            
+            console.log("Final credits:", credits);
+            console.log("Final expenses:", expenses);
+            console.log("Total credits:", credits.length, "Total expenses:", expenses.length);
+            return { credits, expenses };
         }
 
-        safeShowSuccess(data.message || "Event saved.");
+        const { credits, expenses } = collectProposedBudgetItems();
+
+        if (credits.length === 0 && expenses.length === 0) {
+            throw new Error("Please add at least one proposed credit or expense item.");
+        }
+
+        // Calculate totals for warning
+        const creditsTotal = credits.reduce((sum, item) => sum + item.amount, 0);
+        const expensesTotal = expenses.reduce((sum, item) => sum + (item.quantity * item.estimated_cost), 0);
+        const balance = creditsTotal - expensesTotal;
+
+        if (balance < -1000) {
+            if (!confirm(`Warning: The proposed budget has a deficit of ${money(Math.abs(balance))}. Are you sure you want to proceed?`)) {
+                return;
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'add_event');
+        formData.append('mode', mode);
+        formData.append('school_year', schoolYear);
+        formData.append('semester', semester);
+        formData.append('title', name);
+        formData.append('event_date', eventDate);
+        formData.append('location', loc);
+        formData.append('scope', scope);
+        if (desc) formData.append('description', desc);
+        if (scope === 'organization' && orgId) formData.append('org_id', orgId);
+        
+        // Add proposed items as JSON
+        formData.append('proposed_credits', JSON.stringify(credits));
+        formData.append('proposed_expenses', JSON.stringify(expenses));
+        
+        console.log("Sending proposed_credits:", JSON.stringify(credits, null, 2));
+        console.log("Sending proposed_expenses:", JSON.stringify(expenses, null, 2));
+
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+
+        const text = await res.text();
+        console.log("[AddEvent] Response:", res.status, text);
+        
+        let data;
+        try { data = JSON.parse(text); }
+        catch { 
+            console.error("Failed to parse response:", text);
+            throw new Error("Invalid server response: " + text.substring(0, 200)); 
+        }
+        
+        if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+        if (!data?.success) throw new Error(data?.message || "Request failed.");
+
+        safeShowSuccess(data.message || "Event created with proposed budget.");
         resetAddEventForm();
         closeModal("#addEventModal");
         await loadEvents();
-      } catch (e) {
+    } catch (e) {
+        console.error("SubmitAddEvent error:", e);
         safeShowError(e.message);
+    }
+    }
+
+      // Bind buttons INSIDE the function where submitAddEvent is defined
+      const saveDraftBtn = qs("#aeSaveDraftBtn");
+      if (saveDraftBtn && saveDraftBtn.dataset.eeBound !== "1") {
+        saveDraftBtn.dataset.eeBound = "1";
+        saveDraftBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          submitAddEvent("draft");
+        });
+      }
+
+      const submitBtn = qs("#aeSubmitForApprovalBtn");
+      if (submitBtn && submitBtn.dataset.eeBound !== "1") {
+        submitBtn.dataset.eeBound = "1";
+        submitBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          submitAddEvent("submit");
+        });
+      }
+
+      const legacySave = qs("#aeSaveBtn");
+      if (legacySave && legacySave.dataset.eeBound !== "1") {
+        legacySave.dataset.eeBound = "1";
+        legacySave.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          submitAddEvent("draft");
+        });
       }
     }
-
-    const saveDraftBtn = qs("#aeSaveDraftBtn");
-    if (saveDraftBtn && saveDraftBtn.dataset.eeBound !== "1") {
-      saveDraftBtn.dataset.eeBound = "1";
-      saveDraftBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        submitAddEvent("draft");
-      });
-    }
-
-    const submitBtn = qs("#aeSubmitForApprovalBtn");
-    if (submitBtn && submitBtn.dataset.eeBound !== "1") {
-      submitBtn.dataset.eeBound = "1";
-      submitBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        submitAddEvent("submit");
-      });
-    }
-
-    const legacySave = qs("#aeSaveBtn");
-    if (legacySave && legacySave.dataset.eeBound !== "1") {
-      legacySave.dataset.eeBound = "1";
-      legacySave.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        submitAddEvent("draft");
-      });
-    }
-  }
 
   function bindAddCreditModal() {
     const btn = qs("#fundAddBtn");
@@ -3627,7 +4372,6 @@ function setGateBadges() {
       });
     }
 
-    // Accomplishment print button - binding is handled in bindAccomplishmentPrint
     bindAccomplishmentPrint();
   }
 
@@ -3668,7 +4412,7 @@ function setGateBadges() {
       bindApproveAccomplishment();
       bindDeclineAccomplishment();
       bindAccomplishmentPreview();
-      initProposedExpenses();
+      //initProposedExpenses();
 
       const emptyAdd = qs("#btnEmptyAdd");
       if (emptyAdd && emptyAdd.dataset.eeBound !== "1") {

@@ -218,6 +218,30 @@
 
     setTxt("#saViewReqSub", "Loading…");
 
+    // Wire buttons immediately — BEFORE the async API call — so onclick is
+    // always set regardless of whether the request succeeds or fails.
+    // Use document.querySelector since these buttons are inside the modal which
+    // is at body level, potentially outside the injected root that A.rqs searches.
+    const dqs = (sel) => document.querySelector(sel);
+
+    const assignBtn = dqs("#saAssignModeratorBtn");
+    if (assignBtn) {
+      assignBtn.dataset.requestId = requestId;
+      assignBtn.onclick = () => openAssignModerator(A, requestId);
+    }
+
+    const editAssignBtn = dqs("#saEditAssignmentBtn");
+    if (editAssignBtn) {
+      editAssignBtn.dataset.requestId = requestId;
+      editAssignBtn.onclick = () => openEditAssignment(A, requestId);
+    }
+
+    const recBtn = dqs("#saOpenRecommendationBtn");
+    if (recBtn) {
+      recBtn.dataset.requestId = requestId;
+      recBtn.onclick = () => openRecommendation(A, requestId);
+    }
+
     // open early
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
@@ -285,53 +309,44 @@
       // docs + pagination
       renderDocs(A, data?.docs, requestId);
 
+      // ✅ FIX: Setup bulk actions after modal is fully rendered
+      setTimeout(() => {
+        A.setupBulkActions();
+      }, 200);
+
       // Check if all documents are accepted to enable recommendation button
       const docs = data?.docs?.items || [];
       const allAccepted = areAllDocumentsAccepted(docs);
       
-      // assign moderator button
-      const assignBtn = rqs("#saAssignModeratorBtn");
-      if (assignBtn) {
-        assignBtn.dataset.requestId = requestId;
-        assignBtn.onclick = () => openAssignModerator(A, r.id || requestId);
-      }
+      // Update onclick to use resolved r.id now that we have it
+      if (assignBtn)     assignBtn.onclick     = () => openAssignModerator(A, r.id || requestId);
+      if (editAssignBtn) editAssignBtn.onclick  = () => openEditAssignment(A, r.id || requestId);
 
-      // recommendation upload button
-      const recBtn = rqs("#saOpenRecommendationBtn");
-      const submitRecBtn = rqs("#saSubmitRecommendationBtn");
-      
-      if (recBtn) {
-        recBtn.dataset.requestId = requestId;
-        recBtn.onclick = () => openRecommendation(A, r.id || requestId);
-        
-        // Enable/disable based on document status
+      // Recommendation button — enable/disable based on document acceptance state
+      const submitRecBtn = dqs("#saSubmitRecommendationBtn");
+      const recBtnEl = dqs("#saOpenRecommendationBtn");
+
+      if (recBtnEl) {
+        recBtnEl.dataset.requestId = requestId;
         if (allAccepted) {
-          recBtn.disabled = false;
-          recBtn.title = "Open recommendation form";
-          recBtn.classList.remove('disabled');
-          // Restore original click handler
-          if (recBtn.__saOriginalClick) {
-            recBtn.onclick = recBtn.__saOriginalClick;
-          }
+          recBtnEl.disabled = false;
+          recBtnEl.title = "Open recommendation form";
+          recBtnEl.classList.remove('disabled');
+          recBtnEl.onclick = () => openRecommendation(A, r.id || requestId);
         } else {
-          recBtn.disabled = true;
-          recBtn.title = "Cannot open recommendation form: Not all requirements are accepted";
-          recBtn.classList.add('disabled');
-          // Store original click handler and replace with warning
-          if (!recBtn.__saOriginalClick) {
-            recBtn.__saOriginalClick = recBtn.onclick;
-          }
-          recBtn.onclick = (e) => {
+          recBtnEl.disabled = true;
+          recBtnEl.title = "Cannot open recommendation form: Not all requirements are accepted";
+          recBtnEl.classList.add('disabled');
+          recBtnEl.onclick = (e) => {
             e.preventDefault();
             A.safeShowError("Cannot open recommendation form: Not all requirements are accepted. Please accept all documents first.");
             return false;
           };
         }
       }
-      
+
       if (submitRecBtn) {
         submitRecBtn.dataset.requestId = requestId;
-        // Enable/disable based on document status
         if (allAccepted) {
           submitRecBtn.disabled = false;
           submitRecBtn.title = "Submit recommendation for this request";
@@ -392,7 +407,6 @@
           const isAccepted = st === 'Accepted';
           const isReturned = st === 'Returned';
 
-          // ✅ FIX: Make sure data-doc-id is set on the preview button
           const actionsHtml = `
             <div class="btn-group btn-group-sm">
               <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -425,7 +439,7 @@
           `;
 
           return `<tr data-doc-id="${docId}">
-            <td><!-- Checkbox will be added by setupDocumentCheckboxes --></td>
+            <td><!-- Checkbox will be added here by setupDocumentCheckboxes --></td>
             <td class="sa-wrap">${req}</td>
             <td class="sa-wrap">${file}</td>
             <td>${badge(st)}</td>
@@ -434,7 +448,18 @@
           </tr>`;
         })
         .join("");
+      
+      // ✅ FIX: Initialize checkboxes after rendering
+      setTimeout(() => {
+        A.setupDocumentCheckboxes();
+      }, 100);
     }
+
+    A.renderPagination(pag, pagMeta, page, perPage, total, (newPage) => {
+      if (!window.__saDocPages) window.__saDocPages = {};
+      window.__saDocPages[requestId] = newPage;
+      openViewModal(A, requestId);
+    });
   }
 
   // -------------------------
@@ -490,6 +515,111 @@
           openViewModal(A, rid);
         } catch (err) {
           A.safeShowError(err.message);
+        }
+      });
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  // -------------------------
+  // Edit Moderator & Coordinator (super admin only)
+  // -------------------------
+  async function openEditAssignment(A, requestId) {
+    const rqs = A.rqs || A.qs;
+
+    const modalEl = rqs("#saEditAssignmentModal");
+    if (!modalEl || !window.bootstrap) return;
+
+    const hid = rqs("#saEditAssignRequestId");
+    if (hid) hid.value = String(requestId);
+
+    // Load coordinator list and moderator (org_president) list
+    const modSel  = rqs("#saEditModeratorSelect");
+    const coordSel = rqs("#saEditCoordinatorSelect");
+
+    // Fetch current request data to pre-select
+    let currentModId = "";
+    let currentCoordId = "";
+    try {
+      const req = await A.postJSON({ action: "get_request", request_id: requestId });
+      currentModId   = String(req?.request?.moderator_user_id   || req?.request?.moderator_id   || "");
+      currentCoordId = String(req?.request?.coordinator_user_id || req?.request?.coordinator_id || "");
+    } catch (e) { /* non-fatal */ }
+
+    // Populate moderator select (org_president users)
+    if (modSel) {
+      modSel.innerHTML = `<option value="">Loading...</option>`;
+      try {
+        const data = await A.postJSON({ action: "list_org_presidents" });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        modSel.innerHTML = `<option value="">— Keep current —</option>`;
+        for (const m of items) {
+          const opt = document.createElement("option");
+          opt.value = String(m.id);
+          opt.textContent = m.name || m.full_name || `User #${m.id}`;
+          if (String(m.id) === currentModId) opt.selected = true;
+          modSel.appendChild(opt);
+        }
+      } catch (e) {
+        modSel.innerHTML = `<option value="">Failed to load</option>`;
+      }
+    }
+
+    // Populate coordinator select (faculty_admin users)
+    if (coordSel) {
+      coordSel.innerHTML = `<option value="">Loading...</option>`;
+      try {
+        const data = await A.postJSON({ action: "list_coordinators" });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        coordSel.innerHTML = `<option value="">— Keep current —</option>`;
+        for (const m of items) {
+          const opt = document.createElement("option");
+          opt.value = String(m.id);
+          opt.textContent = m.name || m.full_name || `User #${m.id}`;
+          if (String(m.id) === currentCoordId) opt.selected = true;
+          coordSel.appendChild(opt);
+        }
+      } catch (e) {
+        coordSel.innerHTML = `<option value="">Failed to load</option>`;
+      }
+    }
+
+    // Bind form (once per modal element)
+    const form = rqs("#saEditAssignmentForm");
+    if (form && !form.__saEditAssignBound) {
+      form.__saEditAssignBound = true;
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const rid   = rqs("#saEditAssignRequestId")?.value;
+        const mid   = rqs("#saEditModeratorSelect")?.value   || "";
+        const cid   = rqs("#saEditCoordinatorSelect")?.value || "";
+
+        if (!rid) return;
+        if (!mid && !cid) {
+          A.safeShowError("Please select at least a new moderator or coordinator.");
+          return;
+        }
+
+        try {
+          await A.postJSON({
+            action:     "update_assignment",
+            request_id: rid,
+            moderator_id:   mid   || null,
+            coordinator_id: cid   || null,
+          });
+
+          bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+          A.safeShowSuccess("Assignment updated successfully.");
+          A.bus.emit("refresh:all");
+
+          // Refresh the view modal if it's still open
+          const viewEl = rqs("#saViewRequestModal");
+          if (viewEl && viewEl.classList.contains("show")) {
+            openViewModal(A, rid);
+          }
+        } catch (err) {
+          A.safeShowError(err.message || "Failed to update assignment.");
         }
       });
     }
@@ -850,21 +980,13 @@
   // -------------------------
   function init(root) {
     console.log("[Pending] Initializing module...");
-    
     const A = mustBase();
     const r = root || document;
 
-    if (r.__saPendingInited) {
-      console.log("[Pending] Already initialized, skipping");
-      return;
-    }
-    r.__saPendingInited = true;
-
-    console.log("[Pending] Store initial state:", A.store.pending);
-
+    // Always re-bind DOM (bind helpers guard per-element, safe to call repeatedly)
     bindPending(A, r);
-    
-    // Initial fetch
+
+    // Always fetch fresh data on every init / re-navigation
     setTimeout(() => {
       console.log("[Pending] Performing initial fetch...");
       fetchPending(A).catch((e) => {
@@ -873,47 +995,39 @@
       });
     }, 100);
 
-    A.bus.on("search:changed", () => {
-      console.log("[Pending] Search changed, refreshing...");
-      A.store.pending.page = 1;
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load
+    if (!window.__saPendingBusListening) {
+      window.__saPendingBusListening = true;
 
-    A.bus.on("refresh:all", () => {
-      console.log("[Pending] Refresh all triggered...");
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
-    });
-
-    // Listen for filters changed event from base module
-    A.bus.on("filters:changed", (payload) => {
-      if (payload.scope === "pending") {
-        console.log("[Pending] Filters changed for pending, refreshing...");
+      A.bus.on("search:changed", () => {
         A.store.pending.page = 1;
         fetchPending(A).catch((e) => A.safeShowError(e.message));
-      }
-    });
-    
-    // Also listen for terms loaded event
-    A.bus.on("terms:loaded", () => {
-      console.log("[Pending] Terms loaded, refreshing pending table...");
-      A.store.pending.page = 1;
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
-    });
+      });
 
-    // Listen for modal open events from preview
-    A.bus.on('modal:open-accept', (data) => {
-      console.log("[Pending] Received modal:open-accept event:", data);
-      if (data && data.docId && data.fileName) {
-        openAcceptDocumentModal(A, data.docId, data.fileName);
-      }
-    });
+      A.bus.on("refresh:all", () => {
+        fetchPending(A).catch((e) => A.safeShowError(e.message));
+      });
 
-    A.bus.on('modal:open-return', (data) => {
-      console.log("[Pending] Received modal:open-return event:", data);
-      if (data && data.docId && data.fileName) {
-        openReturnDocumentModal(A, data.docId, data.fileName);
-      }
-    });
+      A.bus.on("filters:changed", (payload) => {
+        if (payload?.scope === "pending") {
+          A.store.pending.page = 1;
+          fetchPending(A).catch((e) => A.safeShowError(e.message));
+        }
+      });
+
+      A.bus.on("terms:loaded", () => {
+        A.store.pending.page = 1;
+        fetchPending(A).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on('modal:open-accept', (data) => {
+        if (data && data.docId && data.fileName) openAcceptDocumentModal(A, data.docId, data.fileName);
+      });
+
+      A.bus.on('modal:open-return', (data) => {
+        if (data && data.docId && data.fileName) openReturnDocumentModal(A, data.docId, data.fileName);
+      });
+    }
   }
 
   // Allow base to call: window.SAAccreditationPending.init(root)
@@ -921,7 +1035,8 @@
     init,
     openViewModal,
     openAcceptDocumentModal,
-    openReturnDocumentModal
+    openReturnDocumentModal,
+    openEditAssignment,
   };
 
   // If script loads before base calls submodule init, still listen for booted.

@@ -9,6 +9,7 @@
   const API_URL = "php/home-dashboard-student.php";
 
   function qs(sel, root = document) { return root.querySelector(sel); }
+  function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
   function safeShowError(msg) {
     if (typeof window.showError === "function") return window.showError(msg);
@@ -34,6 +35,14 @@
     return `hsl(${hue}, 95%, ${lightness}%)`;
   }
 
+  // Format semester label
+  function semesterLabel(sem) {
+    if (sem === "1st") return "1st Semester";
+    if (sem === "2nd") return "2nd Semester";
+    if (sem === "Summer") return "Summer";
+    return String(sem || "—");
+  }
+
   async function getJSON() {
     const res = await fetch(API_URL, {
       method: "GET",
@@ -56,7 +65,7 @@
   }
 
   /* =========================
-     Calendar (same as admin)
+     Calendar
      ========================= */
   function buildCalendar(root, date = new Date()) {
     const body = qs("#dashboardCalendarBody", root);
@@ -113,20 +122,22 @@
   }
 
   /* =========================
-     Charts (same as faculty)
+     Charts
      ========================= */
   const chartsByRoot = new WeakMap();
   function getChartsState(root) {
     let st = chartsByRoot.get(root);
-    if (!st) { st = { orgChart: null, eventChart: null }; chartsByRoot.set(root, st); }
+    if (!st) { st = { orgChart: null, clubChart: null, eventChart: null }; chartsByRoot.set(root, st); }
     return st;
   }
   function destroyCharts(root) {
     const st = chartsByRoot.get(root);
     if (!st) return;
     try { st.orgChart?.destroy?.(); } catch (e) {}
+    try { st.clubChart?.destroy?.(); } catch (e) {}
     try { st.eventChart?.destroy?.(); } catch (e) {}
     st.orgChart = null;
+    st.clubChart = null;
     st.eventChart = null;
   }
 
@@ -142,7 +153,7 @@
       data: {
         labels: Array.isArray(labels) ? labels : [],
         datasets: [{
-          label: "Total Org Fees",
+          label: "Organization Fees Collected",
           data: Array.isArray(values) ? values : [],
           backgroundColor: (ctx) => vividColor(ctx.dataIndex, 60),
           borderColor: (ctx) => vividColor(ctx.dataIndex, 42),
@@ -154,7 +165,36 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
+        scales: { y: { beginAtZero: true, ticks: { callback: (v) => '₱' + v } } }
+      }
+    });
+  }
+
+  function renderClubFeesChart(root, labels, values) {
+    const canvas = qs("#clubFeesChart", root);
+    if (!canvas || typeof Chart === "undefined") return;
+
+    const st = getChartsState(root);
+    if (st.clubChart) { st.clubChart.destroy(); st.clubChart = null; }
+
+    st.clubChart = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: Array.isArray(labels) ? labels : [],
+        datasets: [{
+          label: "Club Membership Fees Collected",
+          data: Array.isArray(values) ? values : [],
+          backgroundColor: (ctx) => vividColor(ctx.dataIndex + 20, 55),
+          borderColor: (ctx) => vividColor(ctx.dataIndex + 20, 40),
+          borderWidth: 1,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: (v) => '₱' + v } } }
       }
     });
   }
@@ -193,20 +233,88 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { position: "bottom" } },
-        scales: { y: { beginAtZero: true } }
+        scales: { y: { beginAtZero: true, ticks: { callback: (v) => '₱' + v } } }
       }
     });
   }
 
   /* =========================
-     Lists
+     Lists - with count badges and role display
      ========================= */
-  function renderPaidList(root, paid) {
-    const el = qs("#paidOrgList", root);
+  function renderOrganizationsList(root, organizations, counts) {
+    const container = qs("#organizationsList", root);
+    const countBadge = qs("#orgCountBadge", root);
+    
+    if (!container) return;
+
+    if (countBadge) countBadge.textContent = counts?.organizations || 0;
+
+    if (!Array.isArray(organizations) || organizations.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="bi bi-building-slash"></i>
+          <p>You are not handling any organizations.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = organizations.map((org) => {
+      const typeClass = org.org_type === 'Organization' ? 'type-organization' : 'type-club';
+      const typeIcon = org.org_type === 'Organization' ? 'bi-building' : 'bi-trophy';
+      const scopeClass = org.scope === 'Exclusive' ? 'scope-exclusive' : 'scope-general';
+      const statusClass = org.status === 'Active' ? 'status-active' : 'status-inactive';
+      const fee = org.org_type === 'Organization' ? org.fee_required : org.membership_fee;
+      const feeLabel = org.org_type === 'Organization' ? 'Org Fee' : 'Membership';
+      
+      // Display the user's role/position for this organization
+      const userRole = org.user_role || 'Officer';
+
+      return `
+        <div class="handled-org-item">
+          <span class="handled-org-type ${typeClass}">
+            <i class="bi ${typeIcon} me-1"></i> ${org.org_type}
+          </span>
+          
+          <div class="handled-org-name">
+            ${esc(org.org_name)}
+            ${org.abbreviation ? `<span class="handled-org-abbr">${esc(org.abbreviation)}</span>` : ''}
+          </div>
+          
+          <span class="handled-org-role">
+            <i class="bi bi-person-badge me-1"></i>
+            ${esc(userRole)}
+          </span>
+          
+          <span class="handled-org-scope ${scopeClass}">
+            <i class="bi ${org.scope === 'Exclusive' ? 'bi-lock' : 'bi-globe'} me-1"></i>
+            ${org.scope || 'General'}
+          </span>
+          
+          <div class="handled-org-stats">
+            <div class="handled-org-fee">
+              <span class="fee-label">${feeLabel}</span>
+              <span class="fee-value">${peso(fee)}</span>
+            </div>
+            <div class="handled-org-status">
+              <span class="status-badge ${statusClass}"></span>
+              <span class="small">${org.status || 'Active'}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderPaidList(root, paid, type = 'org') {
+    const el = type === 'org' ? qs("#paidOrgList", root) : qs("#paidClubList", root);
+    const countEl = type === 'org' ? qs("#paidOrgCount", root) : qs("#paidClubCount", root);
+    
     if (!el) return;
 
+    if (countEl) countEl.textContent = paid?.length || 0;
+
     if (!Array.isArray(paid) || paid.length === 0) {
-      el.innerHTML = `<li class="list-group-item text-muted">No paid organization fees yet.</li>`;
+      el.innerHTML = `<li class="list-group-item text-muted"><i class="bi bi-check-circle me-2"></i>No paid ${type === 'org' ? 'organization' : 'club'} fees yet.</li>`;
       return;
     }
 
@@ -216,13 +324,19 @@
         <li class="list-group-item">
           <div class="d-flex justify-content-between align-items-start">
             <div class="me-2">
-              <div class="fw-semibold">${esc(p.org_name)}${p.abbreviation ? ` (${esc(p.abbreviation)})` : ""}</div>
+              <div class="fw-semibold">
+                <i class="bi ${p.org_type === 'Organization' ? 'bi-building' : 'bi-trophy'} me-1 text-success"></i>
+                ${esc(p.org_name)}${p.abbreviation ? ` (${esc(p.abbreviation)})` : ""}
+              </div>
               <div class="small text-muted">${esc(meta)}</div>
-              <div class="small text-muted">Receipt: ${esc(p.receipt_no || "—")}</div>
+              <div class="small text-muted">
+                <i class="bi bi-receipt me-1"></i> Receipt: ${esc(p.receipt_no || "—")}
+              </div>
             </div>
             <div class="text-end">
-              <div class="fw-semibold">${esc(peso(p.amount))}</div>
+              <div class="fw-semibold text-success">${esc(peso(p.amount))}</div>
               <span class="badge bg-success">Paid</span>
+              <div class="small text-muted mt-1">${p.paid_at ? new Date(p.paid_at).toLocaleDateString() : ''}</div>
             </div>
           </div>
         </li>
@@ -230,12 +344,16 @@
     }).join("");
   }
 
-  function renderUnpaidList(root, unpaid) {
-    const el = qs("#unpaidOrgList", root);
+  function renderUnpaidList(root, unpaid, type = 'org') {
+    const el = type === 'org' ? qs("#unpaidOrgList", root) : qs("#unpaidClubList", root);
+    const countEl = type === 'org' ? qs("#unpaidOrgCount", root) : qs("#unpaidClubCount", root);
+    
     if (!el) return;
 
+    if (countEl) countEl.textContent = unpaid?.length || 0;
+
     if (!Array.isArray(unpaid) || unpaid.length === 0) {
-      el.innerHTML = `<li class="list-group-item text-muted">No unpaid organization fees. You're good.</li>`;
+      el.innerHTML = `<li class="list-group-item text-muted"><i class="bi bi-check-circle me-2 text-success"></i>No unpaid ${type === 'org' ? 'organization' : 'club'} fees.</li>`;
       return;
     }
 
@@ -245,11 +363,14 @@
         <li class="list-group-item">
           <div class="d-flex justify-content-between align-items-start">
             <div class="me-2">
-              <div class="fw-semibold">${esc(u.org_name)}${u.abbreviation ? ` (${esc(u.abbreviation)})` : ""}</div>
+              <div class="fw-semibold">
+                <i class="bi ${u.org_type === 'Organization' ? 'bi-building' : 'bi-trophy'} me-1 text-danger"></i>
+                ${esc(u.org_name)}${u.abbreviation ? ` (${esc(u.abbreviation)})` : ""}
+              </div>
               <div class="small text-muted">${esc(meta)}</div>
             </div>
             <div class="text-end">
-              <div class="fw-semibold">${esc(peso(u.fee_required))}</div>
+              <div class="fw-semibold text-danger">${esc(peso(u.fee_required))}</div>
               <span class="badge bg-danger">Unpaid</span>
             </div>
           </div>
@@ -260,10 +381,14 @@
 
   function renderClubs(root, clubs) {
     const el = qs("#clubsList", root);
+    const countEl = qs("#clubsCount", root);
+    
     if (!el) return;
 
+    if (countEl) countEl.textContent = clubs?.length || 0;
+
     if (!Array.isArray(clubs) || clubs.length === 0) {
-      el.innerHTML = `<li class="list-group-item text-muted">You haven't joined any clubs yet.</li>`;
+      el.innerHTML = `<li class="list-group-item text-muted"><i class="bi bi-people me-2"></i>You haven't joined any clubs yet.</li>`;
       return;
     }
 
@@ -280,8 +405,13 @@
       return `
         <li class="list-group-item d-flex justify-content-between align-items-start">
           <div class="me-2">
-            <div class="fw-semibold">${esc(c.org_name)}${c.abbreviation ? ` (${esc(c.abbreviation)})` : ""}</div>
-            <div class="small text-muted">Requested: ${esc(c.requested_at || "—")}</div>
+            <div class="fw-semibold">
+              <i class="bi bi-trophy me-1 text-warning"></i>
+              ${esc(c.org_name)}${c.abbreviation ? ` (${esc(c.abbreviation)})` : ""}
+            </div>
+            <div class="small text-muted">
+              <i class="bi bi-clock me-1"></i> Requested: ${esc(c.requested_at ? new Date(c.requested_at).toLocaleDateString() : "—")}
+            </div>
           </div>
           <div class="text-end">
             <div class="mb-1">${statusBadge}</div>
@@ -293,72 +423,76 @@
   }
 
   /* =========================
-     Fill UI (same format rules)
+     Fill UI - Show user role for each organization
      ========================= */
   function fillUI(root, data) {
     const user = data.user || {};
-    const isOfficer = !!data.is_officer;
+    const isOfficer = !!data.is_officer; // This comes from PHP
+    const counts = data.counts || {};
+    const term = data.term || null;
 
-    // Welcome + date (same as admin)
+    // Academic Year display
+    const displayAcademicYear = qs("#displayAcademicYear", root);
+    const displaySemesterLabel = qs("#displaySemesterLabel", root);
+
+    if (!term) {
+      if (displayAcademicYear) displayAcademicYear.textContent = "—";
+      if (displaySemesterLabel) displaySemesterLabel.textContent = "No active term";
+    } else {
+      if (displayAcademicYear) displayAcademicYear.textContent = term.school_year || "—";
+      if (displaySemesterLabel) displaySemesterLabel.textContent = semesterLabel(term.semester);
+    }
+
+    // Welcome + date
     const welcomeUsername = qs("#welcomeUsername", root);
     const welcomeToday = qs("#welcomeToday", root);
     if (welcomeUsername) welcomeUsername.textContent = user.name || "Student";
     if (welcomeToday) welcomeToday.textContent = formatTodayLong(new Date());
 
-    // Officer-only blocks
-    const handledWrap = qs("#handledOrgWrap", root);
+    // Officer-only blocks - ONLY show if user is an officer
+    const officerWrap = qs("#officerWrap", root);
     const kpiRow = qs("#kpiRow", root);
     const chartsRow = qs("#chartsRow", root);
 
     if (!isOfficer) {
-      // ✅ hide handled/kpi/charts if non-officer student
-      handledWrap?.classList.add("d-none");
+      // Hide officer sections for regular students
+      officerWrap?.classList.add("d-none");
       kpiRow?.classList.add("d-none");
       chartsRow?.classList.add("d-none");
       destroyCharts(root);
     } else {
-      handledWrap?.classList.remove("d-none");
+      // Show officer sections for officers
+      officerWrap?.classList.remove("d-none");
       kpiRow?.classList.remove("d-none");
       chartsRow?.classList.remove("d-none");
 
-      // Handled org (same ids as admin)
-      const org = data.organization || null;
-      const handledOrgName = qs("#handledOrgName", root);
-      const handledOrgScope = qs("#handledOrgScope", root);
-
-      if (!org) {
-        if (handledOrgName) handledOrgName.textContent = "No organization assigned";
-        if (handledOrgScope) handledOrgScope.textContent = "—";
-      } else {
-        if (handledOrgName) handledOrgName.textContent = org.org_name || "—";
-        if (handledOrgScope) {
-          const parts = [];
-          if (org.org_type) parts.push(org.org_type);
-          if (org.scope) parts.push(org.scope);
-          if (org.abbreviation) parts.push(`(${org.abbreviation})`);
-          handledOrgScope.textContent = parts.join(" • ") || "—";
-        }
-      }
+      // Organizations list with counts and roles
+      renderOrganizationsList(root, data.organizations || [], counts);
 
       // KPIs
       const kpis = data.kpis || {};
       const elOrgFees = qs("#kpiOrgFeesTotal", root);
+      const elClubFees = qs("#kpiClubFeesTotal", root);
       const elCredits = qs("#kpiEventCredits", root);
       const elDebits = qs("#kpiEventDebits", root);
 
       if (elOrgFees) elOrgFees.textContent = peso(kpis.org_fees_total);
+      if (elClubFees) elClubFees.textContent = peso(kpis.club_fees_total);
       if (elCredits) elCredits.textContent = peso(kpis.event_credits);
       if (elDebits) elDebits.textContent = peso(kpis.event_debits);
 
       // Charts
       const ch = data.charts || {};
       renderOrgFeesChart(root, ch?.org_fees?.labels || [], ch?.org_fees?.values || []);
+      renderClubFeesChart(root, ch?.club_fees?.labels || [], ch?.club_fees?.values || []);
       renderEventFundsChart(root, ch?.event_funds?.labels || [], ch?.event_funds?.credits || [], ch?.event_funds?.debits || []);
     }
 
-    // Student things (always visible)
-    renderUnpaidList(root, data.org_fees_unpaid || []);
-    renderPaidList(root, data.org_fees_paid || []);
+    // Student things (always visible for everyone) - with counts
+    renderUnpaidList(root, data.org_fees_unpaid || [], 'org');
+    renderPaidList(root, data.org_fees_paid || [], 'org');
+    renderUnpaidList(root, data.club_fees_unpaid || [], 'club');
+    renderPaidList(root, data.club_fees_paid || [], 'club');
     renderClubs(root, data.clubs_joined || []);
   }
 
@@ -366,7 +500,7 @@
     const container = (root && root.querySelector) ? root : document;
     try {
       buildCalendar(container, new Date());
-      destroyCharts(container); // fresh load
+      destroyCharts(container);
 
       const data = await getJSON();
       fillUI(container, data);

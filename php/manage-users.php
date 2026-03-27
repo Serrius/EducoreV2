@@ -228,8 +228,8 @@ function get_active_programs(PDO $pdo): array {
  *  Validation rules
  *  ========================= */
 function allowed_status_for_group(string $group): array {
-  // group: students | faculty | moderators
-  if ($group === 'students') return ['Active','Inactive','Pending','Archived'];
+  // group: students | faculty | moderators | presidents
+  if ($group === 'students' || $group === 'presidents') return ['Active','Inactive','Pending','Archived'];
   // staff doesn't need Pending by default
   return ['Active','Inactive','Archived'];
 }
@@ -244,8 +244,8 @@ function require_allowed_status(string $status, array $allowed, string $label = 
 
 function require_staff_role(string $role): string {
   $role = trim($role);
-  if ($role !== 'faculty_admin' && $role !== 'moderator') {
-    out(false, 'Invalid role for staff. Allowed: faculty_admin, moderator');
+  if ($role !== 'faculty_admin' && $role !== 'moderator' && $role !== 'org_president') {
+    out(false, 'Invalid role for staff. Allowed: Coordinator and President are only');
   }
   return $role;
 }
@@ -270,7 +270,7 @@ try {
   }
 
   if ($action === 'list_users') {
-    $group  = qs('group', $in, 'students'); // students | faculty | moderators
+    $group  = qs('group', $in, 'students'); // students | faculty | moderators | presidents
     $status = normalize_status(qs('status', $in, '')); // optional
     $search = qs('search', $in, '');
     $page   = max(1, qi('page', $in, 1));
@@ -289,8 +289,10 @@ try {
       $where[] = "role = 'faculty_admin'";
     } elseif ($group === 'moderators') {
       $where[] = "role = 'moderator'";
+    } elseif ($group === 'presidents') {
+      $where[] = "role = 'org_president'";
     } else {
-      out(false, 'Invalid group. Use: students, faculty, moderators');
+      out(false, 'Invalid group. Use: students, faculty, moderators, presidents');
     }
 
     // status filter
@@ -376,10 +378,17 @@ try {
     if ($last_name === '') $requiredErrors[] = 'Last Name is required';
     if ($program === '') $requiredErrors[] = 'Program is required for students';
     if ($year_level === '') $requiredErrors[] = 'Year Level is required for students';
-    if ($school_year === '') $requiredErrors[] = 'School Year is required for students';
 
     if (!empty($requiredErrors)) {
       out(false, 'Missing required fields: ' . implode(', ', $requiredErrors));
+    }
+
+    // Auto-fill school_year from active term if not provided
+    if ($school_year === '') {
+      $term = get_active_term($pdo);
+      if ($term) {
+        $school_year = (string)$term['school_year'];
+      }
     }
 
     // Check for duplicates
@@ -389,12 +398,6 @@ try {
 
     if ($email !== '' && check_duplicate_email($pdo, $email)) {
       out(false, "Email '{$email}' is already registered to another user.");
-    }
-
-    // Auto-fill school_year from active term if not provided (as fallback)
-    $term = get_active_term($pdo);
-    if ($term && $school_year === '') {
-      $school_year = (string)$term['school_year'];
     }
 
     // Password is now hashed ID number by default
@@ -464,10 +467,17 @@ try {
     if ($last_name === '') $requiredErrors[] = 'Last Name is required';
     if ($program === '') $requiredErrors[] = 'Program is required for students';
     if ($year_level === '') $requiredErrors[] = 'Year Level is required for students';
-    if ($school_year === '') $requiredErrors[] = 'School Year is required for students';
 
     if (!empty($requiredErrors)) {
       out(false, 'Missing required fields: ' . implode(', ', $requiredErrors));
+    }
+
+    // Auto-fill school_year from active term if not provided OR if it's empty
+    if ($school_year === '') {
+      $term = get_active_term($pdo);
+      if ($term) {
+        $school_year = (string)$term['school_year'];
+      }
     }
 
     if (check_duplicate_id_number($pdo, $id_number, $id)) {
@@ -482,7 +492,7 @@ try {
     $stChk->execute([$id]);
     $u = $stChk->fetch(PDO::FETCH_ASSOC);
     if (!$u) out(false, 'User not found.');
-    if ((string)$u['role'] !== 'student') out(false, 'This endpoint only edits students.');
+    if ((string)$u['role'] !== 'student' && (string)$u['role'] !== 'org_president') out(false, 'This endpoint only edits students or presidents.');
 
     $st = $pdo->prepare("
       UPDATE users
@@ -529,6 +539,27 @@ try {
     out(true, 'Student updated successfully.');
   }
 
+  // NEW ACTION: Update user role (promote/demote)
+  if ($action === 'update_user_role') {
+    $id = qi('id', $in, 0);
+    $newRole = qs('role', $in, '');
+
+    if ($id <= 0) out(false, 'Invalid user ID.');
+    if (!in_array($newRole, ['student', 'org_president'], true)) {
+      out(false, 'Invalid role. Allowed: student, org_president');
+    }
+
+    $stChk = $pdo->prepare("SELECT id, role FROM users WHERE id = ? LIMIT 1");
+    $stChk->execute([$id]);
+    $u = $stChk->fetch(PDO::FETCH_ASSOC);
+    if (!$u) out(false, 'User not found.');
+
+    $st = $pdo->prepare("UPDATE users SET role = ? WHERE id = ? LIMIT 1");
+    $st->execute([$newRole, $id]);
+
+    out(true, 'User role updated successfully.');
+  }
+
   /**
    * STAFF: now supports "program" submission (stored in users.program).
    * - program is OPTIONAL here; pass it to store (or send "" to clear).
@@ -542,8 +573,10 @@ try {
     $last_name   = qs('last_name', $in);
     $suffix      = qs('suffix', $in);
     $email       = qs('email', $in);
-    $programIn   = qs('program', $in);              // ✅ ADDED
-    $program     = validate_program_or_null($pdo, $programIn); // ✅ ADDED (validated, stores abbr)
+    $programIn   = qs('program', $in);
+    $program     = validate_program_or_null($pdo, $programIn);
+    $year_level  = qs('year_level', $in);      // Added for presidents
+    $school_year = qs('school_year', $in);     // Added for presidents
     $status      = require_allowed_status(qs('status', $in, 'Active'), allowed_status_for_group('faculty'));
 
     $requiredErrors = [];
@@ -553,6 +586,14 @@ try {
 
     if (!empty($requiredErrors)) {
       out(false, 'Missing required fields: ' . implode(', ', $requiredErrors));
+    }
+
+    // Auto-fill school_year from active term if not provided
+    if ($school_year === '') {
+      $term = get_active_term($pdo);
+      if ($term) {
+        $school_year = (string)$term['school_year'];
+      }
     }
 
     if (check_duplicate_id_number($pdo, $id_number)) {
@@ -568,11 +609,11 @@ try {
     $st = $pdo->prepare("
       INSERT INTO users (
         id_number, first_name, middle_name, last_name, suffix,
-        email, program,
+        email, program, year_level, school_year,
         password_hash, role, status, created_at
       ) VALUES (
         :id_number, :first_name, :middle_name, :last_name, :suffix,
-        :email, :program,
+        :email, :program, :year_level, :school_year,
         :password_hash, :role, :status, NOW()
       )
     ");
@@ -585,7 +626,9 @@ try {
         ':last_name' => $last_name,
         ':suffix' => ($suffix !== '' ? $suffix : null),
         ':email' => ($email !== '' ? $email : null),
-        ':program' => $program,                 // ✅ ADDED
+        ':program' => $program,
+        ':year_level' => ($year_level !== '' ? $year_level : null),
+        ':school_year' => ($school_year !== '' ? $school_year : null),
         ':password_hash' => $hash,
         ':role' => $role,
         ':status' => $status,
@@ -616,8 +659,10 @@ try {
     $last_name   = qs('last_name', $in);
     $suffix      = qs('suffix', $in);
     $email       = qs('email', $in);
-    $programIn   = qs('program', $in);              // ✅ ADDED
-    $program     = validate_program_or_null($pdo, $programIn); // ✅ ADDED
+    $programIn   = qs('program', $in);
+    $program     = validate_program_or_null($pdo, $programIn);
+    $year_level  = qs('year_level', $in);      // Added for presidents
+    $school_year = qs('school_year', $in);     // Added for presidents
     $status      = require_allowed_status(qs('status', $in, 'Active'), allowed_status_for_group('faculty'));
 
     if ($id <= 0) out(false, 'Missing/invalid id.');
@@ -629,6 +674,14 @@ try {
 
     if (!empty($requiredErrors)) {
       out(false, 'Missing required fields: ' . implode(', ', $requiredErrors));
+    }
+
+    // Auto-fill school_year from active term if not provided
+    if ($school_year === '') {
+      $term = get_active_term($pdo);
+      if ($term) {
+        $school_year = (string)$term['school_year'];
+      }
     }
 
     if (check_duplicate_id_number($pdo, $id_number, $id)) {
@@ -644,8 +697,8 @@ try {
     $u = $stChk->fetch(PDO::FETCH_ASSOC);
     if (!$u) out(false, 'User not found.');
     $oldRole = (string)$u['role'];
-    if ($oldRole !== 'faculty_admin' && $oldRole !== 'moderator') {
-      out(false, 'This endpoint only edits staff (faculty_admin/moderator).');
+    if ($oldRole !== 'faculty_admin' && $oldRole !== 'moderator' && $oldRole !== 'org_president') {
+      out(false, 'This endpoint only edits staff (faculty_admin/moderator/org_president).');
     }
 
     $st = $pdo->prepare("
@@ -657,7 +710,9 @@ try {
         middle_name = :middle_name,
         last_name = :last_name,
         suffix = :suffix,
-        program = :program,      -- ✅ ADDED
+        program = :program,
+        year_level = :year_level,
+        school_year = :school_year,
         role = :role,
         status = :status
       WHERE id = :id
@@ -672,7 +727,9 @@ try {
         ':middle_name' => ($middle_name !== '' ? $middle_name : null),
         ':last_name' => $last_name,
         ':suffix' => ($suffix !== '' ? $suffix : null),
-        ':program' => $program,              // ✅ ADDED
+        ':program' => $program,
+        ':year_level' => ($year_level !== '' ? $year_level : null),
+        ':school_year' => ($school_year !== '' ? $school_year : null),
         ':role' => $role,
         ':status' => $status,
         ':id' => $id,
@@ -730,7 +787,7 @@ try {
       out(false, "Email '{$email}' is already registered to another user.");
     }
 
-    if ($role === 'student') {
+    if ($role === 'student' || $role === 'org_president') {
       $id_number   = qs('id_number', $in);
       $program     = qs('program', $in);
       $year_level  = qs('year_level', $in);
@@ -745,10 +802,17 @@ try {
       if ($id_number === '') $studentRequiredErrors[] = 'ID Number is required';
       if ($program === '') $studentRequiredErrors[] = 'Program is required for students';
       if ($year_level === '') $studentRequiredErrors[] = 'Year Level is required for students';
-      if ($school_year === '') $studentRequiredErrors[] = 'School Year is required for students';
 
       if (!empty($studentRequiredErrors)) {
         out(false, 'Missing required fields: ' . implode(', ', $studentRequiredErrors));
+      }
+
+      // Auto-fill school_year from active term if not provided
+      if ($school_year === '') {
+        $term = get_active_term($pdo);
+        if ($term) {
+          $school_year = (string)$term['school_year'];
+        }
       }
 
       $updateFields[] = "id_number = :id_number";
@@ -772,9 +836,12 @@ try {
       }
       $status = require_allowed_status(qs('status', $in, 'Active'), allowed_status_for_group('faculty'));
 
-      // ✅ ADDED: program support for staff in update_user as well
       $programIn = qs('program', $in, '');
       $program = validate_program_or_null($pdo, $programIn);
+      
+      // Added for presidents if they go through update_user
+      $year_level = qs('year_level', $in);
+      $school_year = qs('school_year', $in);
 
       if ($id_number !== $currentIdNumber && check_duplicate_id_number($pdo, $id_number, $id)) {
         out(false, "ID Number '{$id_number}' is already registered to another user.");
@@ -786,13 +853,25 @@ try {
         out(false, 'Missing required fields: ' . implode(', ', $staffRequiredErrors));
       }
 
+      // Auto-fill school_year from active term if not provided
+      if ($school_year === '') {
+        $term = get_active_term($pdo);
+        if ($term) {
+          $school_year = (string)$term['school_year'];
+        }
+      }
+
       $updateFields[] = "id_number = :id_number";
-      $updateFields[] = "program = :program"; // ✅ ADDED
+      $updateFields[] = "program = :program";
+      $updateFields[] = "year_level = :year_level";      // Added
+      $updateFields[] = "school_year = :school_year";    // Added
       $updateFields[] = "role = :role";
       $updateFields[] = "status = :status";
 
       $params[':id_number'] = $id_number;
-      $params[':program'] = $program; // ✅ ADDED (NULL allowed)
+      $params[':program'] = $program;
+      $params[':year_level'] = ($year_level !== '' ? $year_level : null);
+      $params[':school_year'] = ($school_year !== '' ? $school_year : null);
       $params[':role'] = $newRole;
       $params[':status'] = $status;
     }
@@ -825,6 +904,29 @@ try {
 
     if ($id <= 0) out(false, 'Missing/invalid id.');
 
+    // When reactivating a student or org_president, update school_year to
+    // the current active term's school_year if it differs (or is outdated).
+    if ($status === 'Active' && in_array($group, ['students', 'presidents'], true)) {
+      $stUser = $pdo->prepare("SELECT role, school_year FROM users WHERE id = ? LIMIT 1");
+      $stUser->execute([$id]);
+      $userRow = $stUser->fetch(PDO::FETCH_ASSOC);
+
+      if ($userRow && in_array((string)$userRow['role'], ['student', 'org_president'], true)) {
+        $activeTerm = get_active_term($pdo);
+        $activeSchoolYear = $activeTerm ? (string)$activeTerm['school_year'] : '';
+        $userSchoolYear   = (string)($userRow['school_year'] ?? '');
+
+        if ($activeSchoolYear !== '' && $activeSchoolYear !== $userSchoolYear) {
+          $stUpd = $pdo->prepare("UPDATE users SET status = ?, school_year = ? WHERE id = ? LIMIT 1");
+          $stUpd->execute([$status, $activeSchoolYear, $id]);
+          out(true, 'Status updated and school year set to current term.', [
+            'school_year_updated' => true,
+            'school_year' => $activeSchoolYear,
+          ]);
+        }
+      }
+    }
+
     $st = $pdo->prepare("UPDATE users SET status = ? WHERE id = ? LIMIT 1");
     $st->execute([$status, $id]);
 
@@ -851,9 +953,38 @@ try {
     $placeholders = implode(',', array_fill(0, count($clean), '?'));
 
     $roleWhere = "";
-    if ($group === 'students') $roleWhere = " AND role = 'student'";
+    if ($group === 'students') $roleWhere = " AND role IN ('student', 'org_president')";
     if ($group === 'faculty') $roleWhere = " AND role = 'faculty_admin'";
     if ($group === 'moderators') $roleWhere = " AND role = 'moderator'";
+
+    // When bulk-reactivating students or org_presidents, also update school_year
+    // to the active term's school_year for those whose school_year differs.
+    if ($status === 'Active' && in_array($group, ['students', 'presidents'], true)) {
+      $activeTerm = get_active_term($pdo);
+      $activeSchoolYear = $activeTerm ? (string)$activeTerm['school_year'] : '';
+
+      if ($activeSchoolYear !== '') {
+        $sqlBulkSY = "UPDATE users SET status = ?, school_year = ?
+                      WHERE id IN ($placeholders)
+                        AND role IN ('student', 'org_president')
+                        AND (school_year IS NULL OR school_year != ?)";
+        $paramsSY = array_merge([$status, $activeSchoolYear], $clean, [$activeSchoolYear]);
+        $stBulkSY = $pdo->prepare($sqlBulkSY);
+        $stBulkSY->execute($paramsSY);
+
+        // Also update any remaining rows (same role filter) that already have current school_year
+        $sql = "UPDATE users SET status = ? WHERE id IN ($placeholders) $roleWhere";
+        $params = array_merge([$status], $clean);
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+
+        out(true, 'Bulk status updated successfully.', [
+          'updated' => $st->rowCount() + $stBulkSY->rowCount(),
+          'school_year_updated' => true,
+          'school_year' => $activeSchoolYear,
+        ]);
+      }
+    }
 
     $sql = "UPDATE users SET status = ? WHERE id IN ($placeholders) $roleWhere";
     $params = array_merge([$status], $clean);
@@ -951,7 +1082,7 @@ try {
     if ($id > 0) {
       $sql = "SELECT id, id_number, first_name, middle_name, last_name, suffix, role, status
               FROM users
-              WHERE id = :id" . ($mustBeStudent ? " AND role='student'" : "") . "
+              WHERE id = :id" . ($mustBeStudent ? " AND role IN ('student', 'org_president')" : "") . "
               LIMIT 1";
       $st = $pdo->prepare($sql);
       $st->execute([':id' => $id]);
@@ -963,7 +1094,7 @@ try {
   // Fallback: treat as users.id_number
   $sql = "SELECT id, id_number, first_name, middle_name, last_name, suffix, role, status
           FROM users
-          WHERE id_number = :idno" . ($mustBeStudent ? " AND role='student'" : "") . "
+          WHERE id_number = :idno" . ($mustBeStudent ? " AND role IN ('student', 'org_president')" : "") . "
           LIMIT 1";
   $st = $pdo->prepare($sql);
   $st->execute([':idno' => $raw]);
@@ -987,10 +1118,10 @@ try {
     }
 
     if ($id > 0) {
-      $st = $pdo->prepare("SELECT * FROM users WHERE id = :id AND role = 'student' LIMIT 1");
+      $st = $pdo->prepare("SELECT * FROM users WHERE id = :id AND role IN ('student', 'org_president') LIMIT 1");
       $st->execute([':id' => $id]);
     } else {
-      $st = $pdo->prepare("SELECT * FROM users WHERE id_number = :idn AND role = 'student' LIMIT 1");
+      $st = $pdo->prepare("SELECT * FROM users WHERE id_number = :idn AND role IN ('student', 'org_president') LIMIT 1");
       $st->execute([':idn' => $idNumber]);
     }
 

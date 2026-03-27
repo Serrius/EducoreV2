@@ -43,18 +43,27 @@ $stmt = $pdo->query("
 $term = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$term) {
+  
   ok([
     'user' => ['id' => $userId, 'name' => 'Student'],
     'term' => null,
     'is_officer' => false,
-    'organization' => null,
-    'kpis' => ['org_fees_total' => 0, 'event_credits' => 0, 'event_debits' => 0],
+    'organizations' => [],
+    'kpis' => [
+      'org_fees_total' => 0, 
+      'club_fees_total' => 0,
+      'event_credits' => 0, 
+      'event_debits' => 0
+    ],
     'charts' => [
       'org_fees' => ['labels' => [], 'values' => []],
+      'club_fees' => ['labels' => [], 'values' => []],
       'event_funds' => ['labels' => [], 'credits' => [], 'debits' => []],
     ],
     'org_fees_paid' => [],
     'org_fees_unpaid' => [],
+    'club_fees_paid' => [],
+    'club_fees_unpaid' => [],
     'clubs_joined' => [],
   ]);
 }
@@ -115,58 +124,94 @@ if ($secondTerm && isset($secondTerm['id'])) {
 }
 
 /* =========================
-   Officer orgs (AY-wide). If none => non-officer
+   Get ACTIVE/APPROVED organizations for this school year
    ========================= */
-$officerOrgs = [];
+$activeOrgIds = [];
 try {
-  $sql = "
-    SELECT
-      o.id AS org_id,
-      o.org_name,
-      o.abbreviation,
-      o.org_type,
-      o.scope,
-      o.status AS org_status,
-      MAX(oo.created_at) AS last_assigned_at
-    FROM organization_officers oo
-    JOIN organizations o ON o.id = oo.org_id
-    WHERE oo.user_id = ?
-      AND oo.status = 'Active'
-      AND oo.academic_term_id IN ($placeholders)
-      AND o.status <> 'Archived'
-    GROUP BY o.id
-    ORDER BY last_assigned_at DESC, o.id DESC
-  ";
-  $params = array_merge([$userId], $yearTermIds);
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($params);
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-  foreach ($rows as $r) {
-    $officerOrgs[] = [
-      'id' => (int)$r['org_id'],
-      'org_name' => (string)$r['org_name'],
-      'abbreviation' => (string)($r['abbreviation'] ?? ''),
-      'org_type' => (string)($r['org_type'] ?? ''),
-      'scope' => (string)($r['scope'] ?? ''),
-      'status' => (string)($r['org_status'] ?? ''),
-    ];
-  }
-} catch (\Throwable $e) {}
-
-$isOfficer = count($officerOrgs) > 0;
-$org = $isOfficer ? $officerOrgs[0] : null; // primary handled org
-$orgId = $org ? (int)$org['id'] : 0;
+  $stmt = $pdo->prepare("
+    SELECT DISTINCT ar.org_id
+    FROM accreditation_requests ar
+    JOIN academic_terms t ON t.id = ar.academic_term_id
+    WHERE t.school_year = ?
+      AND ar.status IN ('Active', 'Approved')
+  ");
+  $stmt->execute([$schoolYear]);
+  $activeOrgIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) {
+  error_log("Active orgs query error: " . $e->getMessage());
+}
 
 /* =========================
-   Officer-only KPIs + charts (same logic as admin)
+   Officer orgs (AY-wide) - ONLY those with Active/Approved accreditation
+   INCLUDING USER ROLE/POSITION
+   ========================= */
+$officerOrgs = [];
+$officerOrgIds = [];
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  
+  try {
+    $sql = "
+      SELECT
+        o.id AS org_id,
+        o.org_name,
+        o.abbreviation,
+        o.org_type,
+        o.scope,
+        o.status AS org_status,
+        o.fee_required,
+        o.membership_fee,
+        oo.position AS user_role,
+        MAX(oo.created_at) AS last_assigned_at
+      FROM organization_officers oo
+      JOIN organizations o ON o.id = oo.org_id
+      WHERE oo.user_id = ?
+        AND oo.status = 'Active'
+        AND oo.academic_term_id IN ($placeholders)
+        AND o.id IN ($activePlaceholders)
+        AND o.status <> 'Archived'
+      GROUP BY o.id, oo.position
+      ORDER BY o.org_type DESC, last_assigned_at DESC, o.id DESC
+    ";
+    $params = array_merge([$userId], $yearTermIds, $activeOrgIds);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as $r) {
+      $orgId = (int)$r['org_id'];
+      $officerOrgs[] = [
+        'id' => $orgId,
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'org_type' => (string)($r['org_type'] ?? ''),
+        'scope' => (string)($r['scope'] ?? ''),
+        'status' => (string)($r['org_status'] ?? ''),
+        'fee_required' => (float)($r['fee_required'] ?? 0),
+        'membership_fee' => (float)($r['membership_fee'] ?? 0),
+        'user_role' => (string)($r['user_role'] ?? 'Officer'), // User's position in this organization
+      ];
+      $officerOrgIds[] = $orgId;
+    }
+  } catch (\Throwable $e) {
+    error_log("Officer orgs query error: " . $e->getMessage());
+  }
+}
+
+$isOfficer = count($officerOrgs) > 0;
+
+/* =========================
+   Officer-only KPIs + charts (for ALL handled orgs that are active/approved)
    ========================= */
 $kpiOrgFeesTotal = 0.0;
+$kpiClubFeesTotal = 0.0;
 $kpiEventCredits = 0.0;
 $kpiEventDebits  = 0.0;
 
 $orgFeeLabels = [];
 $orgFeeValues = [];
+$clubFeeLabels = [];
+$clubFeeValues = [];
 $eventLabels = [];
 $eventCredits = [];
 $eventDebits = [];
@@ -178,31 +223,59 @@ if (preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $m)) {
   $endYear = (int)$m[2];
 }
 
-if ($isOfficer && $orgId > 0) {
-  // Total Org fees collected for the handled org (canonical term)
+if ($isOfficer && !empty($officerOrgIds)) {
+  $orgPlaceholders = implode(',', array_fill(0, count($officerOrgIds), '?'));
+
+  // Total Organization fees collected (for ALL handled orgs)
   try {
     $stmt = $pdo->prepare("
       SELECT COALESCE(SUM(amount),0)
       FROM organization_fee_payments
       WHERE academic_term_id = ?
-        AND org_id = ?
+        AND org_id IN ($orgPlaceholders)
     ");
-    $stmt->execute([$canonicalTermId, $orgId]);
+    $params = array_merge([$canonicalTermId], $officerOrgIds);
+    $stmt->execute($params);
     $kpiOrgFeesTotal = (float)$stmt->fetchColumn();
   } catch (\Throwable $e) {}
 
-  // Event totals (AY)
+  // Total Club membership fees collected (for ALL handled clubs)
+  try {
+    $clubIds = array_filter($officerOrgIds, function($id) use ($officerOrgs) {
+      foreach ($officerOrgs as $org) {
+        if ($org['id'] == $id && $org['org_type'] === 'Club') return true;
+      }
+      return false;
+    });
+    
+    if (!empty($clubIds)) {
+      $clubPlaceholders = implode(',', array_fill(0, count($clubIds), '?'));
+      $stmt = $pdo->prepare("
+        SELECT COALESCE(SUM(fee_amount),0)
+        FROM organization_memberships
+        WHERE academic_term_id IN ($placeholders)
+          AND org_id IN ($clubPlaceholders)
+          AND fee_paid = 1
+      ");
+      $params = array_merge($yearTermIds, $clubIds);
+      $stmt->execute($params);
+      $kpiClubFeesTotal = (float)$stmt->fetchColumn();
+    }
+  } catch (\Throwable $e) {}
+
+  // Event totals (AY) for ALL handled orgs
   if ($startYear && $endYear) {
     try {
       $stmt = $pdo->prepare("
         SELECT COALESCE(SUM(ec.amount),0)
         FROM event_credits ec
         JOIN event_events e ON e.id = ec.event_id
-        WHERE e.org_id = ?
+        WHERE e.org_id IN ($orgPlaceholders)
           AND e.start_year = ?
           AND e.end_year = ?
       ");
-      $stmt->execute([$orgId, $startYear, $endYear]);
+      $params = array_merge($officerOrgIds, [$startYear, $endYear]);
+      $stmt->execute($params);
       $kpiEventCredits = (float)$stmt->fetchColumn();
     } catch (\Throwable $e) {}
 
@@ -211,21 +284,58 @@ if ($isOfficer && $orgId > 0) {
         SELECT COALESCE(SUM(ed.amount),0)
         FROM event_debits ed
         JOIN event_events e ON e.id = ed.event_id
-        WHERE e.org_id = ?
+        WHERE e.org_id IN ($orgPlaceholders)
           AND e.start_year = ?
           AND e.end_year = ?
       ");
-      $stmt->execute([$orgId, $startYear, $endYear]);
+      $params = array_merge($officerOrgIds, [$startYear, $endYear]);
+      $stmt->execute($params);
       $kpiEventDebits = (float)$stmt->fetchColumn();
     } catch (\Throwable $e) {}
   }
 
-  // Chart A (single bar)
-  $orgFeeLabels = [$org['org_name']];
-  $orgFeeValues = [$kpiOrgFeesTotal];
+  // Chart A: Organization Fees by Org (ONLY ACTIVE/APPROVED)
+  foreach ($officerOrgs as $org) {
+    if ($org['org_type'] === 'Organization') {
+      try {
+        $stmt = $pdo->prepare("
+          SELECT COALESCE(SUM(amount),0)
+          FROM organization_fee_payments
+          WHERE academic_term_id = ?
+            AND org_id = ?
+        ");
+        $stmt->execute([$canonicalTermId, $org['id']]);
+        $total = (float)$stmt->fetchColumn();
+        
+        $orgFeeLabels[] = $org['abbreviation'] ?: $org['org_name'];
+        $orgFeeValues[] = $total;
+      } catch (\Throwable $e) {}
+    }
+  }
 
-  // Chart B: top events by activity
-  if ($startYear && $endYear) {
+  // Chart B: Club Fees by Club (ONLY ACTIVE/APPROVED)
+  foreach ($officerOrgs as $org) {
+    if ($org['org_type'] === 'Club') {
+      try {
+        $stmt = $pdo->prepare("
+          SELECT COALESCE(SUM(fee_amount),0)
+          FROM organization_memberships
+          WHERE academic_term_id IN ($placeholders)
+            AND org_id = ?
+            AND fee_paid = 1
+        ");
+        $params = array_merge($yearTermIds, [$org['id']]);
+        $stmt->execute($params);
+        $total = (float)$stmt->fetchColumn();
+        
+        $clubFeeLabels[] = $org['abbreviation'] ?: $org['org_name'];
+        $clubFeeValues[] = $total;
+      } catch (\Throwable $e) {}
+    }
+  }
+
+  // Chart C: top events by activity (ALL orgs)
+  if ($startYear && $endYear && !empty($officerOrgIds)) {
     try {
       $stmt = $pdo->prepare("
         SELECT
@@ -238,7 +348,7 @@ if ($isOfficer && $orgId > 0) {
         FROM event_events e
         LEFT JOIN event_credits ec ON ec.event_id = e.id
         LEFT JOIN event_debits  ed ON ed.event_id = e.id
-        WHERE e.org_id = ?
+        WHERE e.org_id IN ($orgPlaceholders)
           AND e.start_year = ?
           AND e.end_year = ?
         GROUP BY e.id
@@ -246,7 +356,8 @@ if ($isOfficer && $orgId > 0) {
         ORDER BY activity DESC, e.event_date DESC, e.id DESC
         LIMIT 8
       ");
-      $stmt->execute([$orgId, $startYear, $endYear]);
+      $params = array_merge($officerOrgIds, [$startYear, $endYear]);
+      $stmt->execute($params);
       $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       foreach ($rows as $r) {
@@ -259,134 +370,245 @@ if ($isOfficer && $orgId > 0) {
 }
 
 /* =========================
-   Student lists (always)
+   Student lists - ONLY organizations with Active/Approved accreditation
    ========================= */
 
-// PAID org fees (active term)
+// PAID org fees (active term) - ONLY from active orgs
 $paid = [];
-try {
-  $stmt = $pdo->prepare("
-    SELECT
-      p.org_id,
-      o.org_name,
-      o.abbreviation,
-      o.scope,
-      o.org_type,
-      p.amount,
-      p.paid_at,
-      p.receipt_no
-    FROM organization_fee_payments p
-    JOIN organizations o ON o.id = p.org_id
-    WHERE p.student_user_id = ?
-      AND p.academic_term_id = ?
-    ORDER BY p.paid_at DESC, p.id DESC
-  ");
-  $stmt->execute([$userId, $termId]);
-  foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $paid[] = [
-      'org_id' => (int)$r['org_id'],
-      'org_name' => (string)$r['org_name'],
-      'abbreviation' => (string)($r['abbreviation'] ?? ''),
-      'scope' => (string)($r['scope'] ?? ''),
-      'org_type' => (string)($r['org_type'] ?? ''),
-      'amount' => (float)($r['amount'] ?? 0),
-      'paid_at' => (string)($r['paid_at'] ?? ''),
-      'receipt_no' => (string)($r['receipt_no'] ?? ''),
-    ];
-  }
-} catch (\Throwable $e) {}
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  try {
+    $stmt = $pdo->prepare("
+      SELECT
+        p.org_id,
+        o.org_name,
+        o.abbreviation,
+        o.scope,
+        o.org_type,
+        p.amount,
+        p.paid_at,
+        p.receipt_no
+      FROM organization_fee_payments p
+      JOIN organizations o ON o.id = p.org_id
+      WHERE p.student_user_id = ?
+        AND p.academic_term_id = ?
+        AND p.org_id IN ($activePlaceholders)
+      ORDER BY p.paid_at DESC, p.id DESC
+    ");
+    $params = array_merge([$userId, $termId], $activeOrgIds);
+    $stmt->execute($params);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $paid[] = [
+        'org_id' => (int)$r['org_id'],
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'scope' => (string)($r['scope'] ?? ''),
+        'org_type' => (string)($r['org_type'] ?? ''),
+        'amount' => (float)($r['amount'] ?? 0),
+        'paid_at' => (string)($r['paid_at'] ?? ''),
+        'receipt_no' => (string)($r['receipt_no'] ?? ''),
+      ];
+    }
+  } catch (\Throwable $e) {}
+}
 
-// UNPAID org fees (active term). Exclusive filtered by user program when available.
+// PAID club fees (AY-wide) - ONLY from active clubs
+$clubPaid = [];
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  try {
+    $stmt = $pdo->prepare("
+      SELECT
+        m.org_id,
+        o.org_name,
+        o.abbreviation,
+        o.org_type,
+        m.fee_amount AS amount,
+        m.fee_paid_at AS paid_at,
+        r.receipt_no
+      FROM organization_memberships m
+      JOIN organizations o ON o.id = m.org_id
+      LEFT JOIN organization_membership_receipts r ON r.membership_id = m.id
+      WHERE m.student_user_id = ?
+        AND m.academic_term_id IN ($placeholders)
+        AND m.org_id IN ($activePlaceholders)
+        AND m.fee_paid = 1
+      ORDER BY m.fee_paid_at DESC, m.id DESC
+    ");
+    $params = array_merge([$userId], $yearTermIds, $activeOrgIds);
+    $stmt->execute($params);
+    
+    $seen = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $oid = (int)$r['org_id'];
+      if (isset($seen[$oid])) continue;
+      $seen[$oid] = true;
+      
+      $clubPaid[] = [
+        'org_id' => $oid,
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'org_type' => (string)($r['org_type'] ?? ''),
+        'amount' => (float)($r['amount'] ?? 0),
+        'paid_at' => (string)($r['paid_at'] ?? ''),
+        'receipt_no' => (string)($r['receipt_no'] ?? ''),
+      ];
+    }
+  } catch (\Throwable $e) {}
+}
+
+// UNPAID org fees (active term) - ONLY from active orgs
 $unpaid = [];
-try {
-  $stmt = $pdo->prepare("
-    SELECT
-      o.id AS org_id,
-      o.org_name,
-      o.abbreviation,
-      o.org_type,
-      o.scope,
-      o.fee_required,
-      pr.abbreviation AS program_abbr
-    FROM organizations o
-    LEFT JOIN programs pr ON pr.id = o.program_id
-    WHERE o.status = 'Active'
-      AND o.fee_required > 0
-      AND (
-        o.scope = 'General'
-        OR (
-          o.scope = 'Exclusive'
-          AND ? <> ''
-          AND pr.abbreviation = ?
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  try {
+    $stmt = $pdo->prepare("
+      SELECT
+        o.id AS org_id,
+        o.org_name,
+        o.abbreviation,
+        o.org_type,
+        o.scope,
+        o.fee_required,
+        pr.abbreviation AS program_abbr
+      FROM organizations o
+      LEFT JOIN programs pr ON pr.id = o.program_id
+      WHERE o.status = 'Active'
+        AND o.org_type = 'Organization'
+        AND o.fee_required > 0
+        AND o.id IN ($activePlaceholders)
+        AND (
+          o.scope = 'General'
+          OR (
+            o.scope = 'Exclusive'
+            AND ? <> ''
+            AND pr.abbreviation = ?
+          )
         )
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM organization_fee_payments p
-        WHERE p.org_id = o.id
-          AND p.student_user_id = ?
-          AND p.academic_term_id = ?
-      )
-    ORDER BY o.scope ASC, o.org_name ASC
-  ");
-  $stmt->execute([$studentProgramAbbr, $studentProgramAbbr, $userId, $termId]);
-  foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $unpaid[] = [
-      'org_id' => (int)$r['org_id'],
-      'org_name' => (string)$r['org_name'],
-      'abbreviation' => (string)($r['abbreviation'] ?? ''),
-      'org_type' => (string)($r['org_type'] ?? ''),
-      'scope' => (string)($r['scope'] ?? ''),
-      'fee_required' => (float)($r['fee_required'] ?? 0),
-    ];
-  }
-} catch (\Throwable $e) {}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM organization_fee_payments p
+          WHERE p.org_id = o.id
+            AND p.student_user_id = ?
+            AND p.academic_term_id = ?
+        )
+      ORDER BY o.scope ASC, o.org_name ASC
+    ");
+    $params = array_merge($activeOrgIds, [$studentProgramAbbr, $studentProgramAbbr, $userId, $termId]);
+    $stmt->execute($params);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $unpaid[] = [
+        'org_id' => (int)$r['org_id'],
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'org_type' => (string)($r['org_type'] ?? ''),
+        'scope' => (string)($r['scope'] ?? ''),
+        'fee_required' => (float)($r['fee_required'] ?? 0),
+      ];
+    }
+  } catch (\Throwable $e) {}
+}
 
-// Clubs joined (AY-wide persistence)
+// UNPAID club fees (AY-wide) - ONLY from active clubs
+$clubUnpaid = [];
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  try {
+    $stmt = $pdo->prepare("
+      SELECT DISTINCT
+        o.id AS org_id,
+        o.org_name,
+        o.abbreviation,
+        o.org_type,
+        o.membership_fee AS fee_required
+      FROM organization_memberships m
+      JOIN organizations o ON o.id = m.org_id
+      WHERE m.student_user_id = ?
+        AND m.academic_term_id IN ($placeholders)
+        AND m.org_id IN ($activePlaceholders)
+        AND m.fee_paid = 0
+        AND o.membership_fee > 0
+      ORDER BY o.org_name ASC
+    ");
+    $params = array_merge([$userId], $yearTermIds, $activeOrgIds);
+    $stmt->execute($params);
+    
+    $seen = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $oid = (int)$r['org_id'];
+      if (isset($seen[$oid])) continue;
+      $seen[$oid] = true;
+      
+      $clubUnpaid[] = [
+        'org_id' => $oid,
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'org_type' => (string)($r['org_type'] ?? ''),
+        'fee_required' => (float)($r['fee_required'] ?? 0),
+      ];
+    }
+  } catch (\Throwable $e) {}
+}
+
+// Clubs joined (AY-wide persistence) - ONLY from active clubs
 $clubs = [];
-try {
-  $sql = "
-    SELECT
-      o.id AS org_id,
-      o.org_name,
-      o.abbreviation,
-      m.status,
-      m.fee_amount,
-      m.fee_paid,
-      m.fee_paid_at,
-      m.requested_at,
-      m.academic_term_id
-    FROM organization_memberships m
-    JOIN organizations o ON o.id = m.org_id
-    WHERE m.student_user_id = ?
-      AND m.academic_term_id IN ($placeholders)
-      AND o.org_type = 'Club'
-      AND o.status <> 'Archived'
-      AND m.status IN ('Approved','Pending')
-    ORDER BY o.org_name ASC, m.academic_term_id DESC, m.id DESC
-  ";
-  $params = array_merge([$userId], $yearTermIds);
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($params);
+if (!empty($activeOrgIds)) {
+  $activePlaceholders = implode(',', array_fill(0, count($activeOrgIds), '?'));
+  try {
+    $sql = "
+      SELECT
+        o.id AS org_id,
+        o.org_name,
+        o.abbreviation,
+        m.status,
+        m.fee_amount,
+        m.fee_paid,
+        m.fee_paid_at,
+        m.requested_at,
+        m.academic_term_id
+      FROM organization_memberships m
+      JOIN organizations o ON o.id = m.org_id
+      WHERE m.student_user_id = ?
+        AND m.academic_term_id IN ($placeholders)
+        AND m.org_id IN ($activePlaceholders)
+        AND o.org_type = 'Club'
+        AND o.status <> 'Archived'
+        AND m.status IN ('Approved','Pending')
+      ORDER BY o.org_name ASC, m.academic_term_id DESC, m.id DESC
+    ";
+    $params = array_merge([$userId], $yearTermIds, $activeOrgIds);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
 
-  $seen = [];
-  foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $oid = (int)$r['org_id'];
-    if (isset($seen[$oid])) continue; // dedupe AY-wide
-    $seen[$oid] = true;
+    $seen = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $oid = (int)$r['org_id'];
+      if (isset($seen[$oid])) continue; // dedupe AY-wide
+      $seen[$oid] = true;
 
-    $clubs[] = [
-      'org_id' => $oid,
-      'org_name' => (string)$r['org_name'],
-      'abbreviation' => (string)($r['abbreviation'] ?? ''),
-      'status' => (string)($r['status'] ?? ''),
-      'fee_amount' => (float)($r['fee_amount'] ?? 0),
-      'fee_paid' => (int)($r['fee_paid'] ?? 0) === 1,
-      'fee_paid_at' => (string)($r['fee_paid_at'] ?? ''),
-      'requested_at' => (string)($r['requested_at'] ?? ''),
-    ];
-  }
-} catch (\Throwable $e) {}
+      $clubs[] = [
+        'org_id' => $oid,
+        'org_name' => (string)$r['org_name'],
+        'abbreviation' => (string)($r['abbreviation'] ?? ''),
+        'status' => (string)($r['status'] ?? ''),
+        'fee_amount' => (float)($r['fee_amount'] ?? 0),
+        'fee_paid' => (int)($r['fee_paid'] ?? 0) === 1,
+        'fee_paid_at' => (string)($r['fee_paid_at'] ?? ''),
+        'requested_at' => (string)($r['requested_at'] ?? ''),
+      ];
+    }
+  } catch (\Throwable $e) {}
+}
+
+/* =========================
+   Add count badges
+   ========================= */
+$orgCount = count($officerOrgs);
+$unpaidOrgCount = count($unpaid);
+$paidOrgCount = count($paid);
+$unpaidClubCount = count($clubUnpaid);
+$paidClubCount = count($clubPaid);
+$clubsCount = count($clubs);
 
 /* =========================
    Response
@@ -409,27 +631,34 @@ ok([
   ],
 
   'is_officer' => $isOfficer,
-  'organization' => $org ? [
-    'id' => (int)$org['id'],
-    'org_name' => (string)$org['org_name'],
-    'abbreviation' => (string)($org['abbreviation'] ?? ''),
-    'org_type' => (string)($org['org_type'] ?? ''),
-    'scope' => (string)($org['scope'] ?? ''),
-    'status' => (string)($org['status'] ?? ''),
-  ] : null,
+  'organizations' => $officerOrgs,
+  
+  // Add count badges
+  'counts' => [
+    'organizations' => $orgCount,
+    'unpaid_org' => $unpaidOrgCount,
+    'paid_org' => $paidOrgCount,
+    'unpaid_club' => $unpaidClubCount,
+    'paid_club' => $paidClubCount,
+    'clubs' => $clubsCount,
+  ],
 
   'kpis' => [
     'org_fees_total' => $kpiOrgFeesTotal,
+    'club_fees_total' => $kpiClubFeesTotal,
     'event_credits' => $kpiEventCredits,
     'event_debits' => $kpiEventDebits,
   ],
 
   'charts' => [
     'org_fees' => ['labels' => $orgFeeLabels, 'values' => $orgFeeValues],
+    'club_fees' => ['labels' => $clubFeeLabels, 'values' => $clubFeeValues],
     'event_funds' => ['labels' => $eventLabels, 'credits' => $eventCredits, 'debits' => $eventDebits],
   ],
 
   'org_fees_paid' => $paid,
   'org_fees_unpaid' => $unpaid,
+  'club_fees_paid' => $clubPaid,
+  'club_fees_unpaid' => $clubUnpaid,
   'clubs_joined' => $clubs,
 ]);

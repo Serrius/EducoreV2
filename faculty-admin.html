@@ -61,12 +61,12 @@
                                 <span>MANAGE ANNOUNCEMENT</span>
                             </a>
                         </li>
-                        <li class="sidebar-item">
+<!--   REMOVED          <li class="sidebar-item">
                             <a href="#" class="sidebar-link" data-section="manage-accreditation">
                                 <i class="bi bi-patch-check"></i>
                                 <span>MANAGE ACCREDITATION</span>
                             </a>
-                        </li>
+                        </li> -->
                         <li class="sidebar-item">
                             <a href="#" class="sidebar-link" data-section="event-expenses">
                                 <i class="bi bi-cash-stack"></i>
@@ -788,11 +788,9 @@
 
             <div class="modal-body">
                 <form id="profileForm">
-
                     <div class="row">
                         <!-- LEFT COLUMN -->
                         <div class="col-md-4 text-center">
-
                             <!-- Profile Picture -->
                             <div class="profile-picture-section mb-4">
                                 <img id="profilePreview"
@@ -834,7 +832,6 @@
 
                         <!-- RIGHT COLUMN -->
                         <div class="col-md-8">
-
                             <!-- Basic Info -->
                             <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
@@ -845,7 +842,7 @@
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">
-                                                <i class="bi bi-card-heading me-1"></i>Employee ID
+                                                <i class="bi bi-card-heading me-1"></i>ID Number
                                             </label>
                                             <input type="text" class="form-control" id="id_number" readonly>
                                         </div>
@@ -860,25 +857,25 @@
 
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">First Name</label>
-                                            <input type="text" class="form-control" id="first_name" readonly>
+                                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="first_name">
                                         </div>
 
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Last Name</label>
-                                            <input type="text" class="form-control" id="last_name" readonly>
+                                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" id="last_name">
                                         </div>
                                     </div>
 
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Middle Name</label>
-                                            <input type="text" class="form-control" id="middle_name" readonly>
+                                            <input type="text" class="form-control" id="middle_name">
                                         </div>
 
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Suffix</label>
-                                            <input type="text" class="form-control" id="suffix" readonly>
+                                            <input type="text" class="form-control" id="suffix" placeholder="Jr., III, etc.">
                                         </div>
                                     </div>
                                 </div>
@@ -898,7 +895,7 @@
                                         </div>
 
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Email Address *</label>
+                                            <label class="form-label">Email Address <span class="text-danger">*</span></label>
                                             <input type="email" class="form-control" id="email" name="email" required>
                                             <div class="form-text">
                                                 You can update your email address.
@@ -909,7 +906,7 @@
                             </div>
 
                             <!-- Account Status -->
-                            <div class="card border-0 bg-light">
+                            <div class="card border-0 bg-light mb-4">
                                 <div class="card-body">
                                     <h6 class="card-title border-bottom pb-2 mb-3">
                                         <i class="bi bi-shield-check me-2"></i>Account Status
@@ -935,6 +932,38 @@
                                 </div>
                             </div>
 
+                            <!-- Change Password Section -->
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title border-bottom pb-2 mb-3">
+                                        <i class="bi bi-key me-2"></i>Change Password
+                                    </h6>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Current Password</label>
+                                        <input type="password" class="form-control" id="current_password" autocomplete="off">
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">New Password</label>
+                                            <input type="password" class="form-control" id="new_password" autocomplete="off">
+                                            <div class="form-text">Minimum 8 characters</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Confirm New Password</label>
+                                            <input type="password" class="form-control" id="confirm_password" autocomplete="off">
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="button" class="btn btn-warning" id="changePasswordBtn">
+                                            <i class="bi bi-key me-1"></i>Change Password
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -970,10 +999,12 @@
     <script src="js/manage-e-signatures/canvas.js"></script>
 
     <!--Accreditation-->
+   <!--          Accreditation No longer Available Sorry
     <script src="js/accreditation/admin/accreditation.js"></script>
     <script src="js/accreditation/admin/pending.js"></script>
     <script src="js/accreditation/admin/active.js"></script>
-    <script src="js/accreditation/admin/returned.js"></script>
+    <script src="js/accreditation/admin/returned.js"></script> 
+                                                                -->
 
     <!--Org Fees Script-->       
     <script src="js/org-fees/org-fees.js"></script> 

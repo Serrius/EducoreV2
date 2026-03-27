@@ -73,15 +73,18 @@
       </tr>`;
   }
 
-  async function fetchPending(A) {
+  async function fetchPending(A, overridePage) {
     const { store } = A;
     const p = store.pending;
+
+    // Use overridePage if supplied so pagination clicks are never stale
+    const requestPage = (overridePage != null) ? Number(overridePage) : p.page;
 
     const data = await A.postJSON({
       action: "list_requests",
       mode: "pending",
       q: store.search || "",
-      page: p.page,
+      page: requestPage,
       per_page: p.perPage,
     });
 
@@ -119,7 +122,7 @@
 
     A.renderPagination(pag, pagMeta, p.page, p.perPage, p.total, (newPage) => {
       A.store.pending.page = newPage;
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
+      fetchPending(A, newPage).catch((e) => A.safeShowError(e.message));
     });
 
     // Initialize tooltips for the edit/view buttons
@@ -150,21 +153,26 @@
   function init(root) {
     const A = mustBase();
     const r = root || document;
-    if (r.__adPendingInited) return;
-    r.__adPendingInited = true;
 
+    // Always re-bind DOM listeners (bind helpers guard per-element)
     bindPending(A, r);
 
-    fetchPending(A).catch((e) => A.safeShowError(e.message));
+    // Always fetch fresh data on init / re-navigation
+    fetchPending(A, 1).catch((e) => A.safeShowError(e.message));
 
-    A.bus.on("search:changed", () => {
-      A.store.pending.page = 1;
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
-    });
+    // Register bus listeners only once per module load (guarded by __adPendingBooted at top)
+    if (!window.__adPendingBusListening) {
+      window.__adPendingBusListening = true;
 
-    A.bus.on("refresh:all", () => {
-      fetchPending(A).catch((e) => A.safeShowError(e.message));
-    });
+      A.bus.on("search:changed", () => {
+        A.store.pending.page = 1;
+        fetchPending(A, 1).catch((e) => A.safeShowError(e.message));
+      });
+
+      A.bus.on("refresh:all", () => {
+        fetchPending(A, A.store.pending.page).catch((e) => A.safeShowError(e.message));
+      });
+    }
   }
 
   try {

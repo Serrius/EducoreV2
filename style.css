@@ -74,6 +74,84 @@ tr.row-unread .new-chip {
   100% { transform: scale(1); opacity: .9; }
 }
 
+/* Account Switcher Styles - Simplified */
+#accountSwitcherContainer {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#accountSwitcherContainer .dropdown-toggle {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 10px 15px !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 8px !important;
+    color: white !important;
+    text-align: left !important;
+}
+
+#accountSwitcherContainer .dropdown-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#accountSwitcherContainer .dropdown-toggle::after {
+    margin-left: auto !important;
+}
+
+#accountSwitcherContainer .dropdown-menu {
+    width: 100% !important;
+    min-width: unset !important;
+    margin-top: 5px !important;
+    background-color: #343a40 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+#accountSwitcherContainer .dropdown-item {
+    color: white !important;
+    padding: 10px 15px !important;
+    white-space: normal !important;
+}
+
+#accountSwitcherContainer .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+#accountSwitcherContainer .dropdown-item.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+#accountSwitcherContainer .dropdown-item small {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+#accountSwitcherContainer .dropdown-divider {
+    border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Ensure sidebar footer has proper layout */
+.sidebar-footer {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 15px !important;
+}
+
+.sidebar-footer .sidebar-footer-link {
+    display: flex !important;
+    align-items: center !important;
+    padding: 10px 15px !important;
+    color: white !important;
+    text-decoration: none !important;
+    border-radius: 8px !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    margin-top: 5px !important;
+}
+
+.sidebar-footer .sidebar-footer-link:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 /* Organization Cards - Enhanced Design */
 .gen-org-card, .org-card {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
