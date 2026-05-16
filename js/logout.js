@@ -21,10 +21,22 @@
     const MAX_FAILURES = 3;
     let lastValidSession = Date.now();
 
+    // Single modal instance — created once and reused
+    let logoutModalInstance = null;
+    let logoutModalEl = null;
+
     // Initialize logout functionality
     function initLogout() {
         console.log('Logout system initialized');
-        
+
+        // Initialize the modal ONCE and attach the hidden listener ONCE.
+        // This way cleanup runs for every close trigger: Cancel, ESC, backdrop click, or confirm.
+        logoutModalEl = document.getElementById('logoutModal');
+        if (logoutModalEl) {
+            logoutModalInstance = new bootstrap.Modal(logoutModalEl);
+            logoutModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrop);
+        }
+
         // Add logout button event listener
         const logoutBtn = document.getElementById('logOutBtn');
         if (logoutBtn) {
@@ -56,10 +68,18 @@
         sessionChecker = setInterval(() => checkSession(), LOGOUT_CONFIG.sessionCheckInterval);
     }
 
+    function cleanupModalBackdrop() {
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    }
+
     function showLogoutConfirmation() {
-        const logoutModalEl = document.getElementById('logoutModal');
-        const logoutModal = new bootstrap.Modal(logoutModalEl);
-        logoutModal.show();
+        if (logoutModalInstance) {
+            logoutModalInstance.show();
+        }
     }
 
     async function handleLogout() {
@@ -71,20 +91,9 @@
         isLoggingOut = true;
 
         try {
-            // Properly dispose of the logout modal
-            const logoutModalEl = document.getElementById('logoutModal');
-            const logoutModal = bootstrap.Modal.getInstance(logoutModalEl);
-            
-            if (logoutModal) {
-                const backdrop = document.querySelector('.modal-backdrop');
-                if (backdrop) backdrop.remove();
-                
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-                
-                logoutModal.hide();
-                logoutModal.dispose();
+            // Hide the modal — hidden.bs.modal listener will clean up the backdrop
+            if (logoutModalInstance) {
+                logoutModalInstance.hide();
             }
 
             showLoadingOverlay();
@@ -144,20 +153,17 @@
 
             console.log('📦 SAVED preferences:', preferences);
 
-            // DEBUG: Check if we have the value
             if (preferences.default_account) {
                 console.log('✅ Found default_account to save:', preferences.default_account);
             } else {
                 console.warn('⚠️ default_account is NULL before clearing!');
             }
 
-            // Clear everything
             console.log('🧹 Clearing localStorage...');
             localStorage.clear();
             sessionStorage.clear();
             console.log('✅ localStorage cleared');
 
-            // RESTORE PREFERENCES
             console.log('🔄 Restoring preferences...');
             let restoredCount = 0;
             Object.entries(preferences).forEach(([key, value]) => {
@@ -177,7 +183,6 @@
                     .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
             });
 
-            // FINAL CHECK
             console.log('🔍 FINAL CHECK - default_account:', localStorage.getItem('default_account'));
             console.log('🔍 FINAL CHECK - last_used_account:', localStorage.getItem('last_used_account'));
 
@@ -252,11 +257,7 @@
         
         if (message) sessionStorage.setItem('logout_message', message);
 
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(backdrop => backdrop.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
+        cleanupModalBackdrop();
 
         window.location.href = LOGOUT_CONFIG.loginPageUrl;
     }
